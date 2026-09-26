@@ -1,4 +1,9 @@
 // Pure presentation logic. Routing is estimated, not independently metered.
+window.energyFlowDuration = watts => {
+  // Speed (not duration) scales linearly from 1x at 300 W to 3x at 2 kW.
+  const fraction = Number.isFinite(watts) ? Math.max(0, Math.min(1, (watts - 300) / 1700)) : 0;
+  return 3 / (1 + 2 * fraction);
+};
 window.energyFlowState = (values, mode) => {
   const positive = value => Number.isFinite(value) && value >= 0.5;
   const valid = key => Number.isFinite(values[key]);
@@ -10,6 +15,10 @@ window.energyFlowState = (values, mode) => {
   const solarToHouse = ['pv', 'load', 'grid', 'battery'].every(valid)
     ? Math.min(Math.max(0, values.pv), Math.max(0, values.load - Math.max(0, values.grid) - Math.max(0, -values.battery))) : 0;
   return { batteryState, batteryLabel: !valid('battery') ? 'No report' : charging ? 'Charging' : discharging ? 'Discharging' : waiting ? 'Waiting to charge' : 'Standby',
+    routeWatts: { gridHouse: valid('grid') && valid('load') ? Math.min(Math.max(0, values.grid), Math.max(0, values.load)) : 0,
+      solarHouse: solarToHouse,
+      batteryHouse: valid('battery') && valid('load') ? Math.min(Math.max(0, -values.battery), Math.max(0, values.load)) : 0,
+      solarBattery: valid('pv') && valid('battery') ? Math.min(Math.max(0, values.pv), Math.max(0, values.battery)) : 0 },
     routes: { gridHouse: positive(values.grid) && positive(values.load), solarHouse: positive(solarToHouse),
       batteryHouse: discharging && positive(values.load), solarBattery: positive(values.pv) && charging } };
 };
@@ -283,7 +292,10 @@ function render(sample) {
   document.querySelectorAll('#charge-bar, .scene-charge-bar').forEach(element => { element.style.width = `${Math.max(0, Math.min(100, sample.soc ?? 0))}%`; });
   document.querySelector('#grid-state').textContent = t(Number.isFinite(values.grid) ? 'Estimated' : 'Estimate unavailable');
   document.querySelectorAll('.metric:not(.battery) .meter').forEach(element => { element.hidden = true; });
-  for (const [key, active] of Object.entries(state.routes)) flowGroups[key].style.display = active ? '' : 'none';
+  for (const [key, active] of Object.entries(state.routes)) {
+    flowGroups[key].style.display = active ? '' : 'none';
+    flowGroups[key].style.setProperty('--flow-duration', `${window.energyFlowDuration(state.routeWatts[key])}s`);
+  }
   scheduleFlowLayout();
   if (demo) {
     document.querySelector('#operating-mode').textContent = t(mode === 'Mains' ? 'Grid' : 'Solar');

@@ -21,3 +21,15 @@ assert.equal(state({ ...base, grid: 0.1 }).routes.gridHouse, false);
 assert.equal(state({ ...base, battery: -0.1 }, 'Mains').batteryLabel, 'Waiting to charge');
 assert.equal(state({ ...base, pv: 100, grid: 500 }).routes.solarHouse, false);
 console.log('13 overview routing and battery-state assertions passed.');
+const duration = context.window.energyFlowDuration;
+for (const watts of [0, 100, 300, -500, null, NaN, Infinity]) assert.equal(duration(watts), 3);
+assert.equal(duration(1150), 1.5);
+assert.equal(duration(2000), 1);
+assert.equal(duration(11000), 1);
+for (let watts = 400; watts <= 2000; watts += 100) assert.ok(duration(watts) < duration(watts - 100));
+assert.deepEqual(state({ ...base, pv: 1500, battery: 1000 }).routeWatts,
+  { gridHouse: 0, solarHouse: 500, batteryHouse: 0, solarBattery: 1000 });
+assert.equal(state({ ...base, battery: -1500 }).routeWatts.batteryHouse, 500);
+assert.equal(state({ ...base, grid: 2000 }).routeWatts.gridHouse, 500);
+assert.equal(state({ ...base, battery: 2500, pv: 2000 }).routeWatts.solarBattery, 2000);
+console.log('31 power-based speed and per-route wattage assertions passed.');

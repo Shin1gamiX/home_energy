@@ -57,7 +57,7 @@ body[data-battery-state="idle"]{--battery-color:#738680;--battery-fill:#94a49b}
 .overview[data-battery-state=waiting] .metric.battery { background:#fffaee; border-color:#f1e7ce; }
 .overview .energy-connections { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:1; overflow:visible; }
 .overview .connection-line,.overview .connection-arrow { stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
-.overview .connection-dots { stroke-width:6; stroke-linecap:round; stroke-dasharray:0 64; animation:energy-travel 3s linear infinite; }
+.overview .connection-dots { stroke-width:6; stroke-linecap:round; stroke-dasharray:0 64; animation:energy-travel var(--flow-duration,3s) linear infinite; }
 @keyframes energy-travel { to { stroke-dashoffset:-64; } }
 .overview.paused .connection-dots { animation-play-state:paused; }
 .overview[data-connection=stale] .energy-connections,.overview[data-connection=offline] .energy-connections { visibility:hidden; }

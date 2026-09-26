@@ -68,6 +68,14 @@ Outages do not count stale readings as new energy. Recording resumes after fresh
 
 ## Charts and summaries
 
+Overview motion speed uses each route's estimated wattage, not total PV generation
+for every solar branch. Grid/battery-to-house wattage is capped by house load;
+solar-to-battery is capped by both PV generation and positive charging power.
+At 300 W or below, dots move one 64-pixel spacing every 3 seconds (the original
+speed). Speed increases linearly up to 3x at 2,000 W and remains capped above
+that. Duration is `3 / (1 + 2 * clamp((watts - 300) / 1700, 0, 1))` seconds.
+Zero/inactive routes stay hidden; stale-data and reduced-motion behavior remain.
+
 Day/week/month views use Athens calendar boundaries; weeks start Monday. Auto averaging selects a resolution for the displayed range; explicit intervals include 1 minute, 5 minutes, 15 minutes and 1 hour. Grouping weights minute averages by their sample counts. Refer to the resolution selection in `history.js` for the exact current Auto thresholds.
 
 History does not periodically reload readings: it fetches on entry/range selection and through the explicit Refresh button, which has a five-minute cooldown. A small countdown timer is not data polling. A full browser reload starts a new visit.
