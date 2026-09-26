@@ -65,6 +65,7 @@ Open `http://127.0.0.1:8767/history.html`. This development helper supplies a su
 python3 -B -m unittest discover -s server -p 'test_*.py' -v
 node --check app.js
 node --check history.js
+node server/test_overview.cjs
 ```
 
 Node is needed only for these optional JavaScript syntax checks. Tests use synthetic in-memory/temporary databases, never a live Home Assistant database. Tests do not certify hardware accuracy or compatibility with every Home Assistant version.

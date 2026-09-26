@@ -1,7 +1,26 @@
+// Pure presentation logic. Routing is estimated, not independently metered.
+window.energyFlowState = (values, mode) => {
+  const positive = value => Number.isFinite(value) && value >= 0.5;
+  const valid = key => Number.isFinite(values[key]);
+  const charging = positive(values.battery);
+  const discharging = valid('battery') && values.battery <= -0.5;
+  const waiting = valid('battery') && !charging && !discharging && mode === 'Mains' && valid('soc') && values.soc < 40;
+  const batteryState = charging ? 'charging' : discharging ? 'discharging' : waiting ? 'waiting' : 'idle';
+  // Grid charging is disabled in this installation. Avoid inventing missing flows.
+  const solarToHouse = ['pv', 'load', 'grid', 'battery'].every(valid)
+    ? Math.min(Math.max(0, values.pv), Math.max(0, values.load - Math.max(0, values.grid) - Math.max(0, -values.battery))) : 0;
+  return { batteryState, batteryLabel: !valid('battery') ? 'No report' : charging ? 'Charging' : discharging ? 'Discharging' : waiting ? 'Waiting to charge' : 'Standby',
+    routes: { gridHouse: positive(values.grid) && positive(values.load), solarHouse: positive(solarToHouse),
+      batteryHouse: discharging && positive(values.load), solarBattery: positive(values.pv) && charging } };
+};
+
 // Shared localization is also used by the history page.
 window.energyI18n = (() => {
   const translations = {
     ru: {
+      'Waiting to charge': 'Ожидание зарядки', 'Discharging': 'Разрядка',
+      'Estimated flow': 'Расчётный поток', 'Estimated': 'Расчёт',
+      'Waiting for 40% charge before battery use resumes.': 'Ожидание заряда 40% для возобновления работы от батареи.',
       'Current': 'Ток', 'Solar current': 'Ток солнечных панелей', 'House current': 'Ток нагрузки дома',
       'Battery current (avg.)': 'Ток батареи (средний)', 'A (avg.)': 'A (сред.)',
       'Communication lost': 'Связь потеряна',
@@ -45,6 +64,9 @@ window.energyI18n = (() => {
       '{title} over time': '{title} во времени'
     },
     el: {
+      'Waiting to charge': 'Αναμονή φόρτισης', 'Discharging': 'Εκφόρτιση',
+      'Estimated flow': 'Εκτιμώμενη ροή', 'Estimated': 'Εκτίμηση',
+      'Waiting for 40% charge before battery use resumes.': 'Αναμονή φόρτισης στο 40% για επαναφορά της χρήσης μπαταρίας.',
       'Current': 'Ένταση ρεύματος', 'Solar current': 'Ρεύμα φωτοβολταϊκών', 'House current': 'Ρεύμα σπιτιού',
       'Battery current (avg.)': 'Ρεύμα μπαταρίας (μέσο)', 'A (avg.)': 'A (μέσο)',
       'Communication lost': 'Η επικοινωνία χάθηκε',
@@ -129,10 +151,10 @@ const { t } = window.energyI18n;
 // Simulation is limited to the local preview. Production reads the allowlisted endpoint.
 const demo = location.hostname === '127.0.0.1' && location.port === '8766';
 const samples = [
-  { pv: 1580, load: 910, battery: 670, soc: 84 },
-  { pv: 1610, load: 930, battery: 680, soc: 84 },
-  { pv: 410, load: 910, battery: -500, soc: 84 },
-  { pv: 420, load: 940, battery: -520, soc: 84 },
+  { grid: 535, pv: 0, load: 563, battery: 0, soc: 20, pv_voltage: 34.7, grid_voltage: 234.5, pv_current: 0, battery_current: 0, load_current: 3.1, mode: 'Mains' },
+  { grid: 0, pv: 1580, load: 910, battery: 670, soc: 84, pv_voltage: 382.9, grid_voltage: 232, pv_current: 4.1, battery_current: 12.7, load_current: 4.5, mode: 'Off-Grid' },
+  { grid: 0, pv: 410, load: 910, battery: -500, soc: 84, pv_voltage: 360, grid_voltage: 232, pv_current: 1.1, battery_current: -9.5, load_current: 4.5, mode: 'Off-Grid' },
+  { grid: 0, pv: 0, load: 940, battery: -940, soc: 64, pv_voltage: 31, grid_voltage: 232, pv_current: 0, battery_current: -18, load_current: 4.8, mode: 'Off-Grid' },
 ];
 let sampleIndex = 0;
 const currentReadings = [];
@@ -142,6 +164,7 @@ for (const [name, key, label] of [
   ['load', 'load_current', 'House current'],
 ]) {
   for (const [selector, tag] of [[`.${name}-label>div`, 'span'], [`.metric.${name}`, 'p']]) {
+    if (name === 'battery' && tag === 'p') continue;
     const line = document.createElement(tag);
     line.className = 'current-reading';
     const value = document.createElement('b'); value.dataset.value = key;
@@ -150,9 +173,73 @@ for (const [name, key, label] of [
     const parent = document.querySelector(selector);
     const meter = parent.querySelector('.meter');
     parent.insertBefore(line, meter);
-    currentReadings.push({ line, unit, label, battery: name === 'battery' });
+    currentReadings.push({ line, unit, label, key, battery: name === 'battery' });
   }
 }
+// Existing illustration stays decorative; paths attach to the actual card edges.
+const scene = document.querySelector('.energy-scene');
+const svgNS = 'http://www.w3.org/2000/svg';
+function svgElement(tag, attributes = {}) {
+  const element = document.createElementNS(svgNS, tag);
+  for (const [name, value] of Object.entries(attributes)) element.setAttribute(name, value);
+  return element;
+}
+const icons = {
+  grid: 'M13 2 4 14h7l-1 8 10-13h-7l1-7Z',
+  solar: 'M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0',
+  battery: 'M3 7h16v10H3V7Zm16 3h2v4h-2M6 10v4m3-4v4m3-4v4',
+  load: 'm3 11 9-8 9 8M5 10v11h14V10M10 21v-7h4v7',
+};
+for (const [name, d] of Object.entries(icons)) {
+  document.querySelectorAll(`.${name}-label .mini-icon, .metric.${name} .symbol`).forEach(holder => {
+    const icon = svgElement('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.7', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });
+    icon.append(svgElement('path', { d })); holder.replaceChildren(icon);
+  });
+}
+const flowSvg = svgElement('svg', { class: 'energy-connections', 'aria-hidden': 'true' });
+const flowDefinitions = {
+  gridHouse: ['grid', 'load', '#0878f9'],
+  solarHouse: ['solar', 'load', '#c48a15'],
+  batteryHouse: ['battery', 'load', '#169779'],
+  solarBattery: ['solar', 'battery', '#c48a15'],
+};
+const flowGroups = {};
+for (const [key, [, , color]] of Object.entries(flowDefinitions)) {
+  const group = svgElement('g', { 'data-route': key, stroke: color, fill: 'none' });
+  group.append(svgElement('path', { class: 'connection-line' }), svgElement('path', { class: 'connection-dots' }), svgElement('path', { class: 'connection-arrow', d: 'M-8 -4 0 0-8 4' }));
+  group.style.display = 'none'; flowGroups[key] = group; flowSvg.append(group);
+}
+scene.append(flowSvg);
+let layoutFrame = null;
+function scheduleFlowLayout() {
+  if (layoutFrame !== null) return;
+  layoutFrame = requestAnimationFrame(() => {
+    layoutFrame = null;
+    const bounds = scene.getBoundingClientRect();
+    flowSvg.setAttribute('viewBox', `0 0 ${bounds.width} ${bounds.height}`);
+    function rect(name) {
+      const box = document.querySelector(`.${name}-label`).getBoundingClientRect();
+      return { x: box.left - bounds.left + box.width / 2, y: box.top - bounds.top + box.height / 2, w: box.width, h: box.height };
+    }
+    for (const [key, [source, target]] of Object.entries(flowDefinitions)) {
+      const a = rect(source), b = rect(target);
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const length = Math.hypot(dx, dy);
+      if (!length) continue;
+      // Intersect the center-to-center ray with each card's rectangle, plus a small gap.
+      const edge = box => Math.min(dx ? box.w / 2 / Math.abs(dx) : Infinity, dy ? box.h / 2 / Math.abs(dy) : Infinity) + 5 / length;
+      const start = edge(a), end = 1 - edge(b);
+      const x1 = a.x + dx * start, y1 = a.y + dy * start;
+      const x2 = a.x + dx * end, y2 = a.y + dy * end;
+      const d = `M${x1} ${y1}L${x2} ${y2}`;
+      flowGroups[key].querySelectorAll('.connection-line,.connection-dots').forEach(path => path.setAttribute('d', d));
+      flowGroups[key].querySelector('.connection-arrow').setAttribute('transform', `translate(${x2} ${y2}) rotate(${Math.atan2(dy, dx) * 180 / Math.PI})`);
+    }
+  });
+}
+const flowResize = new ResizeObserver(scheduleFlowLayout);
+flowResize.observe(scene);
+document.querySelectorAll('.scene-label').forEach(box => flowResize.observe(box));
 let paused = false;
 const pauseButton = document.querySelector('#pause');
 pauseButton.hidden = !demo;
@@ -165,14 +252,22 @@ function formatPower(watts) {
   return { value: new Intl.NumberFormat(window.energyI18n.locale, { maximumFractionDigits: kilo ? 2 : 0, useGrouping: false }).format(kilo ? watts / 1000 : watts), unit: kilo ? 'kW' : 'W' };
 }
 function render(sample) {
-  currentReadings.forEach(({ line, unit, label, battery }) => {
+  currentReadings.forEach(({ line, unit, label, key, battery }) => {
     line.title = t(label);
     unit.textContent = battery ? t('A (avg.)') : 'A';
+    line.hidden = Number.isFinite(sample[key]) && Math.abs(sample[key]) < 0.05;
+    if (battery && Number.isFinite(sample.battery) && Math.abs(sample.battery) < 0.5) line.hidden = true;
   });
   // Dashboard convention: positive = charging, negative = discharging.
-  const batteryState = sample.battery > 0 ? 'charging' : sample.battery < 0 ? 'discharging' : 'idle';
-  document.body.dataset.batteryState = batteryState;
-  const values = { grid: 0, ...sample };
+  const mode = demo ? sample.mode : latest?.mode;
+  const state = window.energyFlowState(sample, mode);
+  document.body.dataset.batteryState = state.batteryState;
+  document.querySelectorAll('.battery-status').forEach(element => {
+    element.textContent = t(state.batteryLabel);
+    element.title = state.batteryState === 'waiting' ? t('Waiting for 40% charge before battery use resumes.') : '';
+  });
+  document.querySelectorAll('.battery-watts').forEach(element => { element.hidden = Number.isFinite(sample.battery) && Math.abs(sample.battery) < 0.5; });
+  const values = sample;
   document.querySelectorAll('[data-value]').forEach(element => {
     const key = element.dataset.value;
     if (key === 'soc') {
@@ -185,11 +280,15 @@ function render(sample) {
       element.nextElementSibling.textContent = power.unit;
     }
   });
-  document.querySelector('#charge-bar').style.width = `${sample.soc ?? 0}%`;
-  document.querySelector('#grid-state').textContent = t(values.grid === null ? 'Estimate unavailable' : 'Estimated · house + battery');
-  document.querySelectorAll('.metric:not(.battery) .meter').forEach(element => { element.hidden = !demo; });
-  document.querySelector('.solar-flow').style.animationPlayState = sample.pv > 0 ? '' : 'paused';
-  document.querySelector('.load-flow').style.animationPlayState = sample.load > 0 ? '' : 'paused';
+  document.querySelectorAll('#charge-bar, .scene-charge-bar').forEach(element => { element.style.width = `${Math.max(0, Math.min(100, sample.soc ?? 0))}%`; });
+  document.querySelector('#grid-state').textContent = t(Number.isFinite(values.grid) ? 'Estimated' : 'Estimate unavailable');
+  document.querySelectorAll('.metric:not(.battery) .meter').forEach(element => { element.hidden = true; });
+  for (const [key, active] of Object.entries(state.routes)) flowGroups[key].style.display = active ? '' : 'none';
+  scheduleFlowLayout();
+  if (demo) {
+    document.querySelector('#operating-mode').textContent = t(mode === 'Mains' ? 'Grid' : 'Solar');
+    document.body.dataset.connection = 'live';
+  }
   if (demo) document.querySelector('#freshness').textContent = `Sample updated ${new Date().toLocaleTimeString()}`;
 }
 pauseButton.addEventListener('click', () => {
@@ -267,10 +366,18 @@ async function refresh() {
 if (demo) {
   document.querySelector('.demo').lastChild.textContent = ' Demo preview';
   document.querySelector('#scene-status').textContent = 'Sample energy flow';
+  const previewChoice = document.createElement('select');
+  previewChoice.setAttribute('aria-label', 'Preview scenario');
+  ['Grid / waiting', 'Solar / charging', 'Solar + battery', 'Battery only'].forEach((label, index) => {
+    const option = document.createElement('option'); option.value = index; option.textContent = label; previewChoice.append(option);
+  });
+  previewChoice.addEventListener('change', () => { sampleIndex = Number(previewChoice.value); paused = true; pauseButton.textContent = 'Resume demo'; document.body.classList.remove('paused'); render(samples[sampleIndex]); });
+  document.querySelector('footer').append(previewChoice);
   render(samples[0]);
   setInterval(() => {
     if (paused) return;
     sampleIndex = (sampleIndex + 1) % samples.length;
+    previewChoice.value = sampleIndex;
     render(samples[sampleIndex]);
   }, 5000);
 } else {

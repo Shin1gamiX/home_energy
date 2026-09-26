@@ -86,6 +86,10 @@ Peaks refer to displayed averaged values in the visible range, not guaranteed in
 
 ## Display conventions and decisions to preserve
 
+The overview uses the original SVG house at 25% opacity beneath direct box-to-box SVG paths. A ResizeObserver recalculates endpoints at actual card edges after resizing or translation. Only active estimated routes appear: grid to house, solar to house, battery to house, and solar to battery. Solar-to-house visibility requires all relevant readings and uses the same load-minus-grid-minus-discharge assumption as summaries, capped by PV power. Solar-to-battery assumes grid charging remains disabled. Arrows are qualitative, not separately measured branch wattages. Missing data does not imply a zero flow; stale/offline data hides every route. Reduced-motion preferences disable moving dots.
+
+Secondary values that round to zero (current below 0.05 A, battery power below 0.5 W in magnitude) are hidden. Main power readings and SOC remain. Battery amperage is omitted from the lower summary, but remains in the scene while battery power is active. In Mains mode, idle battery power with reported SOC below 40% displays Waiting to charge, based on the owner's configured return threshold, not a BMS status. Unknown battery power shows No report. EN/RU/EL translations cover the new labels. These presentation rules do not change recorded readings or history.
+
 - Positive battery power means charging; negative means discharging. Green/red/gray indicate charging/discharging/idle or unavailable as implemented by the current UI.
 - Battery percentage remains visible. Battery current is A (average). Do not relabel it as Ah or present SOC multiplied by nameplate capacity as measured BMS remaining capacity.
 - `Mains` is displayed as Grid and `Off-Grid` as Solar. The latter is a friendly label, not proof that all load is supplied by PV rather than battery.
@@ -104,4 +108,4 @@ Peaks refer to displayed averaged values in the visible range, not guaranteed in
 6. Before modifying formulas, document source assumptions and test gaps, nulls, negative values and partial periods.
 7. Back up runtime separately, monitor service logs and storage, and verify restore procedures. Git stores code, not historical measurements.
 
-The publication copy differs from the deployed source only in generic deployment settings, an environment-configurable entity prefix, documentation and a test-fixture correction: reserved synthetic metadata IDs avoid collisions with the expanded ten-metric fixture. No production changes are implied by a repository commit. No license has been selected in this repository.
+The initial publication sanitized deployment settings, added an environment-configurable entity prefix, and corrected test-fixture IDs. Subsequent commits may include explicitly approved frontend deployments; verify deployed hashes instead of assuming Git and production match. No license has been selected in this repository.

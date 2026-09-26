@@ -25,6 +25,92 @@ body[data-battery-state="idle"]{--battery-color:#738680;--battery-fill:#94a49b}
   .battery-label{left:4%;bottom:48px}
   .load-label{bottom:48px}
 }
+/* Overview v2: the illustration is a quiet backdrop to box-to-box routing. */
+.overview { --flow-grid:#0878f9; --flow-solar:#bd800c; --flow-house:#15947a; }
+.overview header .language-control { order:2; }
+.overview header .history-nav { order:3; margin:0; }
+.overview .history-nav a { display:block; }
+.overview .energy-scene { height:500px; }
+.overview .house { width:560px; top:40px; opacity:.25; pointer-events:none; }
+.overview .scene-label { z-index:2; width:190px; max-width:27%; min-width:0; padding:18px 20px; gap:14px; background:#ffffffed; box-shadow:none; backdrop-filter:none; }
+.overview .scene-label>div { min-width:0; flex:1; }
+.overview .scene-label div>span { font-size:28px; }
+.overview .scene-label small { font-size:14px; }
+.overview .scene-label div>span.current-reading { font-size:16px; white-space:normal; }
+.overview .current-reading small { display:inline-block; }
+.overview .grid-label { left:5%; top:55px; bottom:auto; color:var(--flow-grid); }
+.overview .solar-label { left:auto; right:5%; top:55px; bottom:auto; color:var(--flow-solar); }
+.overview .battery-label { left:5%; top:auto; bottom:48px; }
+.overview .load-label { right:5%; top:auto; bottom:48px; color:var(--flow-house); }
+.overview .grid-label [data-value=grid],.overview .metric.grid .reading { color:var(--flow-grid); }
+.overview .solar-label [data-value=pv],.overview .metric.solar .reading { color:var(--flow-solar); }
+.overview .load-label [data-value=load],.overview .metric.load .reading { color:var(--flow-house); }
+.overview .battery-label [data-value=soc],.overview .metric.battery .reading { color:var(--battery-color); }
+.overview .mini-icon svg { width:25px; height:25px; display:block; }
+.overview .symbol svg { width:18px; height:18px; display:block; }
+.overview .battery-label .battery-watts { font-size:18px; }
+.overview .scene-label div>span.battery-status { font-size:12px; line-height:1.4; font-weight:400; white-space:normal; color:var(--battery-color); }
+.overview .scene-label .meter { margin-top:9px; height:5px; background:#eeeede; }
+.overview .scene-charge-bar { background:var(--battery-fill); }
+.overview .scene-label .meter>span { margin:0; }
+.overview[data-battery-state=waiting] { --battery-color:#b87808; --battery-fill:#d09219; }
+.overview[data-battery-state=waiting] .metric.battery { background:#fffaee; border-color:#f1e7ce; }
+.overview .energy-connections { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:1; overflow:visible; }
+.overview .connection-line,.overview .connection-arrow { stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.overview .connection-dots { stroke-width:6; stroke-linecap:round; stroke-dasharray:0 64; animation:energy-travel 3s linear infinite; }
+@keyframes energy-travel { to { stroke-dashoffset:-64; } }
+.overview.paused .connection-dots { animation-play-state:paused; }
+.overview[data-connection=stale] .energy-connections,.overview[data-connection=offline] .energy-connections { visibility:hidden; }
+.overview .metrics { gap:12px; margin-top:16px; }
+.overview .metric { padding:20px; border-radius:16px; min-height:146px; }
+.overview .metric-top { justify-content:flex-start; align-items:center; font-size:12px; min-height:30px; }
+.overview .metric-top .symbol { order:-1; flex-shrink:0; }
+.overview .metric.grid { --accent:var(--flow-grid); }
+.overview .metric.solar { --accent:var(--flow-solar); }
+.overview .metric.load { --accent:var(--flow-house); }
+.overview .reading { margin:7px 0 6px; }
+.overview .reading b { font-size:32px; }
+.overview .reading>span { color:inherit; font-size:15px; }
+.overview .metric .meter { margin-top:10px; height:5px; max-width:120px; }
+.overview .metric .current-reading { margin-top:3px; }
+.overview .metric.battery .battery-status { color:var(--battery-color); }
+.overview .metric.grid p { display:inline; }
+.overview #grid-state::before { content:' · '; }
+.overview .scene-caption { bottom:18px; }
+.overview footer select { font:inherit; padding:7px; border:1px solid #d4dfd8; border-radius:8px; color:inherit; background:white; }
+@media(max-width:700px) {
+  .overview .dashboard { padding:22px 18px; }
+  .overview header { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:14px 10px; }
+  .overview header .brand { grid-area:1 / 1; }
+  .overview header .language-control { grid-area:1 / 2; }
+  .overview header .header-status { grid-area:2 / 1; width:auto; flex-direction:row; justify-content:flex-start; margin:0; }
+  .overview header .history-nav { grid-area:2 / 2; }
+  .overview .energy-scene { height:430px; }
+  .overview .house { width:410px; top:75px; }
+  .overview .scene-label { width:43%; max-width:43%; padding:13px 11px; gap:8px; font-size:11px; }
+  .overview .grid-label,.overview .solar-label { top:42px; }
+  .overview .grid-label,.overview .battery-label { left:4%; }
+  .overview .solar-label,.overview .load-label { right:4%; }
+  .overview .battery-label,.overview .load-label { bottom:43px; }
+  .overview .scene-label div>span { font-size:24px; }
+  .overview .scene-label small { font-size:12px; }
+  .overview .scene-label div>span.current-reading { font-size:14px; }
+  .overview .scene-label div>span.battery-status { font-size:10px; }
+  .overview .mini-icon svg { width:20px; height:20px; }
+  .overview .metrics { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+  .overview .metric { padding:13px; min-height:119px; }
+  .overview .metric-top { font-size:11px; gap:7px; min-height:28px; }
+  .overview .metric-top .symbol svg { width:16px; height:16px; }
+  .overview .reading b { font-size:27px; }
+  .overview .reading { margin:4px 0; }
+  .overview .metric p { font-size:10px; }
+}
+@media(max-width:360px) {
+  .overview .dashboard { padding:18px 12px; }
+  .overview .scene-label { gap:6px; padding:12px 8px; }
+  .overview .mini-icon svg { width:16px; height:16px; }
+  .overview .scene-label div>span { font-size:21px; }
+}
 .connection-alert[hidden]{display:none}
 .connection-alert strong{display:block;font-size:17px;margin-bottom:7px}
 .connection-alert p{font-size:13px;line-height:1.55;margin:0}

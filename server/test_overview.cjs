@@ -1,0 +1,23 @@
+// Test the pure routing rules without dependencies or a browser.
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+const context = { window: {} };
+vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../app.js'), 'utf8').split('// Shared localization')[0], context);
+const state = (values, mode = 'Off-Grid') => JSON.parse(JSON.stringify(context.window.energyFlowState(values, mode)));
+const base = { grid: 0, pv: 0, load: 500, battery: 0, soc: 20 };
+assert.deepEqual(state({ ...base, grid: 500 }, 'Mains').routes, { gridHouse: true, solarHouse: false, batteryHouse: false, solarBattery: false });
+assert.equal(state(base, 'Mains').batteryLabel, 'Waiting to charge');
+assert.equal(state({ ...base, soc: 40 }, 'Mains').batteryLabel, 'Standby');
+assert.equal(state({ ...base, soc: null }, 'Mains').batteryLabel, 'Standby');
+assert.equal(state({ ...base, battery: null }, 'Mains').batteryLabel, 'No report');
+assert.deepEqual(state({ ...base, pv: 1000, battery: 500 }).routes, { gridHouse: false, solarHouse: true, batteryHouse: false, solarBattery: true });
+assert.deepEqual(state({ ...base, pv: 200, battery: -300 }).routes, { gridHouse: false, solarHouse: true, batteryHouse: true, solarBattery: false });
+assert.deepEqual(state({ ...base, pv: 500, load: 0, battery: 500 }).routes, { gridHouse: false, solarHouse: false, batteryHouse: false, solarBattery: true });
+assert.equal(state({ ...base, pv: 0, battery: -500 }).routes.batteryHouse, true);
+assert.equal(state({ ...base, pv: null, grid: null }).routes.solarHouse, false);
+assert.equal(state({ ...base, grid: 0.1 }).routes.gridHouse, false);
+assert.equal(state({ ...base, battery: -0.1 }, 'Mains').batteryLabel, 'Waiting to charge');
+assert.equal(state({ ...base, pv: 100, grid: 500 }).routes.solarHouse, false);
+console.log('13 overview routing and battery-state assertions passed.');
