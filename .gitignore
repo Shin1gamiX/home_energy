@@ -1,0 +1,30 @@
+# Private configuration and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*
+secrets*
+ssh/
+# Runtime readings, databases and operational artifacts
+runtime/
+history/
+backups/
+logs/
+*.db
+*.db-*
+*.sqlite*
+*.log
+*.tmp
+*.zip
+# Local tooling
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+node_modules/
+.DS_Store
+Thumbs.db

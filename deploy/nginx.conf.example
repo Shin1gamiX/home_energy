@@ -1,0 +1,43 @@
+server {
+    listen 80;
+    listen [::]:80;
+    server_name energy.example.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name energy.example.com;
+    ssl_certificate /etc/letsencrypt/live/energy.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/energy.example.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    root /var/www/homeenergy/public;
+    index index.html;
+    server_tokens off;
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy no-referrer always;
+    add_header X-Frame-Options DENY always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'" always;
+    add_header Cache-Control "no-store, max-age=0" always;
+
+    location = /api/energy {
+        alias /var/www/homeenergy/runtime/energy.json;
+        default_type application/json;
+        limit_except GET { deny all; }
+    }
+    location = / { try_files /index.html =404; }
+    location = /index.html { try_files $uri =404; }
+    location = /styles.css { try_files $uri =404; }
+    location = /app.js { try_files $uri =404; }
+    location = /history.html { try_files $uri =404; }
+    location = /history.js { try_files $uri =404; }
+    location = /history.css { try_files $uri =404; }
+    location ~ "^/history/(index|[0-9]{4}-[0-9]{2}-[0-9]{2})\.json$" {
+        root /var/www/homeenergy/runtime;
+        default_type application/json;
+        limit_except GET { deny all; }
+    }
+    location / { return 404; }
+}

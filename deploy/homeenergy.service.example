@@ -1,0 +1,31 @@
+[Unit]
+Description=Home energy read-only snapshot exporter
+After=docker.service
+
+[Service]
+Type=simple
+User=homeenergy
+Group=homeenergy
+Environment=HA_DATABASE=/srv/homeassistant/config/home-assistant_v2.db
+Environment=ENERGY_OUTPUT=/var/www/homeenergy/runtime/energy.json
+Environment=ENERGY_ENTITY_PREFIX=sensor.anenji_anj_11kw_48v_wifi_p_
+ExecStart=/usr/bin/python3 -B /var/www/homeenergy/server/export_energy.py
+Restart=always
+RestartSec=5
+UMask=0022
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/www/homeenergy/runtime
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX
+MemoryMax=96M
+CPUQuota=10%
+
+[Install]
+WantedBy=multi-user.target

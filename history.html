@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#eff7f6"><title>Energy history · Home</title>
+  <link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="history.css">
+</head>
+<body>
+<main class="dashboard">
+  <header><a class="brand" href="/" aria-label="Home energy overview"><span class="brand-mark">h.</span><span>shin1gamix<span class="brand-sub">HOME ENERGY</span></span></a></header>
+  <a class="back" href="/">← Overview</a>
+  <section class="intro"><div><h1>Energy history</h1><p>Your home, over time.</p></div></section>
+  <nav class="periods" aria-label="History period"><button data-period="day" aria-pressed="true">Day</button><button data-period="week" aria-pressed="false">Week</button><button data-period="month" aria-pressed="false">Month</button></nav>
+  <div class="date-controls"><button id="previous" aria-label="Previous period">‹</button><input id="history-date" type="date" aria-label="Choose date"><button id="next" aria-label="Next period">›</button><span>Athens time</span></div>
+  <p id="range-label"></p>
+  <section id="energy-summary" class="energy-summary" aria-live="polite"></section>
+  <div class="filters" role="group" aria-label="Statistics"></div>
+  <div class="filter-actions"><button id="select-all">Select all</button><button id="clear-all">Clear all</button></div>
+  <div class="averaging-control"><label for="averaging">Average over</label><select id="averaging"><option value="auto">Auto</option><option value="60">1 minute</option><option value="300">5 minutes</option><option value="900">15 minutes</option><option value="3600">1 hour</option></select></div>
+  <label class="peaks-toggle"><input id="show-peaks" type="checkbox" checked><span>Show peaks</span></label>
+  <div class="history-toolbar"><p id="history-status" role="status">Loading history…</p><button id="refresh-history" type="button">↻ Refresh</button></div>
+  <section id="charts" aria-label="History charts"></section>
+</main>
+<script src="app.js"></script>
+<script src="history.js"></script>
+</body>
+</html>

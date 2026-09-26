@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#eff7f6">
+  <title>Home · Energy</title><link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main class="dashboard">
+  <header><a class="brand" href="./" aria-label="Home energy overview"><span class="brand-mark">h.</span><span>shin1gamix<span class="brand-sub">HOME ENERGY</span></span></a><div class="header-status"><span class="mode-badge" title="Inverter operating mode" role="status">Mode · <span id="operating-mode">—</span></span><span class="demo"><i></i> Connecting</span></div></header>
+  <nav class="history-nav"><a href="history.html">History ↗</a></nav>
+  <section class="intro"><div><h1>House power information.</h1></div><span class="date" id="date"></span></section>
+  <section class="energy-scene" aria-label="Illustrated home energy flow">
+    <div class="scene-heading"><span><i class="status-dot"></i><span id="scene-status">Waiting for readings</span></span><span>POWER OVERVIEW</span></div>
+    <svg class="house" viewBox="0 0 800 600" role="img" aria-label="Solar panels on a house connected to the grid and a home battery">
+      <defs>
+        <linearGradient id="wall" x2="1" y2="1"><stop stop-color="#ffffff"/><stop offset="1" stop-color="#d5e4e1"/></linearGradient>
+        <linearGradient id="roof" x2="1" y2="1"><stop stop-color="#51716e"/><stop offset="1" stop-color="#274643"/></linearGradient>
+        <linearGradient id="panel" x2="1" y2="1"><stop stop-color="#39596b"/><stop offset="1" stop-color="#182e3a"/></linearGradient>
+        <filter id="shadow"><feGaussianBlur stdDeviation="12"/></filter>
+        <pattern id="cells" width="22" height="22" patternUnits="userSpaceOnUse"><path d="M22 0H0V22" fill="none" stroke="#91b4c0" stroke-width=".65" opacity=".6"/></pattern>
+      </defs>
+      <ellipse cx="413" cy="478" rx="222" ry="40" fill="#668b82" opacity=".16" filter="url(#shadow)"/>
+      <path d="M163 402L401 528L664 381L427 258Z" fill="#e4efea"/>
+      <path d="M163 402V414L401 541V528Z" fill="#ccdcd5"/><path d="M401 528V541L664 394V381Z" fill="#d8e5df"/>
+      <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M142 299V389L281 462L347 425" stroke="#bad2d0" stroke-width="4"/>
+        <path class="flow solar-flow" d="M464 215L540 256V384L446 437" stroke="#dca547" stroke-width="3"/>
+        <path class="flow battery-flow" d="M272 394V432L367 482L446 437" stroke="#479887" stroke-width="3"/>
+        <path class="flow load-flow" d="M446 437L523 479L636 415" stroke="#678eba" stroke-width="3"/>
+      </g>
+      <path d="M268 285L432 374V471L268 381Z" fill="url(#wall)"/>
+      <path d="M432 374L597 280V377L432 471Z" fill="#b9cfca"/>
+      <path d="M268 285L341 174L432 231L499 337L432 374Z" fill="#eaf2ef"/>
+      <path d="M336 170L506 77L610 282L433 383Z" fill="url(#roof)" stroke="#294842" stroke-width="6" stroke-linejoin="round"/>
+      <g transform="matrix(.77,-.42,.61,.65,337,225)"><rect width="190" height="130" rx="3" fill="#b5cacb"/><rect x="5" y="5" width="180" height="120" fill="url(#panel)"/><rect x="5" y="5" width="180" height="120" fill="url(#cells)"/><path d="M66 5V125M128 5V125M5 65H185" stroke="#a0b7bd" stroke-width="3"/></g>
+      <path d="M460 378L499 356V427L460 449Z" fill="#476b64"/><path d="M466 381L493 366V401L466 416Z" fill="#aeced0"/>
+      <path d="M530 353L570 330V372L530 395Z" fill="#f8efcd" stroke="#e9f2eb" stroke-width="5"/><path d="M550 342V383M530 374L570 351" stroke="#e9f2eb" stroke-width="3"/>
+      <path d="M302 317L337 336V375L302 356Z" fill="#b0cecc" stroke="#f8fbf8" stroke-width="5"/>
+      <g transform="translate(240 343)"><path d="M0 0L28 -15L63 4L35 20Z" fill="#f8fcfa"/><path d="M0 0L35 20V96L0 77Z" fill="#f9fcfa"/><path d="M35 20L63 4V81L35 96Z" fill="#c2d8d0"/><path class="battery-fill" d="M7 21L28 32V79L7 68Z" fill="#58aa8b"/><path d="M7 32L28 43M7 44L28 55M7 56L28 67" stroke="#edf5ef" stroke-width="3"/></g>
+      <g stroke="#91aaa7" stroke-width="3" fill="none" stroke-linejoin="round"><path d="M119 386L143 277L168 386M126 354H160M132 325H153M117 303H169M112 318H175M126 354L168 386M160 354L119 386M132 325L160 354M153 325L126 354"/></g>
+      <g fill="#8eac91"><ellipse cx="591" cy="408" rx="24" ry="12"/><ellipse cx="608" cy="400" rx="19" ry="12"/><ellipse cx="210" cy="425" rx="22" ry="12"/></g>
+    </svg>
+    <div class="scene-label solar-label"><span class="mini-icon">☀</span><div>Solar<span><b data-value="pv">—</b> <small>kW</small></span><span><b data-value="pv_voltage">—</b> <small>V</small></span></div></div>
+    <div class="scene-label grid-label"><span class="mini-icon">↯</span><div>Grid (est.)<span><b data-value="grid">—</b> <small>W</small></span><span><b data-value="grid_voltage">—</b> <small>V</small></span></div></div>
+    <div class="scene-label battery-label"><span class="mini-icon">▰</span><div>Battery<span><b data-value="soc">—</b><small>%</small></span><span class="battery-watts"><b data-value="battery">—</b> <small>W</small></span></div></div>
+    <div class="scene-label load-label"><span class="mini-icon">⌂</span><div>House<span><b data-value="load">—</b> <small>W</small></span></div></div>
+    <div class="scene-caption">A connected view of your home.</div>
+  </section>
+  <section class="metrics" aria-label="Energy readings">
+    <article class="metric grid"><div class="metric-top"><span>Grid power</span><span class="symbol">↯</span></div><div class="reading"><b data-value="grid">—</b><span>W</span></div><p><span data-value="grid_voltage">—</span> V</p><p id="grid-state">Waiting for readings</p><div class="meter" hidden><span style="width:0%"></span></div></article>
+    <article class="metric solar"><div class="metric-top"><span>Solar production</span><span class="symbol">☀</span></div><div class="reading"><b data-value="pv">—</b><span>kW</span></div><p><span data-value="pv_voltage">—</span> V</p><div class="meter" hidden><span style="width:65%"></span></div></article>
+    <article class="metric battery"><div class="metric-top"><span>Battery</span><span class="symbol">▰</span></div><div class="reading"><b data-value="soc">—</b><span>%</span></div><p><strong><span data-value="battery">—</span> <span>W</span></strong></p><div class="meter"><span id="charge-bar" style="width:0%"></span></div></article>
+    <article class="metric load"><div class="metric-top"><span>House consumption</span><span class="symbol">⌂</span></div><div class="reading"><b data-value="load">—</b><span>W</span></div><p>Total house load</p><div class="meter" hidden><span style="width:42%"></span></div></article>
+  </section>
+  <footer><span id="freshness" role="status">Waiting for inverter readings</span><button id="pause" type="button" hidden>Pause demo</button></footer>
+  <p class="disclaimer" hidden>Design preview only. These are simulated readings, not your inverter’s live data.</p>
+</main>
+<script src="app.js"></script>
+</body></html>
