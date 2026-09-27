@@ -25,6 +25,21 @@ No build pipeline is required. Generated data belongs outside the public source 
 
 ## Source entities
 
+PV1/PV2 channel power, voltage and current are additionally read using
+`ENERGY_PV_ENTITY_PREFIX` (default `sensor.living_room_anenji_anj_11kw_48v_wifi_p_`).
+Their suffixes are `pv1_power`, `pv1_voltage`, `pv1_current` and the corresponding
+`pv2_*` names. This separate prefix accommodates the existing HA entity registry.
+The original `pv` aggregate is retained unchanged for summaries and flow estimates;
+channel values are not added to it. Compare it against both channel powers during
+generation before changing its source. Voltages are displayed separately, not summed.
+Channel history starts when recording is deployed; older files remain valid and
+missing channel readings are gaps, never fabricated zeros. Generic PV voltage/current
+remain selectable in history for access to older records.
+
+Generic `pv_voltage` history is retired: existing rows are retained and selectable
+as "PV voltage (legacy)", but new samples are not recorded and Select all excludes
+this series. The live API/HA sensor is unchanged; PV1/PV2 voltage recording continues.
+
 `ENERGY_ENTITY_PREFIX` is prepended to these suffixes. Recorder tables used are `states_meta`, `states` and `state_attributes`; schema changes in Home Assistant may require exporter updates.
 
 | JSON key | Suffix | Required unit |

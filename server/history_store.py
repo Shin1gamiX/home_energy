@@ -1,12 +1,15 @@
 """Record fresh reports once, retaining minute aggregates and public daily files."""
 import json
 import sqlite3
+from contextlib import closing
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-KEYS = ('grid', 'pv', 'battery', 'soc', 'load', 'pv_voltage', 'grid_voltage',
-        'pv_current', 'battery_current', 'load_current')
+# Generic PV voltage remains in old rows, but only channel voltages are recorded now.
+KEYS = ('grid', 'pv', 'battery', 'soc', 'load', 'grid_voltage',
+        'pv_current', 'battery_current', 'load_current',
+        'pv1_power', 'pv1_voltage', 'pv1_current', 'pv2_power', 'pv2_voltage', 'pv2_current')
 ATHENS = ZoneInfo('Europe/Athens')
 
 
@@ -17,7 +20,7 @@ def record(payload, runtime):
     stamp = payload['updated_at']
     minute = int(stamp // 60) * 60
     day = datetime.fromtimestamp(stamp, ATHENS).strftime('%Y-%m-%d')
-    with sqlite3.connect(runtime / 'history.sqlite3', timeout=2) as db:
+    with closing(sqlite3.connect(runtime / 'history.sqlite3', timeout=2)) as db, db:
         db.execute('CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value REAL)')
         db.execute('CREATE TABLE IF NOT EXISTS readings (minute INTEGER, day TEXT, metric TEXT, total REAL, count INTEGER, PRIMARY KEY(minute, metric))')
         db.execute('CREATE INDEX IF NOT EXISTS readings_day ON readings(day)')

@@ -1,6 +1,6 @@
 import sqlite3
 import unittest
-from export_energy import FIELDS, PREFIX, snapshot
+from export_energy import FIELDS, CHANNEL_FIELDS, PREFIX, PV_PREFIX, snapshot
 
 
 class SnapshotTests(unittest.TestCase):
@@ -11,7 +11,8 @@ class SnapshotTests(unittest.TestCase):
                              'CREATE TABLE state_attributes(attributes_id INTEGER,shared_attrs TEXT);'
                              'CREATE TABLE states(metadata_id INTEGER,state TEXT,last_updated_ts REAL,attributes_id INTEGER);')
         for index, (key, (suffix, unit)) in enumerate(FIELDS.items(), 1):
-            self.db.execute('INSERT INTO states_meta VALUES(?,?)', (index, PREFIX + suffix))
+            prefix = PV_PREFIX if key in CHANNEL_FIELDS else PREFIX
+            self.db.execute('INSERT INTO states_meta VALUES(?,?)', (index, prefix + suffix))
             self.db.execute('INSERT INTO state_attributes VALUES(?,?)', (index, '{"unit_of_measurement":"' + unit + '"}'))
             value = '84' if key == 'soc' else '-500' if key == 'battery' else '0'
             self.db.execute('INSERT INTO states VALUES(?,?,?,?)', (index, value, 1, index))
@@ -23,6 +24,22 @@ class SnapshotTests(unittest.TestCase):
     def test_grid_includes_house_and_battery(self):
         self.db.execute("UPDATE states SET state='678' WHERE metadata_id=1")
         self.assertEqual(snapshot(self.db, 1000)['values']['grid'], 859)
+
+    def test_channels_do_not_double_count_total(self):
+        for key, value in [('pv', 3000), ('pv1_power', 1800), ('pv2_power', 1200)]:
+            index = list(FIELDS).index(key) + 1
+            self.db.execute('UPDATE states SET state=? WHERE metadata_id=?', (str(value), index))
+        values = snapshot(self.db, 1000)['values']
+        self.assertEqual(values['pv'], 3000)
+        self.assertEqual(values['pv1_power'], 1800)
+        self.assertEqual(values['pv2_power'], 1200)
+
+    def test_missing_channel_is_not_zero(self):
+        index = list(FIELDS).index('pv2_power') + 1
+        self.db.execute('DELETE FROM states WHERE metadata_id=?', (index,))
+        result = snapshot(self.db, 1000)
+        self.assertIsNone(result['values']['pv2_power'])
+        self.assertEqual(result['status'], 'partial')
 
     def test_missing_grid_component_is_not_zero(self):
         self.db.execute('DELETE FROM states WHERE metadata_id=102')

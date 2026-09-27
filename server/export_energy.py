@@ -11,26 +11,31 @@ from history_store import record
 DATABASE = Path(os.environ.get('HA_DATABASE', '/srv/homeassistant/config/home-assistant_v2.db'))
 OUTPUT = Path(os.environ.get('ENERGY_OUTPUT', '/var/www/homeenergy/runtime/energy.json'))
 PREFIX = os.environ.get('ENERGY_ENTITY_PREFIX', 'sensor.anenji_anj_11kw_48v_wifi_p_')
+PV_PREFIX = os.environ.get('ENERGY_PV_ENTITY_PREFIX', 'sensor.living_room_anenji_anj_11kw_48v_wifi_p_')
 FIELDS = {'grid': ('grid_to_home_power', 'W'), 'pv': ('pv_power', 'W'),
           'battery': ('battery_power', 'W'), 'soc': ('battery_percent', '%'), 'load': ('load_power', 'W'),
           'pv_voltage': ('pv_voltage', 'V'), 'grid_voltage': ('grid_voltage', 'V'),
           'pv_current': ('pv_current', 'A'), 'battery_current': ('battery_average_current', 'A'),
           'load_current': ('output_current', 'A')}
+CHANNEL_FIELDS = {f'pv{channel}_{metric}': (f'pv{channel}_{metric}', unit)
+                  for channel in (1, 2)
+                  for metric, unit in [('power', 'W'), ('voltage', 'V'), ('current', 'A')]}
+FIELDS.update(CHANNEL_FIELDS)
 
 
-def latest(connection, suffix):
+def latest(connection, suffix, prefix=PREFIX):
     return connection.execute(
         'SELECT s.state,s.last_updated_ts,a.shared_attrs FROM states s '
         'LEFT JOIN state_attributes a ON a.attributes_id=s.attributes_id '
         'WHERE s.metadata_id=(SELECT metadata_id FROM states_meta WHERE entity_id=?) '
-        'ORDER BY s.last_updated_ts DESC LIMIT 1', (PREFIX + suffix,),
+        'ORDER BY s.last_updated_ts DESC LIMIT 1', (prefix + suffix,),
     ).fetchone()
 
 
 def snapshot(connection, now):
     values = {}
     for key, (suffix, unit) in FIELDS.items():
-        row = latest(connection, suffix)
+        row = latest(connection, suffix, PV_PREFIX if key in CHANNEL_FIELDS else PREFIX)
         try:
             value = float(row[0])
             attributes = json.loads(row[2] or '{}')

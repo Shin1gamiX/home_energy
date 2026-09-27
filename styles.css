@@ -112,6 +112,20 @@ body[data-battery-state="idle"]{--battery-color:#738680;--battery-fill:#94a49b}
   .overview .scene-label div>span { font-size:21px; }
 }
 .connection-alert[hidden]{display:none}
+/* Channel details share one solar card; voltages are never combined. */
+.overview .pv-channels { margin-top:8px; border-top:1px solid #c3923226; }
+.overview .pv-channel { display:grid; grid-template-columns:auto 1fr; gap:2px 8px; padding-top:7px; }
+.overview .pv-channel>strong { font-size:11px; color:#987027; align-self:center; }
+.overview .pv-channel>span.pv-channel-power { font-size:14px; font-weight:650; margin:0; text-align:right; }
+.overview .pv-channel>span.pv-channel-details { grid-column:1 / -1; font-size:11px; font-weight:400; margin:0; color:#70857d; white-space:normal; }
+.overview .solar-label { width:210px; }
+@media(max-width:700px) {
+  .overview .energy-scene { height:475px; }
+  .overview .solar-label { gap:5px; }
+  .overview .solar-label .mini-icon { display:none; }
+  .overview .pv-channel>span.pv-channel-power { font-size:13px; }
+  .overview .pv-channel>span.pv-channel-details { font-size:10px; }
+}
 .connection-alert strong{display:block;font-size:17px;margin-bottom:7px}
 .connection-alert p{font-size:13px;line-height:1.55;margin:0}
 .connection-alert small{display:block;font-size:12px;line-height:1.5;margin-top:10px;color:#994141}

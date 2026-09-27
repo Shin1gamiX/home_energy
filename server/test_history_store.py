@@ -2,11 +2,43 @@ import json
 import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 from history_store import record
 
 
 class HistoryTests(unittest.TestCase):
+    def test_legacy_voltage_is_preserved_but_not_recorded(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runtime = Path(directory)
+            sample = {'status': 'live', 'updated_at': 1790100000,
+                      'values': {'pv_voltage': 380, 'pv1_voltage': 380, 'pv2_voltage': 240}}
+            record(sample, runtime)
+            with closing(sqlite3.connect(runtime / 'history.sqlite3')) as db, db:
+                self.assertEqual(db.execute("SELECT COUNT(*) FROM readings WHERE metric='pv_voltage'").fetchone()[0], 0)
+                day = db.execute('SELECT day FROM readings LIMIT 1').fetchone()[0]
+                db.execute('INSERT INTO readings VALUES(?,?,?,?,?)', (1790099940, day, 'pv_voltage', 390, 1))
+            sample['updated_at'] += 60
+            record(sample, runtime)
+            data = json.loads((runtime / 'history' / (day + '.json')).read_text())
+            legacy = [p['values']['pv_voltage'] for p in data['points'] if 'pv_voltage' in p['values']]
+            self.assertEqual(legacy, [390])
+            self.assertEqual(data['points'][-1]['values']['pv2_voltage'], 240)
+
+    def test_channel_history_preserves_legacy_and_missing_values(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runtime = Path(directory)
+            sample = {'status': 'live', 'updated_at': 1790100000, 'values': {'pv': 300}}
+            record(sample, runtime)
+            sample['updated_at'] += 60
+            sample['values'] = {'pv': 300, 'pv1_power': 100, 'pv2_power': 200,
+                                'pv2_voltage': 237, 'pv2_current': None}
+            record(sample, runtime)
+            with closing(sqlite3.connect(runtime / 'history.sqlite3')) as db:
+                self.assertEqual(db.execute("SELECT SUM(total) FROM readings WHERE metric='pv'").fetchone()[0], 600)
+                self.assertEqual(db.execute("SELECT total,count FROM readings WHERE metric='pv2_power'").fetchone(), (200, 1))
+                self.assertEqual(db.execute("SELECT COUNT(*) FROM readings WHERE metric='pv2_current'").fetchone()[0], 0)
+
     def test_current_metrics_keep_sign_and_missing_values(self):
         with tempfile.TemporaryDirectory() as directory:
             runtime = Path(directory)
@@ -37,7 +69,7 @@ class HistoryTests(unittest.TestCase):
             sample['status'] = 'stale'
             sample['updated_at'] += 5
             record(sample, runtime)
-            with sqlite3.connect(runtime / 'history.sqlite3') as db:
+            with closing(sqlite3.connect(runtime / 'history.sqlite3')) as db:
                 self.assertEqual(db.execute("SELECT total,count FROM readings WHERE metric='pv'").fetchone(), (400, 2))
             index = json.loads((runtime / 'history/index.json').read_text())
             data = json.loads((runtime / 'history' / (index['days'][0] + '.json')).read_text())

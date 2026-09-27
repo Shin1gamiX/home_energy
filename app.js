@@ -27,6 +27,10 @@ window.energyFlowState = (values, mode) => {
 window.energyI18n = (() => {
   const translations = {
     ru: {
+      'PV voltage (legacy)': 'Напряжение PV (архив)',
+      'Solar total': 'Солнце · всего', 'PV1 power': 'Мощность PV1', 'PV2 power': 'Мощность PV2',
+      'PV1 voltage': 'Напряжение PV1', 'PV2 voltage': 'Напряжение PV2',
+      'PV1 current': 'Ток PV1', 'PV2 current': 'Ток PV2',
       'Waiting to charge': 'Ожидание зарядки', 'Discharging': 'Разрядка',
       'Estimated flow': 'Расчётный поток', 'Estimated': 'Расчёт',
       'Waiting for 40% charge before battery use resumes.': 'Ожидание заряда 40% для возобновления работы от батареи.',
@@ -73,6 +77,10 @@ window.energyI18n = (() => {
       '{title} over time': '{title} во времени'
     },
     el: {
+      'PV voltage (legacy)': 'Τάση PV (παλαιά δεδομένα)',
+      'Solar total': 'Ηλιακή · σύνολο', 'PV1 power': 'Ισχύς PV1', 'PV2 power': 'Ισχύς PV2',
+      'PV1 voltage': 'Τάση PV1', 'PV2 voltage': 'Τάση PV2',
+      'PV1 current': 'Ρεύμα PV1', 'PV2 current': 'Ρεύμα PV2',
       'Waiting to charge': 'Αναμονή φόρτισης', 'Discharging': 'Εκφόρτιση',
       'Estimated flow': 'Εκτιμώμενη ροή', 'Estimated': 'Εκτίμηση',
       'Waiting for 40% charge before battery use resumes.': 'Αναμονή φόρτισης στο 40% για επαναφορά της χρήσης μπαταρίας.',
@@ -165,10 +173,33 @@ const samples = [
   { grid: 0, pv: 410, load: 910, battery: -500, soc: 84, pv_voltage: 360, grid_voltage: 232, pv_current: 1.1, battery_current: -9.5, load_current: 4.5, mode: 'Off-Grid' },
   { grid: 0, pv: 0, load: 940, battery: -940, soc: 64, pv_voltage: 31, grid_voltage: 232, pv_current: 0, battery_current: -18, load_current: 4.8, mode: 'Off-Grid' },
 ];
+// Explicitly synthetic channel values for the loopback-only preview.
+samples.forEach(sample => {
+  for (const channel of [1, 2]) {
+    const power = sample.pv * (channel === 1 ? .6 : .4);
+    const voltage = sample.pv ? (channel === 1 ? 382.9 : 237.2) : 30;
+    Object.assign(sample, { [`pv${channel}_power`]: power, [`pv${channel}_voltage`]: voltage,
+      [`pv${channel}_current`]: power / voltage });
+  }
+});
+const pvChannelViews = [];
+for (const selector of ['.solar-label>div', '.metric.solar']) {
+  const parent = document.querySelector(selector);
+  parent.querySelector('[data-value="pv_voltage"]').parentElement.remove();
+  const channels = document.createElement('div'); channels.className = 'pv-channels';
+  for (const channel of [1, 2]) {
+    const row = document.createElement('div'); row.className = 'pv-channel';
+    const name = document.createElement('strong'); name.textContent = `PV${channel}`;
+    const power = document.createElement('span'); power.className = 'pv-channel-power';
+    const details = document.createElement('span'); details.className = 'pv-channel-details';
+    row.append(name, power, details); channels.append(row);
+    pvChannelViews.push({ channel, power, details });
+  }
+  parent.append(channels);
+}
 let sampleIndex = 0;
 const currentReadings = [];
 for (const [name, key, label] of [
-  ['solar', 'pv_current', 'Solar current'],
   ['battery', 'battery_current', 'Battery current (avg.)'],
   ['load', 'load_current', 'House current'],
 ]) {
@@ -281,7 +312,7 @@ function render(sample) {
     const key = element.dataset.value;
     if (key === 'soc') {
       element.textContent = values[key] ?? '—';
-    } else if (key === 'pv_voltage' || key === 'grid_voltage' || key.endsWith('_current')) {
+    } else if (key.endsWith('_voltage') || key.endsWith('_current')) {
       element.textContent = Number.isFinite(values[key]) ? new Intl.NumberFormat(window.energyI18n.locale, { maximumFractionDigits: 1 }).format(values[key]) : '—';
     } else {
       const power = formatPower(values[key]);
@@ -289,6 +320,18 @@ function render(sample) {
       element.nextElementSibling.textContent = power.unit;
     }
   });
+  for (const { channel, power, details } of pvChannelViews) {
+    const prefix = `pv${channel}_`;
+    const watts = formatPower(values[prefix + 'power']);
+    power.textContent = `${watts.value} ${watts.unit}`;
+    power.title = t(`PV${channel} power`);
+    const format = value => Number.isFinite(value)
+      ? new Intl.NumberFormat(window.energyI18n.locale, { maximumFractionDigits: 1 }).format(value) : '—';
+    const current = values[prefix + 'current'];
+    details.textContent = `${format(values[prefix + 'voltage'])} V` +
+      (Number.isFinite(current) && Math.abs(current) < .05 ? '' : ` · ${format(current)} A`);
+    details.title = `${t(`PV${channel} voltage`)} · ${t(`PV${channel} current`)}`;
+  }
   document.querySelectorAll('#charge-bar, .scene-charge-bar').forEach(element => { element.style.width = `${Math.max(0, Math.min(100, sample.soc ?? 0))}%`; });
   document.querySelector('#grid-state').textContent = t(Number.isFinite(values.grid) ? 'Estimated' : 'Estimate unavailable');
   document.querySelectorAll('.metric:not(.battery) .meter').forEach(element => { element.hidden = true; });

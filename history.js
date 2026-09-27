@@ -1,18 +1,30 @@
 'use strict';
 const { t } = window.energyI18n;
+if (location.hostname === '127.0.0.1' && location.port === '8766') {
+  const notice = document.createElement('p');
+  notice.textContent = 'Design preview · simulated history, not live inverter data.';
+  document.querySelector('.intro').append(notice);
+}
 const metrics = {
-  pv: { get label() { return t('Solar'); }, color: '#c39232', unit: 'W', group: 'power' },
+  pv: { get label() { return t('Solar total'); }, color: '#c39232', unit: 'W', group: 'power' },
+  pv1_power: { get label() { return t('PV1 power'); }, color: '#b56610', unit: 'W', group: 'power' },
+  pv2_power: { get label() { return t('PV2 power'); }, color: '#365dc1', unit: 'W', group: 'power' },
+  pv1_voltage: { get label() { return t('PV1 voltage'); }, color: '#337eb9', unit: 'V', group: 'voltage' },
+  pv2_voltage: { get label() { return t('PV2 voltage'); }, color: '#c27019', unit: 'V', group: 'voltage' },
+  pv1_current: { get label() { return t('PV1 current'); }, color: '#b56610', unit: 'A', group: 'current' },
+  pv2_current: { get label() { return t('PV2 current'); }, color: '#365dc1', unit: 'A', group: 'current' },
   grid: { get label() { return t('Grid (est.)'); }, color: '#8861ba', unit: 'W', group: 'power' },
   load: { get label() { return t('House'); }, color: '#168b8a', unit: 'W', group: 'power' },
   battery: { get label() { return t('Battery power'); }, color: '#d65c66', unit: 'W', group: 'power' },
   soc: { get label() { return t('Battery %'); }, color: '#80a57c', unit: '%', group: 'soc' },
-  pv_voltage: { get label() { return t('PV voltage'); }, color: '#337eb9', unit: 'V', group: 'voltage' },
+  pv_voltage: { get label() { return t('PV voltage (legacy)'); }, color: '#337eb9', unit: 'V', group: 'voltage', legacy: true },
   grid_voltage: { get label() { return t('Grid voltage'); }, color: '#aa4e91', unit: 'V', group: 'voltage' },
   pv_current: { get label() { return t('Solar current'); }, color: '#c39232', unit: 'A', group: 'current' },
   battery_current: { get label() { return t('Battery current (avg.)'); }, color: '#d65c66', unit: 'A', group: 'current' },
   load_current: { get label() { return t('House current'); }, color: '#168b8a', unit: 'A', group: 'current' },
 };
-const selected = new Set(Object.keys(metrics));
+// Generic voltage/current remain selectable for older recorded history.
+const selected = new Set(Object.keys(metrics).filter(key => !['pv_voltage', 'pv_current'].includes(key)));
 const timezone = 'Europe/Athens';
 const dateInput = document.querySelector('#history-date');
 const statusElement = document.querySelector('#history-status');
@@ -461,14 +473,19 @@ for (const [key, metric] of Object.entries(metrics)) {
     pv_voltage: 'M3 6l5 12 5-12M17 6v12m-3-6h6',
     grid_voltage: 'M8 22l4-20 4 20M6 8h12M5 13h14M9 18h6M9 8l6 5m-6 0 6 5',
   };
-  const iconKey = { pv_current: 'pv', battery_current: 'battery', load_current: 'load' }[key] || key;
+  const iconKey = /^pv[12]_/.test(key) ? (key.endsWith('_voltage') ? 'pv_voltage' : 'pv')
+    : { pv_current: 'pv', battery_current: 'battery', load_current: 'load' }[key] || key;
   icon.append(svgElement('path', { d: paths[iconKey] }));
   const label = document.createElement('span'); label.textContent = metric.label;
   button.append(icon, label);
   button.addEventListener('click', () => { selected.has(key) ? selected.delete(key) : selected.add(key); updateFilters(); });
   document.querySelector('.filters').append(button);
 }
-document.querySelector('#select-all').addEventListener('click', () => { Object.keys(metrics).forEach(k => selected.add(k)); updateFilters(); });
+document.querySelector('#select-all').addEventListener('click', () => {
+  selected.clear();
+  Object.keys(metrics).filter(k => !metrics[k].legacy).forEach(k => selected.add(k));
+  updateFilters();
+});
 document.querySelector('#clear-all').addEventListener('click', () => { selected.clear(); updateFilters(); });
 document.querySelectorAll('[data-period]').forEach(button => button.addEventListener('click', () => {
   period = button.dataset.period;

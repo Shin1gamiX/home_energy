@@ -25,6 +25,13 @@ class Preview(SimpleHTTPRequestHandler):
                     continue
                 solar = max(0, math.sin((i - 360) / 720 * math.pi)) * 2400 if 360 < i < 1080 else 0
                 values = {'pv': solar, 'grid': 300, 'load': 700 + math.sin(i / 30) * 100, 'battery': solar - 700, 'soc': 50 + math.sin(i / 240) * 20, 'pv_voltage': 200 if solar else 30}
+                for channel, share, voltage in [(1, .6, 382.9), (2, .4, 237.2)]:
+                    power = solar * share
+                    values.update({f'pv{channel}_power': power,
+                                   f'pv{channel}_voltage': voltage if solar else 30,
+                                   f'pv{channel}_current': power / voltage})
+                values.update(grid_voltage=232, battery_current=values['battery'] / 52,
+                              load_current=values['load'] / 230, pv_current=solar / 300)
                 points.append({'t': start + i * 60, 'values': values, 'counts': dict.fromkeys(values, 1)})
             payload = {'points': points}
         else:
@@ -37,4 +44,4 @@ class Preview(SimpleHTTPRequestHandler):
 
 
 if __name__ == '__main__':
-    ThreadingHTTPServer(('127.0.0.1', 8767), Preview).serve_forever()
+    ThreadingHTTPServer(('127.0.0.1', 8766), Preview).serve_forever()
