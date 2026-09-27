@@ -40,8 +40,8 @@ body[data-battery-state="idle"]{--battery-color:#738680;--battery-fill:#94a49b}
 .overview .current-reading small { display:inline-block; }
 .overview .grid-label { left:5%; top:55px; bottom:auto; color:var(--flow-grid); }
 .overview .solar-label { left:auto; right:5%; top:55px; bottom:auto; color:var(--flow-solar); }
-.overview .battery-label { left:5%; top:auto; bottom:48px; }
-.overview .load-label { right:5%; top:auto; bottom:48px; color:var(--flow-house); }
+.overview .battery-label { left:auto; right:5%; top:auto; bottom:48px; }
+.overview .load-label { left:5%; right:auto; top:auto; bottom:48px; color:var(--flow-house); }
 .overview .grid-label [data-value=grid],.overview .metric.grid .reading { color:var(--flow-grid); }
 .overview .solar-label [data-value=pv],.overview .metric.solar .reading { color:var(--flow-solar); }
 .overview .load-label [data-value=load],.overview .metric.load .reading { color:var(--flow-house); }
@@ -89,8 +89,8 @@ body[data-battery-state="idle"]{--battery-color:#738680;--battery-fill:#94a49b}
   .overview .house { width:410px; top:75px; }
   .overview .scene-label { width:43%; max-width:43%; padding:13px 11px; gap:8px; font-size:11px; }
   .overview .grid-label,.overview .solar-label { top:42px; }
-  .overview .grid-label,.overview .battery-label { left:4%; }
-  .overview .solar-label,.overview .load-label { right:4%; }
+  .overview .grid-label,.overview .load-label { left:4%; }
+  .overview .solar-label,.overview .battery-label { right:4%; }
   .overview .battery-label,.overview .load-label { bottom:43px; }
   .overview .scene-label div>span { font-size:24px; }
   .overview .scene-label small { font-size:12px; }
