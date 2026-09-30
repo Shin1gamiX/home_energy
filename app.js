@@ -27,6 +27,10 @@ window.energyFlowState = (values, mode) => {
 window.energyI18n = (() => {
   const translations = {
     ru: {
+      'Enter a valid date as DD/MM/YYYY, not in the future.': 'Введите корректную дату ДД/ММ/ГГГГ, не позднее сегодняшней.',
+      'Mode': 'Режим', 'Mixed': 'Смешанный', 'No data': 'Нет данных', 'Unknown supply': 'Источник неизвестен', 'Mode not recorded': 'Режим не записан', 'Duration': 'Длительность',
+      'Estimated source supplying the house': 'Расчётный источник питания дома',
+      'Observed transitions; timing depends on polling. Gaps start 90 seconds after the last report.': 'Зафиксированные переходы; точность зависит от опроса. Пробелы начинаются через 90 секунд после последней отчётной записи.',
       'PV voltage (legacy)': 'Напряжение PV (архив)',
       'Solar total': 'Солнце · всего', 'PV1 power': 'Мощность PV1', 'PV2 power': 'Мощность PV2',
       'PV1 voltage': 'Напряжение PV1', 'PV2 voltage': 'Напряжение PV2',
@@ -77,6 +81,10 @@ window.energyI18n = (() => {
       '{title} over time': '{title} во времени'
     },
     el: {
+      'Enter a valid date as DD/MM/YYYY, not in the future.': 'Εισαγάγετε έγκυρη ημερομηνία ΗΗ/ΜΜ/ΕΕΕΕ, όχι στο μέλλον.',
+      'Mode': 'Λειτουργία', 'Mixed': 'Μικτή', 'No data': 'Χωρίς δεδομένα', 'Unknown supply': 'Άγνωστη πηγή', 'Mode not recorded': 'Δεν καταγράφηκε', 'Duration': 'Διάρκεια',
+      'Estimated source supplying the house': 'Εκτιμώμενη πηγή τροφοδοσίας σπιτιού',
+      'Observed transitions; timing depends on polling. Gaps start 90 seconds after the last report.': 'Καταγεγραμμένες μεταβάσεις· η ακρίβεια εξαρτάται από τη συχνότητα λήψης. Τα κενά ξεκινούν 90 δευτερόλεπτα μετά την τελευταία αναφορά.',
       'PV voltage (legacy)': 'Τάση PV (παλαιά δεδομένα)',
       'Solar total': 'Ηλιακή · σύνολο', 'PV1 power': 'Ισχύς PV1', 'PV2 power': 'Ισχύς PV2',
       'PV1 voltage': 'Τάση PV1', 'PV2 voltage': 'Τάση PV2',
@@ -284,7 +292,7 @@ let paused = false;
 const pauseButton = document.querySelector('#pause');
 pauseButton.hidden = !demo;
 document.querySelector('.disclaimer').hidden = !demo;
-function updateDate() { document.querySelector('#date').textContent = new Intl.DateTimeFormat(window.energyI18n.locale, { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Athens' }).format(new Date()); }
+function updateDate() { document.querySelector('#date').textContent = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Athens' }).format(new Date()); }
 updateDate();
 function formatPower(watts) {
   if (!Number.isFinite(watts)) return { value: '—', unit: 'W' };

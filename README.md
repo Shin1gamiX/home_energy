@@ -102,3 +102,22 @@ Grid import and some derived readings are estimates, not billing-grade measureme
 ## Working on this project later
 
 Start with this README and [ARCHITECTURE.md](docs/ARCHITECTURE.md), then inspect current code and deployment settings. Do not assume repository defaults describe an existing server. Production updates and inverter-setting changes are separate operations requiring explicit approval. This initial publication intentionally leaves the deployed installation untouched.
+
+## Supply-mode history
+
+The History **Mode** toggle shows estimated house supply (Grid, Solar, Battery,
+or Mixed), not the inverter's reported operating mode. It follows the selected
+day/week/month and visible chart range, independently of the averaging selector.
+Hover, tap, or focus an interval for observed timestamps and duration.
+
+Fresh reports are compressed into `supply_intervals` in the existing history
+SQLite database and exported as `modes` in daily JSON. Changes are timestamped
+at the first observed report; precision is limited by polling. A report remains
+valid for at most 90 seconds, then the timeline shows No data. Older history is
+labelled Mode not recorded rather than reconstructed as exact transitions.
+
+Classification assumes grid charging is disabled: solar-to-house is the smaller
+of PV power and house demand minus grid and battery discharge. Sources count as
+active above the larger of 20 W and 2% of house load. Multiple active sources mean
+Mixed. Missing required readings mean Unknown supply; zero demand means Standby.
+These are estimates, not independently metered source allocations.

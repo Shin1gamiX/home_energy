@@ -16,7 +16,8 @@ class Preview(SimpleHTTPRequestHandler):
         now = datetime.now().astimezone()
         day = now.strftime('%Y-%m-%d')
         if self.path == '/history/index.json':
-            payload = {'days': [day]}
+            start = int(now.replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
+            payload = {'days': [day], 'updated_at': now.timestamp(), 'mode_recorded_from': start}
         elif self.path == '/history/' + day + '.json':
             start = int(now.replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
             points = []
@@ -33,7 +34,11 @@ class Preview(SimpleHTTPRequestHandler):
                 values.update(grid_voltage=232, battery_current=values['battery'] / 52,
                               load_current=values['load'] / 230, pv_current=solar / 300)
                 points.append({'t': start + i * 60, 'values': values, 'counts': dict.fromkeys(values, 1)})
-            payload = {'points': points}
+            boundaries = [(0, 420, 'grid'), (420, 520, 'mixed'), (520, 600, 'solar'),
+                          (620, 1050, 'solar'), (1050, 1220, 'battery'), (1220, 1440, 'grid')]
+            modes = [{'start': start + a * 60, 'end': min(start + b * 60, now.timestamp() + 90), 'state': state}
+                     for a, b, state in boundaries if start + a * 60 < now.timestamp()]
+            payload = {'points': points, 'modes': modes}
         else:
             return super().do_GET()
         body = json.dumps(payload).encode()

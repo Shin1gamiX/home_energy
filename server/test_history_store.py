@@ -4,10 +4,56 @@ import tempfile
 import unittest
 from contextlib import closing
 from pathlib import Path
-from history_store import record
+from history_store import record, supply_mode
 
 
 class HistoryTests(unittest.TestCase):
+    def test_supply_classification(self):
+        self.assertEqual(supply_mode({'grid': 5, 'pv': 1000, 'battery': 500, 'load': 500}), 'solar')
+        self.assertEqual(supply_mode({'grid': 0, 'pv': 0, 'battery': -900, 'load': 900}), 'battery')
+        self.assertEqual(supply_mode({'grid': 300, 'pv': 700, 'battery': 0, 'load': 1000}), 'mixed')
+        self.assertEqual(supply_mode({'grid': 1000, 'pv': 0, 'battery': 0, 'load': 1000}), 'grid')
+        self.assertEqual(supply_mode({'pv': 1000}), 'unknown')
+
+    def test_supply_intervals_transitions_and_outages(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runtime = Path(directory)
+            sample = {'status': 'live', 'updated_at': 1790100000,
+                      'values': {'grid': 500, 'pv': 0, 'battery': 0, 'load': 500}}
+            record(sample, runtime)
+            sample['updated_at'] += 10
+            record(sample, runtime)
+            sample['updated_at'] += 10
+            sample['values'] = {'grid': 0, 'pv': 0, 'battery': -500, 'load': 500}
+            record(sample, runtime)
+            sample['updated_at'] += 200
+            record(sample, runtime)
+            with closing(sqlite3.connect(runtime / 'history.sqlite3')) as db:
+                rows = db.execute('SELECT start,end,state FROM supply_intervals ORDER BY start').fetchall()
+            self.assertEqual(rows, [(1790100000, 1790100020, 'grid'),
+                                    (1790100020, 1790100110, 'battery'),
+                                    (1790100220, 1790100310, 'battery')])
+            index = json.loads((runtime / 'history/index.json').read_text())
+            data = json.loads((runtime / 'history' / (index['days'][0] + '.json')).read_text())
+            self.assertEqual(len(data['modes']), 3)
+            self.assertEqual(index['mode_recorded_from'], 1790100000)
+
+    def test_supply_interval_crosses_athens_midnight(self):
+        from datetime import datetime
+        from history_store import ATHENS
+        with tempfile.TemporaryDirectory() as directory:
+            runtime = Path(directory)
+            stamp = datetime(2026, 9, 30, 23, 59, 50, tzinfo=ATHENS).timestamp()
+            sample = {'status': 'live', 'updated_at': stamp,
+                      'values': {'grid': 500, 'pv': 0, 'battery': 0, 'load': 500}}
+            record(sample, runtime)
+            sample['updated_at'] += 20
+            record(sample, runtime)
+            first = json.loads((runtime / 'history/2026-09-30.json').read_text())['modes'][0]
+            second = json.loads((runtime / 'history/2026-10-01.json').read_text())['modes'][0]
+            self.assertEqual(first['end'], second['start'])
+            self.assertEqual(second['end'], stamp + 110)
+
     def test_legacy_voltage_is_preserved_but_not_recorded(self):
         with tempfile.TemporaryDirectory() as directory:
             runtime = Path(directory)

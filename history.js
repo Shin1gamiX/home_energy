@@ -27,6 +27,7 @@ const metrics = {
 const selected = new Set(Object.keys(metrics).filter(key => !['pv_voltage', 'pv_current'].includes(key)));
 const timezone = 'Europe/Athens';
 const dateInput = document.querySelector('#history-date');
+const dateDisplay = document.querySelector('#date-display');
 const statusElement = document.querySelector('#history-status');
 const dateFormat = new Intl.DateTimeFormat('en-GB', { timeZone: timezone, day: '2-digit', month: '2-digit', year: 'numeric' });
 const timeFormat = new Intl.DateTimeFormat('en-GB', { timeZone: timezone, hour: '2-digit', minute: '2-digit' });
@@ -36,6 +37,9 @@ let nextRefreshAt = 0;
 let indexPromise;
 const dayCache = new Map();
 let rawRows = [];
+let modeRows = [];
+let modeRecordedFrom = null;
+let showMode = true;
 let snapshotTime = 0;
 let zoom = null;
 let inspectedTime = null;
@@ -181,9 +185,12 @@ async function load({ refresh = false } = {}) {
   if (refresh) { indexPromise = undefined; dayCache.clear(); }
   const previousRange = range;
   range = getRange();
+  dateDisplay.value = dateInput.value.split('-').reverse().join('/');
+  dateDisplay.setCustomValidity('');
   if (previousRange?.from !== range.from || previousRange?.to !== range.to || previousRange?.step !== range.step) {
     zoom = null;
     rawRows = [];
+    modeRows = [];
     inspectedTime = null;
   }
   const current = range;
@@ -206,6 +213,8 @@ async function load({ refresh = false } = {}) {
     if (id !== requestId) return;
     if (files.some(file => !Array.isArray(file.points))) throw new Error('Invalid history');
     rawRows = files.flatMap(file => file.points);
+    modeRows = files.flatMap(file => Array.isArray(file.modes) ? file.modes : []);
+    modeRecordedFrom = Number.isFinite(index.mode_recorded_from) ? index.mode_recorded_from : null;
     snapshotTime = Number.isFinite(index.updated_at) ? index.updated_at : Date.now() / 1000;
     loading = false;
     if (refresh || !nextRefreshAt) nextRefreshAt = Date.now() + refreshCooldown;
@@ -254,12 +263,13 @@ function render() {
   else statusElement.textContent = points.length ? step === 3600 ? t('Hourly averages') : step === 60 ? t('1-minute averages') : t('{n}-minute averages', { n: step / 60 }) : t('No readings for this period.');
   const container = document.querySelector('#charts');
   container.replaceChildren();
+  if (showMode) renderModeTimeline(container, view);
   const inspectors = [];
   function inspectTogether(timestamp) {
     inspectedTime = Math.max(view.from, Math.min(view.to - step, Math.floor(timestamp / step) * step));
     for (const update of inspectors) update(inspectedTime);
   }
-  if (!selected.size) {
+  if (!selected.size && !showMode) {
     container.textContent = t('Select one or more statistics to display their graphs.');
     return;
   }
@@ -452,7 +462,70 @@ function renderSummary() {
   note.textContent = t('Estimated from recorded readings only; missing periods are excluded.');
   section.append(cards, note);
 }
+function renderModeTimeline(container, view) {
+  const cutoff = Math.min(view.to, Date.now() / 1000);
+  const states = { grid: ['Grid', '#8861ba'], mixed: ['Mixed', '#596cb0'], solar: ['Solar', '#c39232'], battery: ['Battery', '#d65c66'], standby: ['Standby', '#80a57c'], unknown: ['Unknown supply', '#869b98'], missing: ['No data', '#adb8b4'], unrecorded: ['Mode not recorded', '#c3ccc8'] };
+  const segments = [];
+  let cursor = view.from;
+  function gap(end) {
+    if (end <= cursor) return;
+    const before = Math.min(end, modeRecordedFrom ?? end);
+    if (before > cursor) segments.push({ start: cursor, end: before, state: 'unrecorded' });
+    if (end > Math.max(cursor, before)) segments.push({ start: Math.max(cursor, before), end, state: 'missing' });
+    cursor = end;
+  }
+  for (const row of [...modeRows].sort((a, b) => a.start - b.start)) {
+    if (!Number.isFinite(row.start) || !Number.isFinite(row.end) || !states[row.state] || row.end <= cursor || row.start >= cutoff) continue;
+    const start = Math.max(cursor, view.from, row.start), end = Math.min(cutoff, row.end);
+    gap(start);
+    if (end > start) segments.push({ start, end, state: row.state });
+    cursor = Math.max(cursor, end);
+  }
+  gap(cutoff);
+  const card = document.createElement('article'); card.className = 'chart-card mode-card';
+  const heading = document.createElement('h2'); heading.textContent = t('Mode');
+  const note = document.createElement('p'); note.textContent = t('Estimated source supplying the house');
+  card.append(heading, note);
+  if (loading || hasError || cutoff <= view.from) { const message = document.createElement('p'); message.textContent = t(loading ? 'Loading history…' : hasError ? 'History is unavailable. Please try again shortly.' : 'No readings for this period.'); card.append(message); container.append(card); return; }
+  const keys = ['grid', 'mixed', 'solar', 'battery', ...['standby', 'unknown', 'unrecorded'].filter(key => segments.some(s => s.state === key)), 'missing'];
+  const plot = document.createElement('div'); plot.className = 'mode-plot';
+  const labels = document.createElement('div'); labels.className = 'mode-labels';
+  const tracks = document.createElement('div'); tracks.className = 'mode-tracks'; tracks.style.height = `${keys.length * 44}px`;
+  const guide = document.createElement('div'); guide.className = 'mode-guide'; guide.hidden = true;
+  for (const key of keys) { const label = document.createElement('span'); label.textContent = t(states[key][0]); labels.append(label); }
+  const detail = document.createElement('div'); detail.className = 'tooltip'; detail.setAttribute('aria-live', 'polite'); detail.textContent = t('Hover or touch the chart to inspect an interval.');
+  const secondsFormat = new Intl.DateTimeFormat('en-GB', { timeZone: timezone, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  function duration(seconds) { const value = Math.max(0, Math.round(seconds)); return `${Math.floor(value / 3600)}:${String(Math.floor(value % 3600 / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`; }
+  function inspect(segment, time = segment.start) {
+    guide.hidden = false; guide.style.left = `${(time - view.from) / (view.to - view.from) * 100}%`;
+    const title = document.createElement('strong'); title.textContent = t(states[segment.state][0]);
+    const interval = document.createElement('div'); interval.textContent = `${secondsFormat.format(segment.start * 1000)} – ${secondsFormat.format(segment.end * 1000)}`;
+    const length = document.createElement('div'); length.textContent = `${t('Duration')} ${duration(segment.end - segment.start)}`;
+    detail.replaceChildren(title, interval, length);
+  }
+  for (const segment of segments) {
+    const block = document.createElement('button'); block.type = 'button'; block.className = 'mode-segment';
+    block.style.left = `${(segment.start - view.from) / (view.to - view.from) * 100}%`; block.style.width = `${(segment.end - segment.start) / (view.to - view.from) * 100}%`;
+    block.style.top = `${keys.indexOf(segment.state) * 44 + 13}px`; block.style.background = states[segment.state][1];
+    block.setAttribute('aria-label', `${t(states[segment.state][0])}: ${secondsFormat.format(segment.start * 1000)} – ${secondsFormat.format(segment.end * 1000)}`);
+    block.addEventListener('focus', () => inspect(segment)); block.addEventListener('click', () => inspect(segment)); tracks.append(block);
+  }
+  tracks.append(guide);
+  function inspectPointer(event) { const bounds = tracks.getBoundingClientRect(); const timestamp = view.from + Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width)) * (view.to - view.from); const segment = segments.find(s => s.start <= timestamp && timestamp < s.end); if (segment) inspect(segment, timestamp); }
+  tracks.addEventListener('pointermove', inspectPointer); tracks.addEventListener('click', inspectPointer);
+  plot.append(labels, tracks); card.append(plot);
+  const axis = document.createElement('div'); axis.className = 'mode-axis';
+  for (let i = 0; i <= 4; i++) { const tick = document.createElement('span'); const time = (view.from + (view.to - view.from) * i / 4) * 1000; tick.textContent = period === 'day' ? timeFormat.format(time) : new Intl.DateTimeFormat('en-GB', { timeZone: timezone, day: '2-digit', month: '2-digit' }).format(time); axis.append(tick); }
+  card.append(axis, detail);
+  const totals = document.createElement('div'); totals.className = 'mode-totals';
+  for (const key of keys) { const sum = segments.filter(s => s.state === key).reduce((a, s) => a + s.end - s.start, 0); if (!sum) continue; const item = document.createElement('span'); item.textContent = `${t(states[key][0])} · ${duration(sum)}`; totals.append(item); }
+  const foot = document.createElement('p'); foot.className = 'mode-note'; foot.textContent = t('Observed transitions; timing depends on polling. Gaps start 90 seconds after the last report.');
+  card.append(totals, foot); container.append(card);
+}
+
 function updateFilters() {
+  const modeButton = document.querySelector('#mode-filter');
+  if (modeButton) { modeButton.setAttribute('aria-pressed', String(showMode)); modeButton.textContent = `◷ ${t('Mode')}`; }
   document.querySelectorAll('[data-metric]').forEach(button => {
     const enabled = selected.has(button.dataset.metric);
     button.setAttribute('aria-pressed', String(enabled));
@@ -481,12 +554,17 @@ for (const [key, metric] of Object.entries(metrics)) {
   button.addEventListener('click', () => { selected.has(key) ? selected.delete(key) : selected.add(key); updateFilters(); });
   document.querySelector('.filters').append(button);
 }
+const modeButton = document.createElement('button');
+modeButton.id = 'mode-filter'; modeButton.type = 'button'; modeButton.style.setProperty('--series', '#284e43');
+modeButton.addEventListener('click', () => { showMode = !showMode; updateFilters(); });
+document.querySelector('.filters').append(modeButton);
 document.querySelector('#select-all').addEventListener('click', () => {
+  showMode = true;
   selected.clear();
   Object.keys(metrics).filter(k => !metrics[k].legacy).forEach(k => selected.add(k));
   updateFilters();
 });
-document.querySelector('#clear-all').addEventListener('click', () => { selected.clear(); updateFilters(); });
+document.querySelector('#clear-all').addEventListener('click', () => { showMode = false; selected.clear(); updateFilters(); });
 document.querySelectorAll('[data-period]').forEach(button => button.addEventListener('click', () => {
   period = button.dataset.period;
   document.querySelectorAll('[data-period]').forEach(b => b.setAttribute('aria-pressed', String(b === button)));
@@ -504,6 +582,22 @@ document.querySelector('#previous').addEventListener('click', () => move(-1));
 document.querySelector('#next').addEventListener('click', () => move(1));
 dateInput.max = today(); dateInput.value = today();
 dateInput.addEventListener('change', () => { if (dateInput.validity.valid && dateInput.value) load(); });
+dateInput.addEventListener('click', () => { if (dateInput.showPicker) dateInput.showPicker(); });
+function applyDisplayedDate() {
+  const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(dateDisplay.value);
+  const iso = match ? `${match[3]}-${match[2]}-${match[1]}` : '';
+  const parsed = iso ? new Date(`${iso}T12:00:00Z`) : null;
+  if (!parsed || !Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== iso || iso > today()) {
+    dateDisplay.setCustomValidity(t('Enter a valid date as DD/MM/YYYY, not in the future.'));
+    dateDisplay.reportValidity();
+    return;
+  }
+  dateDisplay.setCustomValidity('');
+  if (dateInput.value !== iso) { dateInput.value = iso; load(); }
+}
+dateDisplay.addEventListener('blur', applyDisplayedDate);
+dateDisplay.addEventListener('keydown', event => { if (event.key === 'Enter') applyDisplayedDate(); });
+dateDisplay.addEventListener('input', () => dateDisplay.setCustomValidity(''));
 range = getRange(); updateFilters(); load();
 document.querySelector('#averaging').addEventListener('change', render);
 peaksToggle.addEventListener('change', () => {
