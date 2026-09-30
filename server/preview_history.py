@@ -35,7 +35,10 @@ class Preview(SimpleHTTPRequestHandler):
                               load_current=values['load'] / 230, pv_current=solar / 300)
                 points.append({'t': start + i * 60, 'values': values, 'counts': dict.fromkeys(values, 1)})
             boundaries = [(0, 420, 'grid'), (420, 520, 'mixed'), (520, 600, 'solar'),
-                          (620, 1050, 'solar'), (1050, 1220, 'battery'), (1220, 1440, 'grid')]
+                          (620, 720, 'solar'), (780, 1050, 'solar'), (1050, 1220, 'battery'), (1220, 1440, 'grid')]
+            # Dense 15-second transitions exercise grouping and zoom on phones.
+            boundaries.extend((720 + i / 4, 720 + (i + 1) / 4, 'solar' if i % 2 else 'mixed') for i in range(240))
+            boundaries.sort()
             modes = [{'start': start + a * 60, 'end': min(start + b * 60, now.timestamp() + 90), 'state': state}
                      for a, b, state in boundaries if start + a * 60 < now.timestamp()]
             payload = {'points': points, 'modes': modes}

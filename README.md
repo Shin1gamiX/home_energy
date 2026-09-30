@@ -105,10 +105,15 @@ Start with this README and [ARCHITECTURE.md](docs/ARCHITECTURE.md), then inspect
 
 ## Supply-mode history
 
-The History **Mode** toggle shows estimated house supply (Grid, Solar, Battery,
+The History **House supply** toggle shows estimated house supply (Grid, Solar, Battery,
 or Mixed), not the inverter's reported operating mode. It follows the selected
 day/week/month and visible chart range, independently of the averaging selector.
 Hover, tap, or focus an interval for observed timestamps and duration.
+Drag across the timeline or use Zoom in to inspect short intervals; Reset zoom
+restores the selected period. Zoom is shared with the numeric charts. Dense
+consecutive intervals appear as striped groups that can be selected to zoom.
+Grouping is visual only: totals and Previous/Next interval navigation retain
+the individual recorded transitions. Future hours are shaded as Upcoming.
 
 Fresh reports are compressed into `supply_intervals` in the existing history
 SQLite database and exported as `modes` in daily JSON. Changes are timestamped

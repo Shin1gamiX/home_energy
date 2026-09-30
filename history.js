@@ -40,6 +40,7 @@ let rawRows = [];
 let modeRows = [];
 let modeRecordedFrom = null;
 let showMode = true;
+let modeSelectedTime = null;
 let snapshotTime = 0;
 let zoom = null;
 let inspectedTime = null;
@@ -478,14 +479,28 @@ function renderModeTimeline(container, view) {
     if (!Number.isFinite(row.start) || !Number.isFinite(row.end) || !states[row.state] || row.end <= cursor || row.start >= cutoff) continue;
     const start = Math.max(cursor, view.from, row.start), end = Math.min(cutoff, row.end);
     gap(start);
-    if (end > start) segments.push({ start, end, state: row.state });
+    if (end > start) segments.push({ start, end, state: row.state, observedStart: row.start, observedEnd: Math.min(cutoff, row.end) });
     cursor = Math.max(cursor, end);
   }
   gap(cutoff);
   const card = document.createElement('article'); card.className = 'chart-card mode-card';
-  const heading = document.createElement('h2'); heading.textContent = t('Mode');
+  const heading = document.createElement('h2'); heading.textContent = t('House supply');
   const note = document.createElement('p'); note.textContent = t('Estimated source supplying the house');
-  card.append(heading, note);
+  const header = document.createElement('div'); header.className = 'chart-header'; header.append(heading);
+  const controls = document.createElement('div'); controls.className = 'mode-controls';
+  function setModeZoom(from, to) {
+    zoom = { from: Math.max(range.from, from), to: Math.min(range.to, to) };
+    render();
+  }
+  for (const [label, action] of [
+    ['Zoom in', () => { const span = Math.max(120, (view.to - view.from) / 2); const center = modeSelectedTime !== null && modeSelectedTime >= view.from && modeSelectedTime < view.to ? modeSelectedTime : (view.from + Math.min(view.to, cutoff)) / 2; const from = Math.max(range.from, Math.min(range.to - span, center - span / 2)); setModeZoom(from, from + span); }],
+    ['Reset zoom', () => { zoom = null; render(); }]
+  ]) {
+    const button = document.createElement('button'); button.type = 'button'; button.textContent = t(label);
+    button.disabled = label === 'Reset zoom' ? !zoom : view.to - view.from <= 120;
+    button.addEventListener('click', action); controls.append(button);
+  }
+  header.append(controls); card.append(header, note);
   if (loading || hasError || cutoff <= view.from) { const message = document.createElement('p'); message.textContent = t(loading ? 'Loading history…' : hasError ? 'History is unavailable. Please try again shortly.' : 'No readings for this period.'); card.append(message); container.append(card); return; }
   const keys = ['grid', 'mixed', 'solar', 'battery', ...['standby', 'unknown', 'unrecorded'].filter(key => segments.some(s => s.state === key)), 'missing'];
   const plot = document.createElement('div'); plot.className = 'mode-plot';
@@ -493,7 +508,7 @@ function renderModeTimeline(container, view) {
   const tracks = document.createElement('div'); tracks.className = 'mode-tracks'; tracks.style.height = `${keys.length * 44}px`;
   const guide = document.createElement('div'); guide.className = 'mode-guide'; guide.hidden = true;
   for (const key of keys) { const label = document.createElement('span'); label.textContent = t(states[key][0]); labels.append(label); }
-  const detail = document.createElement('div'); detail.className = 'tooltip'; detail.setAttribute('aria-live', 'polite'); detail.textContent = t('Hover or touch the chart to inspect an interval.');
+  const detail = document.createElement('div'); detail.className = 'chart-tip mode-detail'; detail.setAttribute('aria-live', 'polite'); detail.textContent = t('Select an interval to see its times.');
   const secondsFormat = new Intl.DateTimeFormat('en-GB', { timeZone: timezone, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
   function duration(seconds) {
     let remaining = Math.max(0, Math.round(seconds));
@@ -506,35 +521,104 @@ function renderModeTimeline(container, view) {
     return parts.join(' ') || t('{n}s', { n: 0 });
   }
   function inspect(segment, time = segment.start) {
+    modeSelectedTime = time;
     guide.hidden = false; guide.style.left = `${(time - view.from) / (view.to - view.from) * 100}%`;
+    for (const block of tracks.querySelectorAll('.mode-segment')) block.classList.toggle('is-selected', Number(block.dataset.start) <= time && time < Number(block.dataset.end));
     const title = document.createElement('strong'); title.textContent = t(states[segment.state][0]);
-    const interval = document.createElement('div'); interval.textContent = `${secondsFormat.format(segment.start * 1000)} – ${secondsFormat.format(segment.end * 1000)}`;
-    const length = document.createElement('div'); length.textContent = `${t('Duration')} ${duration(segment.end - segment.start)}`;
-    detail.replaceChildren(title, interval, length);
+    title.style.color = states[segment.state][1];
+    const fields = document.createElement('div'); fields.className = 'mode-detail-fields';
+    const observedStart = segment.observedStart ?? segment.start, observedEnd = segment.observedEnd ?? segment.end;
+    for (const [label, value] of [['Start', secondsFormat.format(observedStart * 1000)], ['End', secondsFormat.format(observedEnd * 1000)], ['Duration', duration(observedEnd - observedStart)]]) {
+      const field = document.createElement('div'), caption = document.createElement('span'), valueElement = document.createElement('b');
+      caption.textContent = t(label); valueElement.textContent = value; field.append(caption, valueElement); fields.append(field);
+    }
+    const navigation = document.createElement('div'); navigation.className = 'mode-controls';
+    const index = segments.indexOf(segment);
+    for (const [label, next] of [['Previous interval', index - 1], ['Next interval', index + 1]]) {
+      const button = document.createElement('button'); button.type = 'button'; button.textContent = t(label); button.disabled = next < 0 || next >= segments.length;
+      button.addEventListener('click', () => inspect(segments[next])); navigation.append(button);
+    }
+    detail.replaceChildren(title, fields, navigation);
   }
-  for (const segment of segments) {
+  plot.append(labels, tracks); card.append(plot); container.append(card);
+  const span = view.to - view.from;
+  const pixelSeconds = span / Math.max(1, tracks.clientWidth);
+  // Group only visually indistinguishable consecutive intervals. Raw intervals
+  // still drive totals and inspection, and are revealed by zooming the group.
+  const groups = [];
+  for (let i = 0; i < segments.length;) {
+    const first = segments[i];
+    const group = { start: first.start, end: first.end, items: [first] };
+    i++;
+    if (!['missing', 'unrecorded', 'unknown'].includes(first.state) && first.end - first.start < pixelSeconds * 6) {
+      while (i < segments.length && !['missing', 'unrecorded', 'unknown'].includes(segments[i].state) && segments[i].end - segments[i].start < pixelSeconds * 6 && segments[i].start <= group.end + 0.001) {
+        group.items.push(segments[i]); group.end = segments[i++].end;
+      }
+    }
+    groups.push(group);
+  }
+  for (const group of groups) for (const state of new Set(group.items.map(item => item.state))) {
+    const dense = group.items.length > 1;
     const block = document.createElement('button'); block.type = 'button'; block.className = 'mode-segment';
-    block.style.left = `${(segment.start - view.from) / (view.to - view.from) * 100}%`; block.style.width = `${(segment.end - segment.start) / (view.to - view.from) * 100}%`;
-    block.style.top = `${keys.indexOf(segment.state) * 44 + 13}px`; block.style.background = states[segment.state][1];
-    block.setAttribute('aria-label', `${t(states[segment.state][0])}: ${secondsFormat.format(segment.start * 1000)} – ${secondsFormat.format(segment.end * 1000)}`);
-    block.addEventListener('focus', () => inspect(segment)); block.addEventListener('click', () => inspect(segment)); tracks.append(block);
+    block.dataset.start = group.start; block.dataset.end = group.end;
+    block.style.left = `${(group.start - view.from) / span * 100}%`; block.style.width = `${(group.end - group.start) / span * 100}%`;
+    block.style.top = `${keys.indexOf(state) * 44 + 11}px`; block.style.setProperty('--mode-color', states[state][1]);
+    const description = dense ? `${t(states[state][0])} · ${t('{n} changes · select to zoom', { n: group.items.length - 1 })}` : t(states[state][0]);
+    block.setAttribute('aria-label', `${description}: ${secondsFormat.format(group.start * 1000)} – ${secondsFormat.format(group.end * 1000)}`);
+    block.title = description;
+    if (dense) block.classList.add('is-dense');
+    block.addEventListener('focus', () => inspect(group.items[0]));
+    block.addEventListener('click', event => {
+      event.stopPropagation();
+      if (suppressModeClick) { suppressModeClick = false; return; }
+      if (dense && span > 120) {
+        const width = Math.max(120, Math.min(span / 2, (group.end - group.start) * 1.2));
+        const center = (group.start + group.end) / 2;
+        setModeZoom(center - width / 2, center + width / 2);
+      }
+      else inspect(group.items[0]);
+    }); tracks.append(block);
+  }
+  if (cutoff < view.to) {
+    const future = document.createElement('div'); future.className = 'mode-future'; future.style.left = `${Math.max(0, (cutoff - view.from) / span * 100)}%`;
+    future.title = t('Upcoming');
+    if ((view.to - cutoff) / span * tracks.clientWidth >= 60) future.textContent = t('Upcoming');
+    tracks.append(future);
   }
   tracks.append(guide);
-  function inspectPointer(event) { const bounds = tracks.getBoundingClientRect(); const timestamp = view.from + Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width)) * (view.to - view.from); const segment = segments.find(s => s.start <= timestamp && timestamp < s.end); if (segment) inspect(segment, timestamp); }
-  tracks.addEventListener('pointermove', inspectPointer); tracks.addEventListener('click', inspectPointer);
-  plot.append(labels, tracks); card.append(plot);
+  const pointerTime = event => { const bounds = tracks.getBoundingClientRect(); return view.from + Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width)) * span; };
+  let drag = null, suppressModeClick = false;
+  const selection = document.createElement('div'); selection.className = 'mode-selection'; selection.hidden = true; tracks.append(selection);
+  tracks.addEventListener('pointerdown', event => { if (event.button === 0) { suppressModeClick = false; drag = { x: event.clientX, time: pointerTime(event) }; } });
+  tracks.addEventListener('pointermove', event => {
+    const time = pointerTime(event);
+    if (drag) { selection.hidden = false; selection.style.left = `${(Math.min(time, drag.time) - view.from) / span * 100}%`; selection.style.width = `${Math.abs(time - drag.time) / span * 100}%`; }
+    else if (event.pointerType !== 'touch') { const segment = segments.find(s => s.start <= time && time < s.end); if (segment) inspect(segment, time); }
+  });
+  tracks.addEventListener('pointerup', event => {
+    if (!drag) return;
+    const start = drag; drag = null; selection.hidden = true;
+    if (Math.abs(event.clientX - start.x) < 12) return;
+    const end = pointerTime(event);
+    if (Math.abs(end - start.time) < 120) return;
+    suppressModeClick = true; setModeZoom(Math.min(start.time, end), Math.max(start.time, end));
+  });
+  for (const name of ['pointercancel', 'pointerleave']) tracks.addEventListener(name, () => { drag = null; selection.hidden = true; });
+  tracks.addEventListener('click', event => { const time = pointerTime(event); const segment = segments.find(s => s.start <= time && time < s.end); if (segment) inspect(segment, time); });
   const axis = document.createElement('div'); axis.className = 'mode-axis';
-  for (let i = 0; i <= 4; i++) { const tick = document.createElement('span'); const time = (view.from + (view.to - view.from) * i / 4) * 1000; tick.textContent = period === 'day' ? timeFormat.format(time) : new Intl.DateTimeFormat('en-GB', { timeZone: timezone, day: '2-digit', month: '2-digit' }).format(time); axis.append(tick); }
-  card.append(axis, detail);
+  for (let i = 0; i <= 4; i++) { const tick = document.createElement('span'); const time = (view.from + span * i / 4) * 1000; tick.textContent = !zoom && period === 'day' && i === 4 ? '24:00' : span <= 86400 ? timeFormat.format(time) : new Intl.DateTimeFormat('en-GB', { timeZone: timezone, day: '2-digit', month: '2-digit' }).format(time); axis.append(tick); }
+  const help = document.createElement('p'); help.className = 'mode-help'; help.textContent = t('Striped blocks contain multiple changes. Select to zoom, or drag across the timeline.');
+  card.append(axis, help, detail);
   const totals = document.createElement('div'); totals.className = 'mode-totals';
-  for (const key of keys) { const sum = segments.filter(s => s.state === key).reduce((a, s) => a + s.end - s.start, 0); if (!sum) continue; const item = document.createElement('span'); item.textContent = `${t(states[key][0])} · ${duration(sum)}`; totals.append(item); }
+  for (const key of keys) { const sum = segments.filter(s => s.state === key).reduce((a, s) => a + s.end - s.start, 0); if (!sum) continue; const item = document.createElement('span'); item.style.setProperty('--mode-color', states[key][1]); item.textContent = `${t(states[key][0])} · ${duration(sum)}`; totals.append(item); }
   const foot = document.createElement('p'); foot.className = 'mode-note'; foot.textContent = t('Observed transitions; timing depends on polling. Gaps start 90 seconds after the last report.');
   card.append(totals, foot); container.append(card);
+  if (modeSelectedTime !== null) { const active = segments.find(s => s.start <= modeSelectedTime && modeSelectedTime < s.end); if (active) inspect(active, modeSelectedTime); }
 }
 
 function updateFilters() {
   const modeButton = document.querySelector('#mode-filter');
-  if (modeButton) { modeButton.setAttribute('aria-pressed', String(showMode)); modeButton.textContent = `◷ ${t('Mode')}`; }
+  if (modeButton) { modeButton.setAttribute('aria-pressed', String(showMode)); modeButton.textContent = `◷ ${t('House supply')}`; }
   document.querySelectorAll('[data-metric]').forEach(button => {
     const enabled = selected.has(button.dataset.metric);
     button.setAttribute('aria-pressed', String(enabled));

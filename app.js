@@ -27,6 +27,11 @@ window.energyFlowState = (values, mode) => {
 window.energyI18n = (() => {
   const translations = {
     ru: {
+      'House supply': 'Питание дома', 'Zoom in': 'Приблизить', 'Upcoming': 'Впереди',
+      'Start': 'Начало', 'End': 'Конец', 'Previous interval': 'Предыдущий интервал', 'Next interval': 'Следующий интервал',
+      'Select an interval to see its times.': 'Выберите интервал, чтобы увидеть время.',
+      '{n} changes · select to zoom': 'Переходов: {n} · нажмите для увеличения',
+      'Striped blocks contain multiple changes. Select to zoom, or drag across the timeline.': 'Полосатые блоки содержат несколько переходов. Нажмите для увеличения или выделите участок шкалы.',
       'Today': 'Сегодня',
       '{n}d': '{n}д', '{n}h': '{n}ч', '{n}m': '{n}мин', '{n}s': '{n}с',
       'Enter a valid date as DD/MM/YYYY, not in the future.': 'Введите корректную дату ДД/ММ/ГГГГ, не позднее сегодняшней.',
@@ -83,6 +88,11 @@ window.energyI18n = (() => {
       '{title} over time': '{title} во времени'
     },
     el: {
+      'House supply': 'Τροφοδοσία σπιτιού', 'Zoom in': 'Μεγέθυνση', 'Upcoming': 'Αργότερα',
+      'Start': 'Έναρξη', 'End': 'Λήξη', 'Previous interval': 'Προηγούμενο διάστημα', 'Next interval': 'Επόμενο διάστημα',
+      'Select an interval to see its times.': 'Επιλέξτε ένα διάστημα για να δείτε τις ώρες του.',
+      '{n} changes · select to zoom': '{n} αλλαγές · επιλέξτε για μεγέθυνση',
+      'Striped blocks contain multiple changes. Select to zoom, or drag across the timeline.': 'Τα ριγέ τμήματα περιέχουν πολλές αλλαγές. Επιλέξτε για μεγέθυνση ή σύρετε πάνω στη χρονογραμμή.',
       'Today': 'Σήμερα',
       '{n}d': '{n}ημ', '{n}h': '{n}ω', '{n}m': '{n}λ', '{n}s': '{n}δ',
       'Enter a valid date as DD/MM/YYYY, not in the future.': 'Εισαγάγετε έγκυρη ημερομηνία ΗΗ/ΜΜ/ΕΕΕΕ, όχι στο μέλλον.',
