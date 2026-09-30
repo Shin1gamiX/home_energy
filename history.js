@@ -589,6 +589,16 @@ function move(direction) {
 }
 document.querySelector('#previous').addEventListener('click', () => move(-1));
 document.querySelector('#next').addEventListener('click', () => move(1));
+document.querySelector('#today').addEventListener('click', () => {
+  period = 'day';
+  dateInput.max = today();
+  dateInput.value = dateInput.max;
+  dateDisplay.setCustomValidity('');
+  zoom = null;
+  inspectedTime = null;
+  document.querySelectorAll('[data-period]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.period === period)));
+  load();
+});
 dateInput.max = today(); dateInput.value = today();
 dateInput.addEventListener('change', () => { if (dateInput.validity.valid && dateInput.value) load(); });
 dateInput.addEventListener('click', () => { if (dateInput.showPicker) dateInput.showPicker(); });

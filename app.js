@@ -27,6 +27,7 @@ window.energyFlowState = (values, mode) => {
 window.energyI18n = (() => {
   const translations = {
     ru: {
+      'Today': 'Сегодня',
       '{n}d': '{n}д', '{n}h': '{n}ч', '{n}m': '{n}мин', '{n}s': '{n}с',
       'Enter a valid date as DD/MM/YYYY, not in the future.': 'Введите корректную дату ДД/ММ/ГГГГ, не позднее сегодняшней.',
       'Mode': 'Режим', 'Mixed': 'Смешанный', 'No data': 'Нет данных', 'Unknown supply': 'Источник неизвестен', 'Mode not recorded': 'Режим не записан', 'Duration': 'Длительность',
@@ -82,6 +83,7 @@ window.energyI18n = (() => {
       '{title} over time': '{title} во времени'
     },
     el: {
+      'Today': 'Σήμερα',
       '{n}d': '{n}ημ', '{n}h': '{n}ω', '{n}m': '{n}λ', '{n}s': '{n}δ',
       'Enter a valid date as DD/MM/YYYY, not in the future.': 'Εισαγάγετε έγκυρη ημερομηνία ΗΗ/ΜΜ/ΕΕΕΕ, όχι στο μέλλον.',
       'Mode': 'Λειτουργία', 'Mixed': 'Μικτή', 'No data': 'Χωρίς δεδομένα', 'Unknown supply': 'Άγνωστη πηγή', 'Mode not recorded': 'Δεν καταγράφηκε', 'Duration': 'Διάρκεια',
@@ -141,7 +143,7 @@ window.energyI18n = (() => {
   try { const saved = localStorage.getItem('homeenergy-language'); if (['en', 'ru', 'el'].includes(saved)) language = saved; } catch { /* Storage may be blocked. */ }
   const t = (key, values = {}) => (translations[language]?.[key] ?? key).replace(/\{(\w+)\}/g, (match, name) => values[name] ?? match);
   // Only translate explicit text nodes so live readings and SVGs stay intact.
-  const selectors = ['.brand-sub', '.mode-badge', '.history-nav a', '.intro h1', '.intro p', '.scene-heading>span:last-child', '.scene-label>div', '.scene-caption', '.metric-top>span:first-child', '.metric.load p', '.back', '[data-period]', '.date-controls>span', '#select-all', '#clear-all', 'label[for="averaging"]', '#averaging option'];
+  const selectors = ['.brand-sub', '.mode-badge', '.history-nav a', '.intro h1', '.intro p', '.scene-heading>span:last-child', '.scene-label>div', '.scene-caption', '.metric-top>span:first-child', '.metric.load p', '.back', '[data-period]', '.date-controls>span', '#today', '#select-all', '#clear-all', 'label[for="averaging"]', '#averaging option'];
   const texts = selectors.flatMap(selector => [...document.querySelectorAll(selector)].map(element => {
     const node = [...element.childNodes].find(child => child.nodeType === Node.TEXT_NODE && child.textContent.trim());
     return node ? { node, key: node.textContent } : null;

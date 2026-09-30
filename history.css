@@ -32,6 +32,7 @@
 .date-controls .date-picker input { position: absolute; inset: 0; width: 100%; height: 100%; min-width: 0; opacity: 0; padding: 0; cursor: pointer; }
 .date-picker:focus-within { outline: 2px solid #32826c; outline-offset: 3px; }
 .date-controls #date-display { width: 150px; min-width: 0; }
+.date-controls #today { font-size: 14px; padding: 11px 14px; }
 .mode-card > p { color: var(--muted, #708789); }
 .mode-plot { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 8px; margin-top: 24px; }
 .mode-labels { display: grid; grid-auto-rows: 44px; font-size: 12px; }
