@@ -27,6 +27,7 @@ window.energyFlowState = (values, mode) => {
 window.energyI18n = (() => {
   const translations = {
     ru: {
+      '{n}d': '{n}д', '{n}h': '{n}ч', '{n}m': '{n}мин', '{n}s': '{n}с',
       'Enter a valid date as DD/MM/YYYY, not in the future.': 'Введите корректную дату ДД/ММ/ГГГГ, не позднее сегодняшней.',
       'Mode': 'Режим', 'Mixed': 'Смешанный', 'No data': 'Нет данных', 'Unknown supply': 'Источник неизвестен', 'Mode not recorded': 'Режим не записан', 'Duration': 'Длительность',
       'Estimated source supplying the house': 'Расчётный источник питания дома',
@@ -81,6 +82,7 @@ window.energyI18n = (() => {
       '{title} over time': '{title} во времени'
     },
     el: {
+      '{n}d': '{n}ημ', '{n}h': '{n}ω', '{n}m': '{n}λ', '{n}s': '{n}δ',
       'Enter a valid date as DD/MM/YYYY, not in the future.': 'Εισαγάγετε έγκυρη ημερομηνία ΗΗ/ΜΜ/ΕΕΕΕ, όχι στο μέλλον.',
       'Mode': 'Λειτουργία', 'Mixed': 'Μικτή', 'No data': 'Χωρίς δεδομένα', 'Unknown supply': 'Άγνωστη πηγή', 'Mode not recorded': 'Δεν καταγράφηκε', 'Duration': 'Διάρκεια',
       'Estimated source supplying the house': 'Εκτιμώμενη πηγή τροφοδοσίας σπιτιού',

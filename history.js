@@ -495,7 +495,16 @@ function renderModeTimeline(container, view) {
   for (const key of keys) { const label = document.createElement('span'); label.textContent = t(states[key][0]); labels.append(label); }
   const detail = document.createElement('div'); detail.className = 'tooltip'; detail.setAttribute('aria-live', 'polite'); detail.textContent = t('Hover or touch the chart to inspect an interval.');
   const secondsFormat = new Intl.DateTimeFormat('en-GB', { timeZone: timezone, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-  function duration(seconds) { const value = Math.max(0, Math.round(seconds)); return `${Math.floor(value / 3600)}:${String(Math.floor(value % 3600 / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`; }
+  function duration(seconds) {
+    let remaining = Math.max(0, Math.round(seconds));
+    const parts = [];
+    for (const [size, label] of [[86400, '{n}d'], [3600, '{n}h'], [60, '{n}m'], [1, '{n}s']]) {
+      const count = Math.floor(remaining / size);
+      remaining %= size;
+      if (count) parts.push(t(label, { n: count }));
+    }
+    return parts.join(' ') || t('{n}s', { n: 0 });
+  }
   function inspect(segment, time = segment.start) {
     guide.hidden = false; guide.style.left = `${(time - view.from) / (view.to - view.from) * 100}%`;
     const title = document.createElement('strong'); title.textContent = t(states[segment.state][0]);
