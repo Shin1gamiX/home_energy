@@ -103,7 +103,7 @@ Energy summaries integrate minute-average watts over represented time, dividing 
 - Grid consumed: integrated estimated grid import.
 - House usage: integrated load power.
 - Battery supplied: integrated `max(0, -battery_power)`; charging is not subtracted from discharge energy.
-- Solar to house: matching intervals of `load - grid - max(0, -battery_power)`, with a nonnegative final total. This assumes grid charging of the battery is disabled; conversion losses, timing differences and estimated entities affect accuracy.
+- Solar to house: matching intervals of `min(pv, max(0, load - grid - max(0, -battery_power)))`. All four readings must be available. Each interval is bounded by reported PV generation, preventing nighttime measurement residuals from being counted as solar. This remains an estimate and assumes grid charging is disabled; conversion losses, timing differences and estimated entities affect accuracy. Existing recorded data is unchanged; summaries are recalculated when viewed.
 
 Peaks refer to displayed averaged values in the visible range, not guaranteed instantaneous hardware extremes. Multi-series charts intentionally use solid lines and per-series min/max buttons below, avoiding overlapping peak callouts. Selecting a peak inspects its time and temporarily emphasizes that series. Single-series charts can show inline labels. A persisted toggle hides peak indicators.
 

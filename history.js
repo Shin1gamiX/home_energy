@@ -428,15 +428,16 @@ function energyTotals(rows, from, to, cutoff) {
       totals[key].kwh += watts * seconds / 3600000;
       totals[key].seconds += seconds;
     }
-    const { load, grid, battery } = row.values || {};
+    const { load, grid, battery, pv } = row.values || {};
     // Compare matching intervals only. This assumes grid charging is disabled.
-    if ([load, grid, battery].every(Number.isFinite) && load >= 0 && grid >= 0) {
-      solarToHouse.kwh += (load - grid - Math.max(0, -battery)) * seconds / 3600000;
+    if ([load, grid, battery, pv].every(Number.isFinite) && load >= 0 && grid >= 0 && pv >= 0) {
+      // A residual is not independent solar metering. Bound every matching
+      // interval by reported PV so estimator noise cannot invent night energy.
+      const watts = Math.min(pv, Math.max(0, load - grid - Math.max(0, -battery)));
+      solarToHouse.kwh += watts * seconds / 3600000;
       solarToHouse.seconds += seconds;
     }
   }
-  // Measurement mismatches must not produce a negative energy total.
-  solarToHouse.kwh = Math.max(0, solarToHouse.kwh);
   totals.solar_to_house = solarToHouse;
   return totals;
 }
