@@ -23,10 +23,25 @@ window.energyFlowState = (values, mode) => {
       batteryHouse: discharging && positive(values.load), solarBattery: positive(values.pv) && charging } };
 };
 
+window.energyModeLabel = mode => mode === 'Mains' ? 'Grid' : mode || '—';
+window.energySupplyLabel = values => {
+  if (!['grid', 'pv', 'battery', 'load'].every(key => Number.isFinite(values[key]))) return 'Unknown supply';
+  if (values.load <= 0) return 'Standby';
+  const flows = window.energyFlowState(values).routeWatts;
+  const sources = { Grid: flows.gridHouse, Solar: flows.solarHouse, Battery: flows.batteryHouse };
+  const active = Object.keys(sources).filter(key => sources[key] > Math.max(20, values.load * .02));
+  if (active.length > 1) return 'Mixed';
+  if (active.length) return active[0];
+  const largest = Object.keys(sources).sort((a, b) => sources[b] - sources[a])[0];
+  return sources[largest] > 0 ? largest : 'Unknown supply';
+};
+
 // Shared localization is also used by the history page.
 window.energyI18n = (() => {
   const translations = {
     ru: {
+      'Inverter · ': 'Инвертор · ', 'Off-Grid': 'Автономный',
+      'House supply · {source}': 'Питание дома · {source}',
       'Not refreshed yet': 'Ещё не обновлено',
       'Snapshot loaded {time} · refresh to update': 'Данные загружены в {time} · обновите для новых показаний',
       'House supply': 'Питание дома', 'Zoom in': 'Приблизить', 'Upcoming': 'Впереди',
@@ -90,6 +105,8 @@ window.energyI18n = (() => {
       '{title} over time': '{title} во времени'
     },
     el: {
+      'Inverter · ': 'Μετατροπέας · ', 'Off-Grid': 'Εκτός δικτύου',
+      'House supply · {source}': 'Τροφοδοσία σπιτιού · {source}',
       'Not refreshed yet': 'Δεν ανανεώθηκε ακόμη',
       'Snapshot loaded {time} · refresh to update': 'Φόρτωση στις {time} · ανανεώστε για νέες μετρήσεις',
       'House supply': 'Τροφοδοσία σπιτιού', 'Zoom in': 'Μεγέθυνση', 'Upcoming': 'Αργότερα',
@@ -327,6 +344,9 @@ function render(sample) {
   // Dashboard convention: positive = charging, negative = discharging.
   const mode = demo ? sample.mode : latest?.mode;
   const state = window.energyFlowState(sample, mode);
+  const supply = window.energySupplyLabel(sample);
+  document.querySelector('#supply-status').textContent = t('House supply · {source}', { source: t(supply) });
+  document.body.dataset.activeSource = { Grid: 'grid', Solar: 'solar', Battery: 'battery' }[supply] || '';
   document.body.dataset.batteryState = state.batteryState;
   document.querySelectorAll('.battery-status').forEach(element => {
     element.textContent = t(state.batteryLabel);
@@ -367,7 +387,7 @@ function render(sample) {
   }
   scheduleFlowLayout();
   if (demo) {
-    document.querySelector('#operating-mode').textContent = t(mode === 'Mains' ? 'Grid' : 'Solar');
+    document.querySelector('#operating-mode').textContent = t(window.energyModeLabel(mode));
     document.body.dataset.connection = 'live';
   }
   if (demo) document.querySelector('#freshness').textContent = `Sample updated ${new Date().toLocaleTimeString()}`;
@@ -416,8 +436,11 @@ function updateStatus() {
   document.querySelector('.demo').style.display = status === 'live' || communicationLost ? 'none' : '';
   document.querySelector('#scene-status').parentElement.style.visibility = status === 'live' || communicationLost ? 'hidden' : '';
   const mode = ['live', 'partial'].includes(status) ? latest?.mode : null;
-  document.body.dataset.activeSource = mode === 'Mains' ? 'grid' : mode?.toLowerCase() === 'off-grid' ? 'solar' : '';
-  document.querySelector('#operating-mode').textContent = t(mode === 'Mains' ? 'Grid' : mode?.toLowerCase() === 'off-grid' ? 'Solar' : mode || '—');
+  if (!['live', 'partial'].includes(status)) {
+    document.body.dataset.activeSource = '';
+    document.querySelector('#supply-status').textContent = t(labels[status]);
+  }
+  document.querySelector('#operating-mode').textContent = t(window.energyModeLabel(mode));
   document.querySelector('#freshness').textContent = latest?.updated_at
     ? `${t('Last inverter report')} ${new Date(latest.updated_at * 1000).toLocaleTimeString('en-GB', { timeZone: 'Europe/Athens' })} (${new Date(latest.updated_at * 1000).toLocaleDateString('en-GB', { timeZone: 'Europe/Athens' })}) · ${t('Athens')}`
     : t('Waiting for inverter readings');

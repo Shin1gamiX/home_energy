@@ -117,7 +117,7 @@ Secondary values that round to zero (current below 0.05 A, battery power below 0
 
 - Positive battery power means charging; negative means discharging. Green/red/gray indicate charging/discharging/idle or unavailable as implemented by the current UI.
 - Battery percentage remains visible. Battery current is A (average). Do not relabel it as Ah or present SOC multiplied by nameplate capacity as measured BMS remaining capacity.
-- `Mains` is displayed as Grid and `Off-Grid` as Solar. The latter is a friendly label, not proof that all load is supplied by PV rather than battery.
+- The Inverter badge displays `Mains` as Grid and preserves `Off-Grid` as Off-Grid, not Solar. A separate House supply line estimates Grid, Solar, Battery or Mixed from the house-bound flows using the same 20 W / 2% threshold as recorded supply history. Neither label is an independent source meter.
 - Grid is visibly labelled estimated. Small nonzero estimates are not proof of physical grid import.
 - Power uses W or kW with trimmed decimals. Voltage and current retain their own units.
 - All user-facing additions need English, Greek and Russian translations.
