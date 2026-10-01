@@ -252,6 +252,19 @@ function display(value, key) {
   const kilo = metrics[key].unit === 'W' && Math.abs(value) >= 1000;
   return `${new Intl.NumberFormat(window.energyI18n.locale, { maximumFractionDigits: kilo ? 2 : 1 }).format(kilo ? value / 1000 : value)} ${kilo ? 'kW' : metrics[key].unit}`;
 }
+// Rounded, outward-facing bounds with zero on an actual labelled tick.
+function chartScale(minimum, maximum) {
+  const low = Math.min(0, minimum), high = Math.max(0, maximum);
+  const extent = high - low || 1;
+  const paddedLow = low < 0 ? low - extent * .05 : 0;
+  const paddedHigh = high > 0 ? high + extent * .05 : low < 0 ? 0 : 1;
+  const roughStep = (paddedHigh - paddedLow) / 5;
+  const magnitude = 10 ** Math.floor(Math.log10(roughStep));
+  const step = [1, 2, 2.5, 5, 10].find(n => n * magnitude >= roughStep) * magnitude;
+  const first = Math.floor(paddedLow / step), last = Math.ceil(paddedHigh / step);
+  const ticks = Array.from({ length: last - first + 1 }, (_, i) => Number(((first + i) * step).toPrecision(12)));
+  return { low: ticks[0], high: ticks[ticks.length - 1], ticks };
+}
 function render() {
   peaksToggle.nextElementSibling.textContent = t('Show peaks');
   renderSummary();
@@ -306,6 +319,10 @@ function render() {
     const description = document.createElement('p');
     description.textContent = keys.map(k => metrics[k].label).join(' · ');
     card.append(cardHeader, description);
+    if (keys.includes('battery') || keys.includes('battery_current')) {
+      const direction = document.createElement('p'); direction.className = 'battery-direction';
+      direction.textContent = t('Battery: + charging · − discharging'); card.append(direction);
+    }
     const area = document.createElement('div');
     area.className = 'chart-area';
     area.tabIndex = 0;
@@ -314,16 +331,17 @@ function render() {
     const width = Math.max(300, Math.min(900, document.documentElement.clientWidth - 90));
     const height = 240, left = 48, right = width - 12, top = 12, bottom = 210;
     const svg = svgElement('svg', { viewBox: `0 0 ${width} ${height}`, preserveAspectRatio: 'none', role: 'img', 'aria-label': t('{title} over time', { title: t(title) }) });
-    let low = 0, high = group === 'soc' ? 100 : 1;
+    let low = 0, high = group === 'soc' ? 100 : 0;
     for (const p of points) for (const k of keys) if (Number.isFinite(p.values[k])) { low = Math.min(low, p.values[k]); high = Math.max(high, p.values[k]); }
-    if (group !== 'soc') { high *= 1.1; if (low < 0) low *= 1.1; }
+    const scale = group === 'soc' ? { low: 0, high: 100, ticks: [0, 25, 50, 75, 100] } : chartScale(low, high);
+    ({ low, high } = scale);
     const x = t => left + (t - view.from) / span * (right - left);
     const y = v => bottom - (v - low) / (high - low) * (bottom - top);
-    for (let i = 0; i <= 4; i++) {
-      const value = low + (high - low) * i / 4;
+    for (const value of scale.ticks) {
       svg.append(svgElement('line', { x1: left, x2: right, y1: y(value), y2: y(value), class: 'chart-grid' }));
       const unitScale = group === 'power' && Math.max(high, Math.abs(low)) >= 1000 ? 1000 : 1;
-      svg.append(svgElement('text', { x: left - 7, y: y(value) + 4, 'text-anchor': 'end', class: 'axis-label' }, Number(value / unitScale).toFixed(group === 'soc' ? 0 : 1)));
+      const label = new Intl.NumberFormat(window.energyI18n.locale, { maximumFractionDigits: 6 }).format(value / unitScale);
+      svg.append(svgElement('text', { x: left - 7, y: y(value) + 4, 'text-anchor': 'end', class: 'axis-label' }, label));
     }
     const unit = group === 'soc' ? '%' : group === 'voltage' ? 'V' : group === 'current' ? 'A' : Math.max(high, Math.abs(low)) >= 1000 ? 'kW' : 'W';
     svg.append(svgElement('text', { x: 0, y: 10, class: 'axis-label' }, unit));

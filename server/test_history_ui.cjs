@@ -34,3 +34,14 @@ assert.equal(historyCutoffs(view, 300, 900).present, 900);
 assert.equal(historyCutoffs(view, 900, 900).observed, 900, 'A new fetch can observe a real outage');
 assert.equal(historyCutoffs(view, 90000, 91000).observed, 86400);
 console.log('History snapshot boundary regression checks passed.');
+const chartScale = readFunction('chartScale');
+for (const [low, high] of [[0, 0], [-88, 76], [0, 5245], [-57, 0], [0, .005], [0, 1000000]]) {
+  const scale = chartScale(low, high);
+  assert.ok(scale.low <= low && scale.high >= high);
+  assert.ok(scale.high > scale.low);
+  assert.ok(scale.ticks.includes(0), 'Zero must be a labelled tick');
+  assert.ok(scale.ticks.length >= 3 && scale.ticks.length <= 8);
+  assert.ok(scale.ticks.every(Number.isFinite));
+}
+assert.deepEqual(Array.from(chartScale(-88, 76).ticks), [-100, -50, 0, 50, 100]);
+console.log('Rounded chart scale regression checks passed.');
