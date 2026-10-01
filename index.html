@@ -41,12 +41,15 @@
     <div class="scene-label load-label"><span class="mini-icon">⌂</span><div>House<span><b data-value="load">—</b> <small>W</small></span></div></div>
     <div class="scene-caption">A connected view of your home.</div>
   </section>
+  <details class="reading-details">
+  <summary><span data-i18n="Electrical details">Electrical details</span><span data-i18n="PV channels, voltage and current">PV channels, voltage and current</span></summary>
   <section class="metrics" aria-label="Energy readings">
     <article class="metric grid"><div class="metric-top"><span>Grid power</span><span class="symbol">↯</span></div><div class="reading"><b data-value="grid">—</b><span>W</span></div><p><span data-value="grid_voltage">—</span> V</p><p id="grid-state">Waiting for readings</p><div class="meter" hidden><span style="width:0%"></span></div></article>
     <article class="metric solar"><div class="metric-top"><span>Solar production</span><span class="symbol">☀</span></div><div class="reading"><b data-value="pv">—</b><span>kW</span></div><p><span data-value="pv_voltage">—</span> V</p><div class="meter" hidden><span style="width:65%"></span></div></article>
     <article class="metric battery"><div class="metric-top"><span>Battery</span><span class="symbol">▰</span></div><div class="reading"><b data-value="soc">—</b><span>%</span></div><p class="battery-watts"><strong><span data-value="battery">—</span> <span>W</span></strong></p><p class="battery-status"></p><div class="meter"><span id="charge-bar" style="width:0%"></span></div></article>
     <article class="metric load"><div class="metric-top"><span>House consumption</span><span class="symbol">⌂</span></div><div class="reading"><b data-value="load">—</b><span>W</span></div><p>Total house load</p><div class="meter" hidden><span style="width:42%"></span></div></article>
   </section>
+  </details>
   <footer><span id="freshness" role="status">Waiting for inverter readings</span><button id="pause" type="button" hidden>Pause demo</button></footer>
   <p class="disclaimer" hidden>Design preview only. These are simulated readings, not your inverter’s live data.</p>
 </main>

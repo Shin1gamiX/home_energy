@@ -187,3 +187,18 @@ footer { font-size: 12px; line-height: 1.6; }
   .overview .pv-channel>span.pv-channel-details { font-size: 12px; }
   .overview .scene-caption { font-size: 11px; }
 }
+.reading-details { margin-top: 18px; border: 1px solid #dce8e2; border-radius: 15px; background: #ffffffb3; }
+.reading-details summary { cursor: pointer; padding: 16px 18px; font-size: 15px; font-weight: 600; }
+.reading-details summary>span:last-child { display: block; margin: 6px 0 0 18px; font-weight: 400; font-size: 13px; color: var(--muted); }
+.overview .reading-details .metrics { margin: 0; padding: 0 16px 16px; }
+.overview .reading-details .metric { min-height: 0; padding: 12px; border-radius: 10px; background: transparent; }
+.reading-details .reading, .reading-details .metric.battery .meter { display: none; }
+.overview .reading-details .metric p { font-size: 13px; line-height: 1.6; }
+.overview .reading-details .metric-top { font-size: 13px; margin-bottom: 7px; }
+.overview .reading-details .pv-channel>span.pv-channel-details { font-size: 13px; }
+.overview .reading-details .metric.grid p { display: block; }
+.overview .reading-details #grid-state::before { content: ''; }
+@media(max-width:700px) {
+  .overview .reading-details .metrics { padding: 0 10px 10px; gap: 8px; }
+  .reading-details summary { padding: 14px; }
+}
