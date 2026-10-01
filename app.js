@@ -40,6 +40,8 @@ window.energySupplyLabel = values => {
 window.energyI18n = (() => {
   const translations = {
     ru: {
+      'Overview': 'Обзор', 'History': 'История', 'Main navigation': 'Основная навигация',
+      'Live · updated {seconds}s ago': 'Онлайн · обновлено {seconds} с назад',
       'Inverter · ': 'Инвертор · ', 'Off-Grid': 'Автономный',
       'House supply · {source}': 'Питание дома · {source}',
       'Not refreshed yet': 'Ещё не обновлено',
@@ -105,6 +107,8 @@ window.energyI18n = (() => {
       '{title} over time': '{title} во времени'
     },
     el: {
+      'Overview': 'Επισκόπηση', 'History': 'Ιστορικό', 'Main navigation': 'Κύρια πλοήγηση',
+      'Live · updated {seconds}s ago': 'Ζωντανά · ενημέρωση πριν από {seconds} δ',
       'Inverter · ': 'Μετατροπέας · ', 'Off-Grid': 'Εκτός δικτύου',
       'House supply · {source}': 'Τροφοδοσία σπιτιού · {source}',
       'Not refreshed yet': 'Δεν ανανεώθηκε ακόμη',
@@ -196,6 +200,7 @@ window.energyI18n = (() => {
     select.value = language; select.setAttribute('aria-label', t('Language'));
     texts.forEach(({ node, key }) => { node.textContent = t(key); });
     attributes.forEach(({ element, name, key }) => element.setAttribute(name, t(key)));
+    document.querySelectorAll('[data-i18n]').forEach(element => { element.textContent = t(element.dataset.i18n); });
   }
   select.addEventListener('change', () => {
     language = select.value;
@@ -281,7 +286,7 @@ for (const [name, d] of Object.entries(icons)) {
 }
 const flowSvg = svgElement('svg', { class: 'energy-connections', 'aria-hidden': 'true' });
 const flowDefinitions = {
-  gridHouse: ['grid', 'load', '#0878f9'],
+  gridHouse: ['grid', 'load', '#8861ba'],
   solarHouse: ['solar', 'load', '#c48a15'],
   batteryHouse: ['battery', 'load', '#169779'],
   solarBattery: ['solar', 'battery', '#c48a15'],
@@ -444,6 +449,13 @@ function updateStatus() {
   document.querySelector('#freshness').textContent = latest?.updated_at
     ? `${t('Last inverter report')} ${new Date(latest.updated_at * 1000).toLocaleTimeString('en-GB', { timeZone: 'Europe/Athens' })} (${new Date(latest.updated_at * 1000).toLocaleDateString('en-GB', { timeZone: 'Europe/Athens' })}) · ${t('Athens')}`
     : t('Waiting for inverter readings');
+  const liveStatus = document.querySelector('#live-status');
+  if (liveStatus) {
+    liveStatus.textContent = status === 'live'
+      ? t('Live · updated {seconds}s ago', { seconds: Math.max(0, Math.floor(now - latest.updated_at)) })
+      : t(labels[status] || 'Connection unavailable');
+    liveStatus.dataset.state = status;
+  }
 }
 async function refresh() {
   if (pending || document.hidden) return;

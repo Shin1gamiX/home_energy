@@ -355,7 +355,7 @@ function render() {
       time.textContent = `${dateFormat.format(active * 1000)} · ${timeFormat.format(active * 1000)} – ${timeFormat.format((active + step) * 1000)}`;
       tip.append(time);
       for (const key of keys) {
-        const item = document.createElement('span'); item.className = 'tip-value'; item.style.color = metrics[key].color;
+        const item = document.createElement('span'); item.className = 'tip-value'; item.style.setProperty('--series', metrics[key].color);
         item.textContent = `${metrics[key].label}: ${display(byTime.get(active)?.values[key], key)}`;
         tip.append(item);
       }
