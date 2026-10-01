@@ -10,15 +10,21 @@
 <main class="dashboard">
   <header><a class="brand" href="/" aria-label="Home energy overview"><span class="brand-mark" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="18" fill="#284e43"/><path fill="#f0f6e9" fill-rule="evenodd" d="M10 29 30 11Q32 9 34 11L43 19V15H49V25L55 30Q57 32 54 32H49V52H15V32H10Q7 32 10 29ZM35 21 23 36Q22 38 24 38H31L28 48 42 32H33Z"/></svg></span><span>shin1gamix<span class="brand-sub">HOME ENERGY</span></span></a><nav class="page-nav" aria-label="Main navigation"><a href="/" data-i18n="Overview">Overview</a><a href="history.html" aria-current="page" data-i18n="History">History</a></nav></header>
   <section class="intro"><div><h1>Energy history</h1><p>Your home, over time.</p></div></section>
+  <div class="history-navigation">
   <nav class="periods" aria-label="History period"><button data-period="day" aria-pressed="true">Day</button><button data-period="week" aria-pressed="false">Week</button><button data-period="month" aria-pressed="false">Month</button></nav>
   <div class="date-controls"><button id="previous" aria-label="Previous period">‹</button><input id="date-display" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" aria-label="DD/MM/YYYY" maxlength="10"><label class="date-picker">▦<input id="history-date" type="date" aria-label="Choose date"></label><button id="next" aria-label="Next period">›</button><button id="today" type="button">Today</button><span>Athens time</span></div>
   <p id="range-label"></p>
+  </div>
   <section id="energy-summary" class="energy-summary" aria-live="polite"></section>
-  <div class="filters" role="group" aria-label="Statistics"></div>
-  <div class="filter-actions"><button id="select-all">Select all</button><button id="clear-all">Clear all</button></div>
+  <section class="chart-settings">
+  <div class="settings-heading"><h2 data-i18n="Displayed statistics">Displayed statistics</h2><div class="filter-actions"><button id="select-all">Select all</button><button id="clear-all">Clear all</button></div></div>
+  <div class="filter-groups"></div>
+  <div class="chart-options">
   <div class="averaging-control"><label for="averaging">Average over</label><select id="averaging"><option value="auto">Auto</option><option value="60">1 minute</option><option value="300">5 minutes</option><option value="900">15 minutes</option><option value="3600">1 hour</option></select></div>
   <label class="peaks-toggle"><input id="show-peaks" type="checkbox" checked><span>Show peaks</span></label>
+  </div></section>
   <div class="history-toolbar"><div><p id="history-status" role="status">Loading history…</p><p id="history-updated"></p></div><button id="refresh-history" type="button">↻ Refresh</button></div>
+  <nav id="chart-jumps" aria-label="History charts"></nav>
   <section id="charts" aria-label="History charts"></section>
 </main>
 <script src="app.js?v=20260930-supply"></script>

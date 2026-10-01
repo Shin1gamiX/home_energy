@@ -19,7 +19,7 @@ const metrics = {
   soc: { get label() { return t('Battery %'); }, color: '#80a57c', unit: '%', group: 'soc' },
   pv_voltage: { get label() { return t('PV voltage (legacy)'); }, color: '#337eb9', unit: 'V', group: 'voltage', legacy: true },
   grid_voltage: { get label() { return t('Grid voltage'); }, color: '#aa4e91', unit: 'V', group: 'voltage' },
-  pv_current: { get label() { return t('Solar current'); }, color: '#c39232', unit: 'A', group: 'current' },
+  pv_current: { get label() { return t('Solar current'); }, color: '#c39232', unit: 'A', group: 'current', legacy: true },
   battery_current: { get label() { return t('Battery current (avg.)'); }, color: '#d65c66', unit: 'A', group: 'current' },
   load_current: { get label() { return t('House current'); }, color: '#168b8a', unit: 'A', group: 'current' },
 };
@@ -270,6 +270,12 @@ function render() {
   else statusElement.textContent = points.length ? step === 3600 ? t('Hourly averages') : step === 60 ? t('1-minute averages') : t('{n}-minute averages', { n: step / 60 }) : t('No readings for this period.');
   const container = document.querySelector('#charts');
   container.replaceChildren();
+  const jumps = document.querySelector('#chart-jumps');
+  jumps.replaceChildren();
+  for (const [group, title] of Object.entries({ supply: 'House supply', power: 'Power', soc: 'Battery charge', voltage: 'Voltage', current: 'Current' })) {
+    if (group === 'supply' ? !showMode : ![...selected].some(key => metrics[key].group === group)) continue;
+    const link = document.createElement('a'); link.href = `#chart-${group}`; link.textContent = t(title); jumps.append(link);
+  }
   if (showMode) renderModeTimeline(container, view);
   const inspectors = [];
   function inspectTogether(timestamp) {
@@ -285,6 +291,7 @@ function render() {
     if (!keys.length) continue;
     const card = document.createElement('article');
     card.className = 'chart-card';
+    card.id = `chart-${group}`;
     const heading = document.createElement('h2');
     heading.textContent = t(title);
     const cardHeader = document.createElement('div');
@@ -454,6 +461,8 @@ function renderSummary() {
   heading.textContent = t(period === 'day' ? 'Daily summary' : period === 'week' ? 'Weekly summary' : 'Monthly summary');
   section.append(heading);
   const cards = document.createElement('div'); cards.className = 'summary-cards';
+  cards.tabIndex = 0;
+  cards.setAttribute('aria-label', t('Energy summaries. Scroll to see more.'));
   const totals = energyTotals(rawRows, range.from, range.to, snapshotTime);
   const format = value => new Intl.NumberFormat(window.energyI18n.locale, { maximumFractionDigits: 2 }).format(value);
   for (const [key, name] of Object.entries({ pv: 'Solar generated', grid: 'Grid consumed', load: 'House usage', battery: 'Battery supplied', solar_to_house: 'Solar to house' })) {
@@ -497,7 +506,7 @@ function renderModeTimeline(container, view) {
     cursor = Math.max(cursor, end);
   }
   gap(cutoff);
-  const card = document.createElement('article'); card.className = 'chart-card mode-card';
+  const card = document.createElement('article'); card.className = 'chart-card mode-card'; card.id = 'chart-supply';
   const heading = document.createElement('h2'); heading.textContent = t('House supply');
   const note = document.createElement('p'); note.textContent = t('Estimated source supplying the house');
   const header = document.createElement('div'); header.className = 'chart-header'; header.append(heading);
@@ -643,7 +652,23 @@ function updateFilters() {
     button.setAttribute('aria-pressed', String(enabled));
     button.querySelector('span').textContent = metrics[button.dataset.metric].label;
   });
+  document.querySelectorAll('.filter-category').forEach(category => {
+    const buttons = [...category.querySelectorAll('button')];
+    const count = buttons.filter(button => button.getAttribute('aria-pressed') === 'true').length;
+    category.querySelector('.filter-count').textContent = `${count}/${buttons.length}`;
+  });
   render();
+}
+const filterContainers = {};
+for (const [key, label] of Object.entries({ power: 'Power', battery: 'Battery', voltage: 'Voltage', current: 'Current', supply: 'House supply', legacy: 'Legacy readings' })) {
+  const category = document.createElement('details'); category.className = 'filter-category';
+  const summary = document.createElement('summary');
+  const name = document.createElement('span'); name.dataset.i18n = label; name.textContent = t(label);
+  const count = document.createElement('span'); count.className = 'filter-count';
+  summary.append(name, count);
+  const filters = document.createElement('div'); filters.className = 'filters';
+  category.append(summary, filters); document.querySelector('.filter-groups').append(category);
+  filterContainers[key] = filters;
 }
 for (const [key, metric] of Object.entries(metrics)) {
   const button = document.createElement('button');
@@ -664,12 +689,13 @@ for (const [key, metric] of Object.entries(metrics)) {
   const label = document.createElement('span'); label.textContent = metric.label;
   button.append(icon, label);
   button.addEventListener('click', () => { selected.has(key) ? selected.delete(key) : selected.add(key); updateFilters(); });
-  document.querySelector('.filters').append(button);
+  const category = metric.legacy ? 'legacy' : ['battery', 'soc', 'battery_current'].includes(key) ? 'battery' : metric.group;
+  filterContainers[category].append(button);
 }
 const modeButton = document.createElement('button');
 modeButton.id = 'mode-filter'; modeButton.type = 'button'; modeButton.style.setProperty('--series', '#284e43');
 modeButton.addEventListener('click', () => { showMode = !showMode; updateFilters(); });
-document.querySelector('.filters').append(modeButton);
+filterContainers.supply.append(modeButton);
 document.querySelector('#select-all').addEventListener('click', () => {
   showMode = true;
   selected.clear();

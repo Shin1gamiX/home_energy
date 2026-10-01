@@ -42,6 +42,8 @@ window.energyI18n = (() => {
     ru: {
       'Overview': 'Обзор', 'History': 'История', 'Main navigation': 'Основная навигация',
       'Live · updated {seconds}s ago': 'Онлайн · обновлено {seconds} с назад',
+      'Displayed statistics': 'Отображаемые показатели', 'Legacy readings': 'Старые показатели',
+      'Energy summaries. Scroll to see more.': 'Сводки энергии. Прокрутите для просмотра остальных.',
       'Inverter · ': 'Инвертор · ', 'Off-Grid': 'Автономный',
       'House supply · {source}': 'Питание дома · {source}',
       'Not refreshed yet': 'Ещё не обновлено',
@@ -109,6 +111,8 @@ window.energyI18n = (() => {
     el: {
       'Overview': 'Επισκόπηση', 'History': 'Ιστορικό', 'Main navigation': 'Κύρια πλοήγηση',
       'Live · updated {seconds}s ago': 'Ζωντανά · ενημέρωση πριν από {seconds} δ',
+      'Displayed statistics': 'Εμφανιζόμενα στοιχεία', 'Legacy readings': 'Παλαιές μετρήσεις',
+      'Energy summaries. Scroll to see more.': 'Σύνοψη ενέργειας. Κάντε κύλιση για περισσότερα.',
       'Inverter · ': 'Μετατροπέας · ', 'Off-Grid': 'Εκτός δικτύου',
       'House supply · {source}': 'Τροφοδοσία σπιτιού · {source}',
       'Not refreshed yet': 'Δεν ανανεώθηκε ακόμη',
