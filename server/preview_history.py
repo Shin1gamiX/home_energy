@@ -2,7 +2,7 @@
 import json
 import math
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -15,13 +15,17 @@ class Preview(SimpleHTTPRequestHandler):
     def do_GET(self):
         now = datetime.now().astimezone()
         day = now.strftime('%Y-%m-%d')
+        days = [(now - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
         if self.path == '/history/index.json':
-            start = int(now.replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
-            payload = {'days': [day], 'updated_at': now.timestamp(), 'mode_recorded_from': start}
-        elif self.path == '/history/' + day + '.json':
-            start = int(now.replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
+            start = int((now - timedelta(days=6)).replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
+            payload = {'days': sorted(days), 'updated_at': now.timestamp(), 'mode_recorded_from': start}
+        elif self.path in ['/history/' + date + '.json' for date in days]:
+            requested = datetime.strptime(self.path.split('/')[-1][:-5], '%Y-%m-%d').astimezone()
+            start = int(requested.timestamp())
             points = []
             for i in range(1440):
+                if start + i * 60 > now.timestamp():
+                    break
                 if 600 <= i < 620:  # Exercise missing-report gaps.
                     continue
                 solar = max(0, math.sin((i - 360) / 720 * math.pi)) * 2400 if 360 < i < 1080 else 0

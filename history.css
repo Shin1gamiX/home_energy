@@ -37,12 +37,12 @@
 .date-controls #today { font-size: 14px; padding: 11px 14px; }
 .mode-card > p { color: var(--muted, #708789); }
 .mode-plot { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 8px; margin-top: 24px; }
-.mode-labels { display: grid; grid-auto-rows: 44px; font-size: 12px; }
+.mode-labels { display: grid; grid-auto-rows: 36px; font-size: 12px; }
 .mode-labels span { display: flex; align-items: center; overflow-wrap: anywhere; }
-.mode-tracks { position: relative; background: repeating-linear-gradient(to bottom, transparent 0, transparent 43px, #e2ebe6 43px, #e2ebe6 44px); }
-.mode-segment { position: absolute; height: 22px; min-width: 1px; border: 0; padding: 0; border-radius: 2px; background: var(--mode-color); }
+.mode-tracks { position: relative; background: repeating-linear-gradient(to bottom, transparent 0, transparent 35px, #e2ebe6 35px, #e2ebe6 36px); }
+.mode-segment { position: absolute; height: 20px; min-width: 1px; border: 0; padding: 0; border-radius: 4px; background: var(--mode-color); }
 .mode-segment:hover { background: var(--mode-color); filter: brightness(.9); }
-.mode-segment.is-dense { background: repeating-linear-gradient(135deg, var(--mode-color) 0 3px, color-mix(in srgb, var(--mode-color) 35%, white) 3px 6px); }
+.mode-segment.is-dense { background: #e2eae6; border: 1px solid #81968c; color: #294b40; font-size: 11px; overflow: hidden; white-space: nowrap; }
 .mode-segment.is-selected { outline: 2px solid #294b40; outline-offset: 2px; z-index: 2; }
 .mode-controls { display: flex; flex-wrap: wrap; gap: 7px; }
 .mode-controls button { font-size: 12px; padding: 7px 10px; }

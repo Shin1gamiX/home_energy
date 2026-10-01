@@ -45,3 +45,19 @@ for (const [low, high] of [[0, 0], [-88, 76], [0, 5245], [-57, 0], [0, .005], [0
 }
 assert.deepEqual(Array.from(chartScale(-88, 76).ticks), [-100, -50, 0, 50, 100]);
 console.log('Rounded chart scale regression checks passed.');
+const groupModeSegments = readFunction('groupModeSegments');
+const shortSegments = [{start: 0, end: 15, state: 'solar'}, {start: 15, end: 30, state: 'grid'}];
+assert.equal(groupModeSegments(shortSegments, 100).length, 1);
+assert.equal(groupModeSegments(shortSegments, 1).length, 2, 'Zoom exposes original intervals');
+for (const state of ['missing', 'unrecorded', 'unknown']) {
+  const groups = groupModeSegments([shortSegments[0], {...shortSegments[1], state}], 100);
+  assert.equal(groups.length, 2, 'Unknown/gap states must not be hidden in a rapid-changes block');
+}
+assert.equal(groupModeSegments([shortSegments[0], {...shortSegments[1], start: 20}], 100).length, 2);
+const recordedRange = readFunction('recordedRange');
+assert.equal(recordedRange([], [], view, 1000), null);
+assert.equal(recordedRange([row(100, {pv: null})], [], view, 1000), null);
+assert.equal(recordedRange([row(100, {pv: 0}), row(700, {pv: 20})], [], view, 730).to, 730);
+assert.equal(recordedRange([], [{start: 200, end: 800}], view, 900).from, 200);
+assert.equal(recordedRange([row(100, {pv: 0})], [], view, 120).to, 220, 'Very short data keeps a usable two-minute view');
+console.log('Supply timeline grouping and recorded-range regression checks passed.');

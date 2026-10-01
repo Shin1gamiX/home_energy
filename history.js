@@ -267,6 +267,7 @@ function chartScale(minimum, maximum) {
 }
 function render() {
   peaksToggle.nextElementSibling.textContent = t('Show peaks');
+  document.querySelector('#fit-history').disabled = loading || hasError || !recordedRange(rawRows, modeRows, range, snapshotTime);
   renderSummary();
   const scrollPosition = window.scrollY;
   const requestedView = zoom || range;
@@ -501,12 +502,43 @@ function historyCutoffs(view, observedAt, now) {
   const present = Math.min(view.to, now);
   return { observed: Math.max(view.from, Math.min(present, observedAt || view.from)), present };
 }
+function groupModeSegments(segments, pixelSeconds) {
+  const groups = [];
+  const canGroup = segment => !['missing', 'unrecorded', 'unknown'].includes(segment.state) && segment.end - segment.start < pixelSeconds * 6;
+  for (let i = 0; i < segments.length;) {
+    const first = segments[i++];
+    const group = { start: first.start, end: first.end, items: [first] };
+    if (canGroup(first)) {
+      while (i < segments.length && canGroup(segments[i]) && segments[i].start <= group.end + .001) {
+        group.items.push(segments[i]); group.end = segments[i++].end;
+      }
+    }
+    groups.push(group);
+  }
+  return groups;
+}
+function recordedRange(rows, modes, range, cutoff) {
+  const intervals = [
+    ...rows.filter(row => Number.isFinite(row.t) && Object.values(row.values || {}).some(Number.isFinite)).map(row => ({ start: row.t, end: row.t + 60 })),
+    ...modes.filter(row => Number.isFinite(row.start) && Number.isFinite(row.end))
+  ].map(row => ({ start: Math.max(range.from, row.start), end: Math.min(range.to, cutoff, row.end) })).filter(row => row.end > row.start);
+  if (!intervals.length) return null;
+  const from = intervals.reduce((min, row) => Math.min(min, row.start), range.to);
+  const to = intervals.reduce((max, row) => Math.max(max, row.end), range.from);
+  // Retain the existing two-minute minimum for zoom interactions.
+  const end = Math.min(range.to, Math.max(to, from + 120));
+  return { from: Math.max(range.from, Math.min(from, end - 120)), to: end };
+}
+function fitRecordedTime() {
+  const recorded = recordedRange(rawRows, modeRows, range, snapshotTime);
+  if (recorded) { zoom = recorded; render(); }
+}
 function renderModeTimeline(container, view) {
   // Missing reports can only be inferred up to when this snapshot was fetched.
   // Re-rendering cached data must not manufacture an outage after that time.
   const bounds = historyCutoffs(view, snapshotObservedAt, Date.now() / 1000);
   const cutoff = bounds.observed;
-  const states = { grid: ['Grid', '#8861ba'], mixed: ['Mixed', '#596cb0'], solar: ['Solar', '#c39232'], battery: ['Battery', '#d65c66'], standby: ['Standby', '#80a57c'], unknown: ['Unknown supply', '#869b98'], missing: ['No data', '#adb8b4'], unrecorded: ['Mode not recorded', '#c3ccc8'] };
+  const states = { grid: ['Grid', '#8861ba'], mixed: ['Mixed', '#596cb0'], solar: ['Solar', '#c39232'], battery: ['Battery', '#d65c66'], standby: ['Standby', '#80a57c'], unknown: ['Unknown supply', '#869b98'], missing: ['No data', '#adb8b4'], unrecorded: ['Mode not recorded', '#c3ccc8'], rapid: ['Rapid changes', '#60776c'] };
   const segments = [];
   let cursor = view.from;
   function gap(end) {
@@ -534,19 +566,21 @@ function renderModeTimeline(container, view) {
     render();
   }
   for (const [label, action] of [
+    ['Fit recorded time', fitRecordedTime],
     ['Zoom in', () => { const span = Math.max(120, (view.to - view.from) / 2); const center = modeSelectedTime !== null && modeSelectedTime >= view.from && modeSelectedTime < view.to ? modeSelectedTime : (view.from + Math.min(view.to, cutoff)) / 2; const from = Math.max(range.from, Math.min(range.to - span, center - span / 2)); setModeZoom(from, from + span); }],
     ['Reset zoom', () => { zoom = null; render(); }]
   ]) {
     const button = document.createElement('button'); button.type = 'button'; button.textContent = t(label);
-    button.disabled = label === 'Reset zoom' ? !zoom : view.to - view.from <= 120;
+    button.disabled = label === 'Reset zoom' ? !zoom : label === 'Fit recorded time' ? !recordedRange(rawRows, modeRows, range, snapshotTime) : view.to - view.from <= 120;
     button.addEventListener('click', action); controls.append(button);
   }
   header.append(controls); card.append(header, note);
   if (loading || hasError || cutoff <= view.from) { const message = document.createElement('p'); message.textContent = t(loading ? 'Loading history…' : hasError ? 'History is unavailable. Please try again shortly.' : 'No readings for this period.'); card.append(message); container.append(card); return; }
-  const keys = ['grid', 'mixed', 'solar', 'battery', ...['standby', 'unknown', 'unrecorded'].filter(key => segments.some(s => s.state === key)), 'missing'];
+  const keys = Object.keys(states).filter(key => segments.some(s => s.state === key));
+  if (!keys.length) keys.push('unknown');
   const plot = document.createElement('div'); plot.className = 'mode-plot';
   const labels = document.createElement('div'); labels.className = 'mode-labels';
-  const tracks = document.createElement('div'); tracks.className = 'mode-tracks'; tracks.style.height = `${keys.length * 44}px`;
+  const tracks = document.createElement('div'); tracks.className = 'mode-tracks'; tracks.style.height = `${keys.length * 36}px`;
   const guide = document.createElement('div'); guide.className = 'mode-guide'; guide.hidden = true;
   for (const key of keys) { const label = document.createElement('span'); label.textContent = t(states[key][0]); labels.append(label); }
   const detail = document.createElement('div'); detail.className = 'chart-tip mode-detail'; detail.setAttribute('aria-live', 'polite'); detail.textContent = t('Select an interval to see its times.');
@@ -566,7 +600,7 @@ function renderModeTimeline(container, view) {
     guide.hidden = false; guide.style.left = `${(time - view.from) / (view.to - view.from) * 100}%`;
     for (const block of tracks.querySelectorAll('.mode-segment')) block.classList.toggle('is-selected', Number(block.dataset.start) <= time && time < Number(block.dataset.end));
     const title = document.createElement('strong'); title.textContent = t(states[segment.state][0]);
-    title.style.color = states[segment.state][1];
+    title.style.borderLeft = `3px solid ${states[segment.state][1]}`; title.style.paddingLeft = '8px';
     const fields = document.createElement('div'); fields.className = 'mode-detail-fields';
     const observedStart = segment.observedStart ?? segment.start, observedEnd = segment.observedEnd ?? segment.end;
     for (const [label, value] of [['Start', secondsFormat.format(observedStart * 1000)], ['End', secondsFormat.format(observedEnd * 1000)], ['Duration', duration(observedEnd - observedStart)]]) {
@@ -586,28 +620,26 @@ function renderModeTimeline(container, view) {
   const pixelSeconds = span / Math.max(1, tracks.clientWidth);
   // Group only visually indistinguishable consecutive intervals. Raw intervals
   // still drive totals and inspection, and are revealed by zooming the group.
-  const groups = [];
-  for (let i = 0; i < segments.length;) {
-    const first = segments[i];
-    const group = { start: first.start, end: first.end, items: [first] };
-    i++;
-    if (!['missing', 'unrecorded', 'unknown'].includes(first.state) && first.end - first.start < pixelSeconds * 6) {
-      while (i < segments.length && !['missing', 'unrecorded', 'unknown'].includes(segments[i].state) && segments[i].end - segments[i].start < pixelSeconds * 6 && segments[i].start <= group.end + 0.001) {
-        group.items.push(segments[i]); group.end = segments[i++].end;
-      }
-    }
-    groups.push(group);
+  const groups = groupModeSegments(segments, pixelSeconds);
+  if (groups.some(group => group.items.length > 1)) {
+    keys.push('rapid');
+    const label = document.createElement('span'); label.textContent = t('Rapid changes'); labels.append(label);
+    tracks.style.height = `${keys.length * 36}px`;
   }
-  for (const group of groups) for (const state of new Set(group.items.map(item => item.state))) {
+  for (const group of groups) {
     const dense = group.items.length > 1;
+    const state = dense ? 'rapid' : group.items[0].state;
     const block = document.createElement('button'); block.type = 'button'; block.className = 'mode-segment';
     block.dataset.start = group.start; block.dataset.end = group.end;
     block.style.left = `${(group.start - view.from) / span * 100}%`; block.style.width = `${(group.end - group.start) / span * 100}%`;
-    block.style.top = `${keys.indexOf(state) * 44 + 11}px`; block.style.setProperty('--mode-color', states[state][1]);
+    block.style.top = `${keys.indexOf(state) * 36 + 8}px`; block.style.setProperty('--mode-color', states[state][1]);
     const description = dense ? `${t(states[state][0])} · ${t('{n} changes · select to zoom', { n: group.items.length - 1 })}` : t(states[state][0]);
     block.setAttribute('aria-label', `${description}: ${secondsFormat.format(group.start * 1000)} – ${secondsFormat.format(group.end * 1000)}`);
     block.title = description;
-    if (dense) block.classList.add('is-dense');
+    if (dense) {
+      block.classList.add('is-dense');
+      if ((group.end - group.start) / pixelSeconds > 60) block.textContent = t('{n} changes', { n: group.items.length - 1 });
+    }
     block.addEventListener('focus', () => inspect(group.items[0]));
     block.addEventListener('click', event => {
       event.stopPropagation();
@@ -653,7 +685,7 @@ function renderModeTimeline(container, view) {
   tracks.addEventListener('click', event => { const time = pointerTime(event); const segment = segments.find(s => s.start <= time && time < s.end); if (segment) inspect(segment, time); });
   const axis = document.createElement('div'); axis.className = 'mode-axis';
   for (let i = 0; i <= 4; i++) { const tick = document.createElement('span'); const time = (view.from + span * i / 4) * 1000; tick.textContent = !zoom && period === 'day' && i === 4 ? '24:00' : span <= 86400 ? timeFormat.format(time) : new Intl.DateTimeFormat('en-GB', { timeZone: timezone, day: '2-digit', month: '2-digit' }).format(time); axis.append(tick); }
-  const help = document.createElement('p'); help.className = 'mode-help'; help.textContent = t('Striped blocks contain multiple changes. Select to zoom, or drag across the timeline.');
+  const help = document.createElement('p'); help.className = 'mode-help'; help.textContent = t(groups.some(group => group.items.length > 1) ? 'Rapid changes are grouped. Select a block to zoom into individual intervals.' : 'Select an interval for exact times. Drag across the timeline to zoom.');
   card.append(axis, help, detail);
   const totals = document.createElement('div'); totals.className = 'mode-totals';
   for (const key of keys) { const sum = segments.filter(s => s.state === key).reduce((a, s) => a + s.end - s.start, 0); if (!sum) continue; const item = document.createElement('span'); item.style.setProperty('--mode-color', states[key][1]); item.textContent = `${t(states[key][0])} · ${duration(sum)}`; totals.append(item); }
@@ -766,6 +798,7 @@ dateDisplay.addEventListener('keydown', event => { if (event.key === 'Enter') ap
 dateDisplay.addEventListener('input', () => dateDisplay.setCustomValidity(''));
 range = getRange(); updateFilters(); load();
 document.querySelector('#averaging').addEventListener('change', render);
+document.querySelector('#fit-history').addEventListener('click', fitRecordedTime);
 peaksToggle.addEventListener('change', () => {
   try { localStorage.setItem('homeenergy-show-peaks', String(peaksToggle.checked)); } catch {}
   render();
