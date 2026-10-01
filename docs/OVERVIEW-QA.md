@@ -40,6 +40,19 @@ when power is active. There are no invented sparkline histories. The comparison
 image combines desktop/mobile views, so each implementation viewport was checked
 separately rather than matching the full comparison-board dimensions.
 
+## UI refinement QA (02/10/2026)
+
+This refinement retains the existing design system and code-native artwork;
+it does not introduce a new generated concept. It supersedes the older notes
+above about blue grid, always-visible summary cards and a fixed two-row header.
+
+- In-app Chromium checks covered desktop, narrow phone layouts and EN/RU/EL.
+- Greek charging at 360 CSS pixels had no overlapping diagram boxes or page overflow; Russian charging and expandable readings were checked too.
+- History controls exercised: select/clear all, legacy voltage, day/week/month, Today, five-minute averaging, peaks on/off, chart jumps, keyboard inspection and recorded-time fitting.
+- All four numeric charts showed the same inspected minute. Rounded positive/negative current ticks included zero. Dense synthetic mode changes opened a smaller shared time range without losing the original intervals.
+- Node regressions cover routing, power-dependent flow speed, inverter/source distinction, energy residual bounds, cached snapshot boundaries, rounded axes, timeline grouping and fit bounds. All 15 existing Python backend tests pass.
+- Production deployment is frontend-only: no collector, Home Assistant or inverter configuration changes. Public files must be hash-checked against the release and the public pages checked again after upload.
+
 ## Limitations
 
 Routing indicates estimates, not independently measured branch power. Solar to

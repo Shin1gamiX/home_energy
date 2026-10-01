@@ -123,6 +123,25 @@ Secondary values that round to zero (current below 0.05 A, battery power below 0
 - All user-facing additions need English, Greek and Russian translations.
 - Preserve desktop layout when changing mobile scene labels. Check narrow screens and longer translated labels.
 
+## Interface refinements (02/10/2026)
+
+- Overview/History share the same navigation. The overview keeps its house illustration and animated routes, with secondary electrical readings in a collapsed details section. Live freshness is visible near the heading. Grid is purple on both pages.
+- History keeps a sticky date/period selector and chart jump links. Its selected statistics are grouped in a disclosure; generic old PV voltage/current are in Legacy readings. On phones, summary cards scroll horizontally without widening the page.
+- Numerical chart axes use rounded outward bounds and include a labelled zero. Battery power/current explain positive charging and negative discharging; SOC remains fixed at 0-100%. Series measurements and averaging are unchanged.
+- Supply history displays only rows present in the selected range. Indistinguishable consecutive transitions share one neutral Rapid changes lane, never simultaneous copies on several source rows. Selecting that block zooms in. Original intervals still determine exact inspection and totals; missing/unrecorded/unknown intervals are never grouped into source transitions.
+- Fit recorded time shares its zoom with every graph and has a two-minute minimum. Reset zoom restores the chosen calendar period. The supply timeline remains independent of numeric averaging.
+- All added production labels have English, Russian and Greek versions. No new dependencies or external assets are required.
+
+Regression commands (no installation needed):
+
+```text
+node --check app.js
+node --check history.js
+node server/test_overview.cjs
+node server/test_history_ui.cjs
+python -B -m unittest discover -s server -p 'test_*.py'
+```
+
 ## Security and maintenance checklist
 
 1. Treat the public JSON allowlist as a security boundary. Never proxy unrestricted Home Assistant endpoints or place its token in browser code.
