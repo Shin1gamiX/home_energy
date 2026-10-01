@@ -42,6 +42,7 @@ let modeRecordedFrom = null;
 let showMode = true;
 let modeSelectedTime = null;
 let snapshotTime = 0;
+let snapshotObservedAt = 0;
 let zoom = null;
 let inspectedTime = null;
 let period = 'day';
@@ -203,8 +204,9 @@ async function load({ refresh = false } = {}) {
   updateRefreshButton();
   if (!rawRows.length) render();
   try {
-    indexPromise ??= json('/history/index.json').catch(error => { indexPromise = undefined; throw error; });
-    const index = await indexPromise;
+    indexPromise ??= json('/history/index.json').then(data => ({ data, observedAt: Date.now() / 1000 }))
+      .catch(error => { indexPromise = undefined; throw error; });
+    const { data: index, observedAt } = await indexPromise;
     if (!Array.isArray(index.days)) throw new Error('Invalid history');
     const days = [...new Set(index.days)].filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d) && d >= current.start && d < current.end);
     const files = await Promise.all(days.map(day => {
@@ -217,6 +219,7 @@ async function load({ refresh = false } = {}) {
     modeRows = files.flatMap(file => Array.isArray(file.modes) ? file.modes : []);
     modeRecordedFrom = Number.isFinite(index.mode_recorded_from) ? index.mode_recorded_from : null;
     snapshotTime = Number.isFinite(index.updated_at) ? index.updated_at : Date.now() / 1000;
+    snapshotObservedAt = observedAt;
     loading = false;
     if (refresh || !nextRefreshAt) nextRefreshAt = Date.now() + refreshCooldown;
     render();
@@ -234,6 +237,9 @@ function updateRefreshButton() {
   const seconds = Math.max(0, Math.ceil((nextRefreshAt - Date.now()) / 1000));
   refreshButton.disabled = loading || seconds > 0;
   refreshButton.textContent = loading ? t('Refreshing…') : seconds ? `↻ ${t('Refresh')} ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}` : `↻ ${t('Refresh')}`;
+  const updated = document.querySelector('#history-updated');
+  if (updated) updated.textContent = hasError ? t('History unavailable.') : snapshotObservedAt
+    ? t('Snapshot loaded {time} · refresh to update', { time: timeFormat.format(snapshotObservedAt * 1000) }) : '';
 }
 function svgElement(name, attributes = {}, text) {
   const element = document.createElementNS('http://www.w3.org/2000/svg', name);
@@ -464,8 +470,15 @@ function renderSummary() {
   note.textContent = t('Estimated from recorded readings only; missing periods are excluded.');
   section.append(cards, note);
 }
+function historyCutoffs(view, observedAt, now) {
+  const present = Math.min(view.to, now);
+  return { observed: Math.max(view.from, Math.min(present, observedAt || view.from)), present };
+}
 function renderModeTimeline(container, view) {
-  const cutoff = Math.min(view.to, Date.now() / 1000);
+  // Missing reports can only be inferred up to when this snapshot was fetched.
+  // Re-rendering cached data must not manufacture an outage after that time.
+  const bounds = historyCutoffs(view, snapshotObservedAt, Date.now() / 1000);
+  const cutoff = bounds.observed;
   const states = { grid: ['Grid', '#8861ba'], mixed: ['Mixed', '#596cb0'], solar: ['Solar', '#c39232'], battery: ['Battery', '#d65c66'], standby: ['Standby', '#80a57c'], unknown: ['Unknown supply', '#869b98'], missing: ['No data', '#adb8b4'], unrecorded: ['Mode not recorded', '#c3ccc8'] };
   const segments = [];
   let cursor = view.from;
@@ -580,12 +593,17 @@ function renderModeTimeline(container, view) {
       else inspect(group.items[0]);
     }); tracks.append(block);
   }
-  if (cutoff < view.to) {
-    const future = document.createElement('div'); future.className = 'mode-future'; future.style.left = `${Math.max(0, (cutoff - view.from) / span * 100)}%`;
-    future.title = t('Upcoming');
-    if ((view.to - cutoff) / span * tracks.clientWidth >= 60) future.textContent = t('Upcoming');
-    tracks.append(future);
+  function shade(start, end, label, className) {
+    if (end <= start) return;
+    const area = document.createElement('div'); area.className = `mode-future ${className}`;
+    area.style.left = `${Math.max(0, (start - view.from) / span * 100)}%`;
+    area.style.width = `${(end - start) / span * 100}%`; area.style.right = 'auto';
+    area.title = t(label);
+    if ((end - start) / span * tracks.clientWidth >= 80) area.textContent = t(label);
+    tracks.append(area);
   }
+  shade(cutoff, bounds.present, 'Not refreshed yet', 'mode-pending');
+  shade(bounds.present, view.to, 'Upcoming', '');
   tracks.append(guide);
   const pointerTime = event => { const bounds = tracks.getBoundingClientRect(); return view.from + Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width)) * span; };
   let drag = null, suppressModeClick = false;

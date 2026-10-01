@@ -19,7 +19,7 @@
   <div class="filter-actions"><button id="select-all">Select all</button><button id="clear-all">Clear all</button></div>
   <div class="averaging-control"><label for="averaging">Average over</label><select id="averaging"><option value="auto">Auto</option><option value="60">1 minute</option><option value="300">5 minutes</option><option value="900">15 minutes</option><option value="3600">1 hour</option></select></div>
   <label class="peaks-toggle"><input id="show-peaks" type="checkbox" checked><span>Show peaks</span></label>
-  <div class="history-toolbar"><p id="history-status" role="status">Loading history…</p><button id="refresh-history" type="button">↻ Refresh</button></div>
+  <div class="history-toolbar"><div><p id="history-status" role="status">Loading history…</p><p id="history-updated"></p></div><button id="refresh-history" type="button">↻ Refresh</button></div>
   <section id="charts" aria-label="History charts"></section>
 </main>
 <script src="app.js?v=20260930-supply"></script>

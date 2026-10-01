@@ -95,6 +95,8 @@ Day/week/month views use Athens calendar boundaries; weeks start Monday. Auto av
 
 History does not periodically reload readings: it fetches on entry/range selection and through the explicit Refresh button, which has a five-minute cooldown. A small countdown timer is not data polling. A full browser reload starts a new visit.
 
+The cached index retains its fetch time as well as the latest report timestamp. House-supply gaps are inferred only up to that fetch time; time beyond it is "Not refreshed yet", not an outage. The toolbar shows when the snapshot was loaded. Refreshing can reveal real gaps after the previous snapshot, while re-rendering or changing language cannot invent one.
+
 Dragging selects a zoomed time window; Reset zoom restores the period. Hover/tap inspection shares a timestamp across charts. Power, battery charge, voltages and currents use separate chart groups.
 
 Energy summaries integrate minute-average watts over represented time, dividing watt-seconds by 3,600,000 for kWh. They summarize the selected calendar period; missing intervals are excluded rather than filled. They are estimates, not raw high-frequency meter totals, and incomplete recording means incomplete totals.

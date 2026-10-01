@@ -27,6 +27,8 @@ window.energyFlowState = (values, mode) => {
 window.energyI18n = (() => {
   const translations = {
     ru: {
+      'Not refreshed yet': 'Ещё не обновлено',
+      'Snapshot loaded {time} · refresh to update': 'Данные загружены в {time} · обновите для новых показаний',
       'House supply': 'Питание дома', 'Zoom in': 'Приблизить', 'Upcoming': 'Впереди',
       'Start': 'Начало', 'End': 'Конец', 'Previous interval': 'Предыдущий интервал', 'Next interval': 'Следующий интервал',
       'Select an interval to see its times.': 'Выберите интервал, чтобы увидеть время.',
@@ -88,6 +90,8 @@ window.energyI18n = (() => {
       '{title} over time': '{title} во времени'
     },
     el: {
+      'Not refreshed yet': 'Δεν ανανεώθηκε ακόμη',
+      'Snapshot loaded {time} · refresh to update': 'Φόρτωση στις {time} · ανανεώστε για νέες μετρήσεις',
       'House supply': 'Τροφοδοσία σπιτιού', 'Zoom in': 'Μεγέθυνση', 'Upcoming': 'Αργότερα',
       'Start': 'Έναρξη', 'End': 'Λήξη', 'Previous interval': 'Προηγούμενο διάστημα', 'Next interval': 'Επόμενο διάστημα',
       'Select an interval to see its times.': 'Επιλέξτε ένα διάστημα για να δείτε τις ώρες του.',
