@@ -196,7 +196,6 @@ async function load({ refresh = false } = {}) {
     inspectedTime = null;
   }
   const current = range;
-  document.querySelector('#range-label').textContent = `${dateFormat.format(current.from * 1000)} – ${dateFormat.format((current.to - 1) * 1000)}`;
   document.querySelector('#next').disabled = current.end > today();
   statusElement.textContent = t('Loading history…');
   loading = true;
@@ -266,6 +265,7 @@ function chartScale(minimum, maximum) {
   return { low: ticks[0], high: ticks[ticks.length - 1], ticks };
 }
 function render() {
+  document.querySelector('#range-label').textContent = `${dateFormat.format(range.from * 1000)} – ${dateFormat.format((range.to - 1) * 1000)} · ${t('Athens time')}`;
   peaksToggle.nextElementSibling.textContent = t('Show peaks');
   document.querySelector('#fit-history').disabled = loading || hasError || !recordedRange(rawRows, modeRows, range, snapshotTime);
   renderSummary();
@@ -695,6 +695,7 @@ function renderModeTimeline(container, view) {
 }
 
 function updateFilters() {
+  document.querySelector('#selection-count').textContent = t('{n} selected', { n: selected.size + Number(showMode) });
   const modeButton = document.querySelector('#mode-filter');
   if (modeButton) { modeButton.setAttribute('aria-pressed', String(showMode)); modeButton.textContent = `◷ ${t('House supply')}`; }
   document.querySelectorAll('[data-metric]').forEach(button => {
