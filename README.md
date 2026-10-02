@@ -32,6 +32,17 @@ The exporter reads an allowlist of Home Assistant entities directly from Recorde
 
 See [Architecture and maintenance](docs/ARCHITECTURE.md) for the file map, entity mapping, calculations, limitations and future-work guidance.
 
+## Installation hardware
+
+The original installation uses an **ANENJI ANJ-HHS-11KW-48V-WIFI** inverter and an
+**ANENJI ANJ-314AH-S** LiFePO₄ battery (51.2 V, 314 Ah, 16.07 kWh), with solar
+connected to **PV1 and PV2**.
+
+See [Hardware reference](docs/HARDWARE.md) for the photographed label
+specifications, previously reported charge/BMS settings, monitoring equipment
+and the panel/string details still to be confirmed. This reference records known
+installation information; it does not verify current device settings.
+
 ## Requirements
 
 - Python 3.9+ with SQLite and the `Europe/Athens` timezone available. Standard library only; no Python package installation is required on a Linux system with timezone data.
