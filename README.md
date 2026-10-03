@@ -1,6 +1,6 @@
 # Home Energy
 
-A mobile-first, read-only home energy dashboard for a solar inverter and battery monitored through Home Assistant and EyeBond Local. Includes an overview and interactive history, in English, Greek and Russian.
+A mobile-first home energy dashboard for a solar inverter and battery monitored through Home Assistant and EyeBond Local. Readings and history remain read-only; an optional, separately deployed password-protected service can restart the monitoring dongle. Includes an overview and interactive history, in English, Greek and Russian.
 
 This repository contains application code and generic deployment examples, **not a backup of Home Assistant or a running installation**. It contains no production readings, credentials, certificates or device serial numbers. Existing public project branding is retained.
 
@@ -11,6 +11,7 @@ This repository contains application code and generic deployment examples, **not
 - Records fresh readings into minute aggregates, with daily, weekly and monthly history and energy summaries.
 - Supports metric filters, averaging intervals, drag-to-zoom, synchronized inspection and optional minimum/maximum indicators.
 - Publishes a deliberately public, no-login view. It does not change inverter settings.
+- Offers an optional **Restart dongle** password dialog: two wrong passwords lock out the client network for five minutes; a five-minute restart cooldown is global. It remains unavailable until privately configured. See [Collector restart setup and security](docs/CONTROL.md).
 
 ## How it works
 
@@ -28,7 +29,7 @@ Inverter / battery -> EyeBond collector -> Home Assistant + EyeBond Local
                                     Browser dashboard
 ```
 
-The exporter reads an allowlist of Home Assistant entities directly from Recorder SQLite. **No Home Assistant REST/WebSocket API or access token is used.** The browser receives only selected JSON values, not access to Home Assistant or its database. A remote installation needs an independently configured network path between the collector and Home Assistant.
+The exporter reads an allowlist of Home Assistant entities directly from Recorder SQLite. **The exporter uses no Home Assistant REST/WebSocket API or access token.** The optional collector-control service is separate: it uses a private server-side Home Assistant token for one fixed button action. The browser never receives that token or database access. A remote installation needs an independently configured network path between the collector and Home Assistant.
 
 See [Architecture and maintenance](docs/ARCHITECTURE.md) for the file map, entity mapping, calculations, limitations and future-work guidance.
 

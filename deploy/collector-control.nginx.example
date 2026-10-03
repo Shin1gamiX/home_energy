@@ -1,0 +1,37 @@
+# Include inside the HTTPS server block, not in the port-80 redirect block.
+# First configure trusted real-IP handling if behind Cloudflare (see CONTROL.md).
+# Both API routes are exact; do not proxy a wildcard to Home Assistant.
+location = /api/collector/status {
+    limit_except GET { deny all; }
+    proxy_pass http://127.0.0.1:8767;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For "";
+    proxy_set_header Cookie "";
+    proxy_set_header Authorization "";
+    proxy_set_header Origin $http_origin;
+    proxy_connect_timeout 2s;
+    proxy_read_timeout 10s;
+    proxy_next_upstream off;
+    proxy_cache off;
+    access_log off;
+}
+location = /api/collector/restart {
+    limit_except POST { deny all; }
+    client_max_body_size 1k;
+    client_body_buffer_size 2k;
+    client_body_timeout 10s;
+    proxy_pass http://127.0.0.1:8767;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For "";
+    proxy_set_header Cookie "";
+    proxy_set_header Authorization "";
+    proxy_set_header Origin $http_origin;
+    proxy_connect_timeout 2s;
+    proxy_read_timeout 40s;
+    proxy_next_upstream off;
+    proxy_cache off;
+    access_log off;
+}
+location = /collector-control.js { try_files $uri =404; }

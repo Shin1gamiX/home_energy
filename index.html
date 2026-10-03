@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#eff7f6">
-  <title>Home · Energy</title><link rel="stylesheet" href="styles.css?v=20261002-polish">
+  <title>Home · Energy</title><link rel="stylesheet" href="styles.css?v=20261003-control">
   <link rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2218%22%20fill%3D%22%23284e43%22%2F%3E%3Cpath%20fill%3D%22%23f0f6e9%22%20fill-rule%3D%22evenodd%22%20d%3D%22M10%2029%2030%2011Q32%209%2034%2011L43%2019V15H49V25L55%2030Q57%2032%2054%2032H49V52H15V32H10Q7%2032%2010%2029ZM35%2021%2023%2036Q22%2038%2024%2038H31L28%2048%2042%2032H33Z%22%2F%3E%3C%2Fsvg%3E">
 </head>
 <body class="overview">
@@ -50,8 +50,20 @@
     <article class="metric load"><div class="metric-top"><span>House consumption</span><span class="symbol">⌂</span></div><div class="reading"><b data-value="load">—</b><span>W</span></div><p>Total house load</p><div class="meter" hidden><span style="width:42%"></span></div></article>
   </section>
   </details>
-  <footer><span id="freshness" role="status">Waiting for inverter readings</span><button id="pause" type="button" hidden>Pause demo</button></footer>
+  <footer><span id="freshness" role="status">Waiting for inverter readings</span><button id="restart-dongle" type="button" aria-haspopup="dialog">Restart dongle</button><button id="pause" type="button" hidden>Pause demo</button></footer>
   <p class="disclaimer" hidden>Design preview only. These are simulated readings, not your inverter’s live data.</p>
 </main>
+<dialog id="collector-dialog" aria-labelledby="collector-title" aria-describedby="collector-description">
+  <form id="collector-form">
+    <div class="collector-heading"><h2 id="collector-title" data-control-text="title">Restart dongle</h2><button type="button" id="collector-close" aria-label="Close">×</button></div>
+    <p id="collector-description" data-control-text="description">Restart the monitoring dongle only. Readings may briefly stop; the inverter will not be restarted.</p>
+    <label for="collector-password" data-control-text="password">Restart password</label>
+    <input id="collector-password" type="password" autocomplete="off" maxlength="128" required spellcheck="false" autocapitalize="off" aria-describedby="collector-rules" />
+    <p id="collector-rules" class="collector-hint" data-control-text="rules">Two wrong passwords lock your network out for 5 minutes. Every restart has a 5-minute cooldown shared by everyone.</p>
+    <p id="collector-feedback" role="status" aria-live="polite"></p>
+    <div class="collector-actions"><button type="button" id="collector-cancel" data-control-text="cancel">Cancel</button><button type="submit" id="collector-submit" data-control-text="confirm">Confirm restart</button></div>
+  </form>
+</dialog>
 <script src="app.js?v=20261002-polish"></script>
+<script src="collector-control.js?v=20261003-control"></script>
 </body></html>

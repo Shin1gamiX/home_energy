@@ -193,6 +193,24 @@ footer { font-size: 12px; line-height: 1.6; }
 .overview .reading-details .metrics { margin: 0; padding: 0 16px 16px; }
 .overview .reading-details .metric { min-height: 0; padding: 12px; border-radius: 10px; background: transparent; }
 .reading-details .reading, .reading-details .metric.battery .meter { display: none; }
+.overview #restart-dongle { font-size: 12px; }
+#collector-dialog { color: #233c38; background: #f9fcfa; border: 1px solid #d4e2db; border-radius: 20px; padding: 26px; width: min(460px, calc(100% - 32px)); max-height: calc(100dvh - 32px); overflow: auto; box-shadow: 0 24px 80px #173c3833; }
+#collector-dialog::backdrop { background: #173c3866; backdrop-filter: blur(3px); }
+.collector-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.collector-heading h2 { font-size: 22px; margin: 0; letter-spacing: -.4px; }
+#collector-close { font-size: 25px; border: 0; padding: 0; width: 40px; height: 40px; flex-shrink: 0; }
+#collector-dialog p { line-height: 1.6; font-size: 14px; }
+#collector-dialog label { display: block; font-size: 14px; font-weight: 600; margin-top: 22px; }
+#collector-password { width: 100%; margin-top: 8px; padding: 12px; font: inherit; border: 1px solid #a9c0b5; border-radius: 9px; color: inherit; background: #fff; }
+#collector-password:focus-visible { outline: 3px solid #518b77; outline-offset: 2px; }
+#collector-dialog .collector-hint { font-size: 12px; color: #526b62; }
+#collector-feedback { min-height: 44px; padding: 10px 12px; border-radius: 9px; background: #eaf2ed; }
+#collector-feedback[data-error=true] { color: #943438; background: #fff0f0; }
+.collector-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+.collector-actions button { min-height: 44px; }
+#collector-submit { background: #284e43; border-color: #284e43; color: white; }
+#collector-submit:disabled, #collector-password:disabled { opacity: .55; cursor: not-allowed; }
+@media(max-width: 400px) { #collector-dialog { padding: 20px; } .collector-actions button { flex: 1; } }
 .overview .reading-details .metric p { font-size: 13px; line-height: 1.6; }
 .overview .reading-details .metric-top { font-size: 13px; margin-bottom: 7px; }
 .overview .reading-details .pv-channel>span.pv-channel-details { font-size: 13px; }

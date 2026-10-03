@@ -1,0 +1,42 @@
+[Unit]
+Description=Password-protected Home Energy collector restart
+After=network.target
+
+[Service]
+Type=simple
+DynamicUser=yes
+EnvironmentFile=/etc/homeenergy-control/control.env
+LoadCredential=password.hash:/etc/homeenergy-control/password.hash
+LoadCredential=ha.token:/etc/homeenergy-control/ha.token
+Environment=CONTROL_PASSWORD_FILE=%d/password.hash
+Environment=CONTROL_HA_TOKEN_FILE=%d/ha.token
+Environment=CONTROL_STATE_FILE=/var/lib/homeenergy-control/state.sqlite3
+Environment=CONTROL_SNAPSHOT_FILE=/var/www/homeenergy/runtime/energy.json
+ExecStart=/usr/bin/python3 -B /opt/homeenergy-control/collector_control.py serve --port 8767
+StateDirectory=homeenergy-control
+StateDirectoryMode=0700
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET
+CapabilityBoundingSet=
+LockPersonality=true
+RestrictRealtime=true
+IPAddressDeny=any
+IPAddressAllow=localhost
+LimitCORE=0
+TasksMax=16
+MemoryMax=128M
+CPUQuota=25%
+
+[Install]
+WantedBy=multi-user.target

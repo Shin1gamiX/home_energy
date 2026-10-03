@@ -2,7 +2,7 @@
 
 ## Scope and ownership
 
-Home Energy is a read-only presentation and recording layer. Home Assistant, EyeBond Local, inverter firmware, battery BMS and VPN routing are external prerequisites, not bundled components. This code does not control the inverter or establish the collector connection.
+Home Energy's presentation and recording layer is read-only. Home Assistant, EyeBond Local, inverter firmware, battery BMS and VPN routing are external prerequisites, not bundled components. An optional, separately deployed [collector-control service](CONTROL.md) can request a monitoring-dongle restart through one fixed Home Assistant button. It cannot change inverter settings or establish the VPN connection. Existing monitoring does not depend on this service.
 
 The original installation uses an ANENJI ANJ-HHS-11KW-48V-WIFI inverter and an ANJ-314AH-S LiFePO4 battery. Model names describe context, not a guarantee of protocol support. Entity availability and interpretation must be verified against the installed integration/firmware.
 

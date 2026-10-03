@@ -8,6 +8,9 @@
 *.pfx
 credentials*
 secrets*
+control-secrets/
+password.hash
+ha.token
 ssh/
 # Runtime readings, databases and operational artifacts
 runtime/
