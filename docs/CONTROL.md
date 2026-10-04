@@ -32,11 +32,20 @@ is supplied by this repository. No new Python packages are required.
 - The **five-minute restart cooldown is global**, reserved atomically before
   contacting Home Assistant. Concurrent clients cannot send duplicate restarts.
   Timeout, ambiguous result and upstream failure all keep the cooldown.
+- Password verification now precedes cooldown feedback. A correct password
+  during the cooldown returns the remaining wait, without sending another
+  command or extending the deadline. Wrong passwords still count toward the
+  two-attempt lockout during a cooldown; they reveal no restart state. All such
+  password checks, including correct-password cooldown checks, consume the
+  existing global verification budget.
 - SQLite stores limits persistently across control-service restarts and sessions.
   Do not remove the state database to bypass limits. Keep the server clock synced.
 - Only exact API routes are exposed. POST requires JSON and an exact allowed
   HTTPS Origin; missing/foreign origins and cross-site browser requests fail.
   No CORS grants, generic Home Assistant proxy or browser-specified entity exists.
+- `/api/collector/status` is internal-only. The public Nginx route returns 404;
+  the backend independently rejects non-loopback client identities on that GET
+  route. Do not proxy it publicly or trust arbitrary client IP headers.
 - Home Assistant is contacted only at loopback, using a token read from a private
   file. It is not sent to the browser. A Home Assistant token may have permissions
   beyond this action: use the least-privileged dedicated account that can press
@@ -53,6 +62,36 @@ Use Full (strict) TLS to the origin, review request-body logging/security produc
 and never reuse another account's password. Avoiding Cloudflare's visibility would
 require a separately approved direct/VPN endpoint or different authentication
 design; hashing a password in frontend JavaScript is not a substitute.
+
+## Private status and restart dialog
+
+Opening the dialog asks for a password immediately, without fetching status.
+Readiness, another client's recent restart time and the global cooldown are not
+published through a status API. A submitted password is verified before returning
+restart/cooldown information; rejected credentials expose only authentication
+and throttling errors. A password submission is still an explicit **Confirm
+restart** request, not a login: if no cooldown or other block applies, it dispatches
+the fixed restart action. A correct password is never permission to bypass the
+global cooldown, including from a different IP or after restarting this service.
+
+The dialog keeps deadlines learned from its own responses only in page memory,
+including when it is closed while a response is in flight. Closing/reopening the
+dialog retains that wait; reloading the page does not retain the local countdown,
+but the server still enforces the persistent limits after password submission.
+No password or authenticated session is stored, and no POST is retried
+automatically. Lost responses keep a conservative five-minute local wait. Fresh
+energy readings can still be checked after a submitted request; that public
+monitoring endpoint is unrelated to private restart status.
+
+For server-local health checks over SSH (never expose this port):
+
+```sh
+curl --fail --silent --show-error -H 'X-Real-IP: 127.0.0.1' http://127.0.0.1:8767/api/collector/status
+```
+
+This localhost interface remains inside the trusted host boundary, not a separate
+administrator login. Website visitors cannot reach it. Administrator event
+inspection remains through the private journal described below.
 
 ## Private security-event log
 
@@ -222,8 +261,11 @@ sudo systemctl reload nginx
 ```
 
 Reload completion does not guarantee new workers are already serving requests.
-Use a bounded retry of the read-only status endpoint (including temporary 404s),
-check the HTTP status before parsing JSON, and roll back if it never becomes ready.
+Use a bounded retry of the server-local read-only status endpoint, check the HTTP
+status before parsing JSON, and roll back if it never becomes ready. Separately
+verify every public hostname returns 404 for `/api/collector/status`, including
+requests with query strings or forged client-IP headers. Publish the matching
+dialog script and cache-busted HTML when removing the old public status proxy.
 Do not retry the restart POST as part of deployment health checks.
 
 Publish the reviewed `index.html`, `styles.css` and `collector-control.js` together
@@ -234,8 +276,10 @@ history files do not need changing.
 ### Required activation checks
 
 1. Verify `ss -ltn` shows only `127.0.0.1:8767`; no public interface binding.
-2. Check `/api/collector/status` over HTTPS: `enabled` should be true. It exposes
-   only readiness, cooldown/lockout durations and action status, never secrets.
+2. Check `/api/collector/status` over public HTTPS: it must return 404 and no
+   status fields. Check the loopback endpoint from SSH with `X-Real-IP: 127.0.0.1`:
+   `enabled` should be true. Requests with non-loopback client identity must fail
+   at the backend too, even if a public proxy is accidentally restored.
 3. Verify actual client-IP restoration through Cloudflare, then a **direct-origin**
    request with forged forwarding headers: those headers must not alter its IP.
    Do this with disposable test credentials before enabling the real action.
@@ -244,7 +288,7 @@ history files do not need changing.
    it. Correct password during lockout must not dispatch an action. Shared-IP
    clients share this restriction; another IP has its own failure counter.
 6. With the owner's approval for one real restart, submit the correct password.
-   Verify another device/IP cannot send a restart during the global cooldown and
+   Verify the correct password from another device/IP cannot send a restart during the global cooldown and
    that the cooldown survives a service restart. Never loop hardware restarts to
    test concurrency: automated tests use a fake dispatcher.
 7. Check fresh inverter timestamps after the request. A timeout is **unknown**,
@@ -262,7 +306,7 @@ update the unit's credential source and restart the service; retain the state DB
 Revoke the old Home Assistant token separately.
 
 To disable the feature, stop/disable **homeenergy-control.service** and remove its
-two API proxy locations (validate/reload Nginx), or restore the prior three
+restart API proxy location (validate/reload Nginx; keep status blocked), or restore the prior three
 frontend assets to remove the button. Do not stop the read-only exporter. Preserve
 private state/secrets for rollback; do not include them in source backups or Git.
 
@@ -274,6 +318,22 @@ node --check collector-control.js
 node server/test_collector_ui.cjs
 node server/test_overview.cjs
 ```
+
+## Verification record — 04/10/2026 (private status, pre-deployment)
+
+- All 62 isolated backend tests passed on Linux. Correct passwords during the
+  global cooldown return the remaining wait without another dispatch or extending
+  the cooldown, including different IPs, concurrent requests and reopened state.
+  Wrong passwords do not reveal restart status. Failed/unknown dispatches retain
+  the same cooldown protection. All dispatchers used by these tests are fake.
+- Eleven isolated dialog scenarios and 52 existing overview assertions passed.
+  The dialog tests reject any attempt to fetch the public status route and cover
+  closing/reopening during a request, late responses, lockout and cooldown expiry,
+  lost responses, password clearing and all three languages.
+- Local in-app browser checks verified the ready dialog and cancellation in
+  English, Russian and Greek, with no console warnings/errors. No real password
+  was entered and no restart was submitted. Production activation remains a
+  separate administrator step; these checks do not establish live deployment.
 
 ## Verification record — 03/10/2026
 

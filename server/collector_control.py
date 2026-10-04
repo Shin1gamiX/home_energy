@@ -353,9 +353,6 @@ class CollectorControl:
             self.audit.emit("request_rejected", **context, reason="disabled", http_status=503,
                             password_checked=False, blocked=True)
             return 503, {"error": "unavailable"}
-        cooldown = self.store.status()["cooldown_seconds"]
-        if cooldown:
-            return blocked("cooldown", cooldown, "cooldown")
         ticket, error, retry = self.store.reserve_verification(ip, details)
         if error:
             return blocked(error, retry, details["reason"])
@@ -370,6 +367,8 @@ class CollectorControl:
                             blocked=True, retry_after_seconds=retry)
             return status, {"error": error, "retry_after_seconds": retry}
         self.audit.emit("authentication_accepted", **context, **details, blocked=False)
+        # Authenticate before revealing cooldown state. This transaction remains
+        # the sole dispatch gate: correct passwords do not bypass or extend it.
         cooldown = self.store.reserve_restart()
         if cooldown:
             return blocked("cooldown", cooldown, "cooldown")
@@ -422,6 +421,10 @@ class Handler(BaseHTTPRequestHandler):
         control = self.server.control
         try:
             identity = self.client_identity()
+            # Internal health checks only, including if a proxy is misconfigured.
+            # Nginx also returns 404 for this route on every public hostname.
+            if not ipaddress.ip_address(self.client_ip).is_loopback:
+                return self.reply(404, {"error": "not_found"})
             self.reply(200, {"enabled": control.enabled, "lockout_seconds": control.store.lockout_seconds(identity),
                              **control.store.status()})
         except ValueError:

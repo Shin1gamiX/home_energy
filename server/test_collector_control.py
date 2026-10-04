@@ -313,8 +313,8 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(self.request("wrong")[1]["error"], "locked")
         self.assertEqual(self.request()[1]["error"], "locked")
         status, payload = self.request(method="GET", path="/api/collector/status")
-        self.assertEqual(status, 200)
-        self.assertGreater(payload["lockout_seconds"], 0)
+        self.assertEqual(status, 404)
+        self.assertEqual(payload, {"error": "not_found"})
         self.dispatch.assert_not_called()
 
     def test_ipv6_privacy_addresses_share_lockout(self):
@@ -345,7 +345,7 @@ class HttpTests(unittest.TestCase):
     def test_disabled_fails_closed(self):
         self.control.enabled = False
         self.assertEqual(self.request()[0], 503)
-        status, payload = self.request(method="GET", path="/api/collector/status")
+        status, payload = self.request(method="GET", path="/api/collector/status", headers={"X-Real-IP": "127.0.0.1"})
         self.assertEqual(status, 200)
         self.assertFalse(payload["enabled"])
 
@@ -404,8 +404,9 @@ class HttpTests(unittest.TestCase):
         event = self.audit_events()[-1]
         self.assertEqual(event["reason"], "cooldown")
         self.assertEqual(event["client_ip"], "192.0.2.2")
-        self.assertFalse(event["password_checked"])
-        self.assertNotIn("attempt_number", event)
+        self.assertTrue(event["password_checked"])
+        self.assertEqual(event["attempt_number"], 1)
+        self.assertEqual(event["failed_attempts"], 0)
         self.dispatch.assert_called_once()
 
     def test_audit_keeps_full_ipv6_ip_separate_from_shared_bucket(self):
@@ -470,11 +471,74 @@ class HttpTests(unittest.TestCase):
         self.assertNotIn("secret-exception-marker", self.audit_output.getvalue())
 
     def test_audit_storage_failure_never_logs_exception_text(self):
-        with patch.object(self.store, "status", side_effect=OSError("secret-storage-marker")):
+        with patch.object(self.store, "reserve_verification", side_effect=OSError("secret-storage-marker")):
             self.assertEqual(self.request()[0], 503)
         self.assertEqual(self.audit_events()[-1]["reason"], "storage_error")
         self.assertNotIn("secret-storage-marker", self.audit_output.getvalue())
         self.dispatch.assert_not_called()
+
+    def test_status_is_internal_only_even_if_proxy_route_is_misconfigured(self):
+        for ip in ("192.0.2.1", "2001:db8::1", "::ffff:192.0.2.1"):
+            status, payload = self.request(method="GET", path="/api/collector/status", headers={"X-Real-IP": ip})
+            self.assertEqual((status, payload), (404, {"error": "not_found"}))
+        status, payload = self.request(method="GET", path="/api/collector/status", headers={"X-Real-IP": "127.0.0.1"})
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["enabled"])
+        self.assertEqual(self.request(method="GET", path="/api/collector/status?test=1")[0], 404)
+
+    def test_wrong_password_cannot_discover_active_cooldown_or_last_restart(self):
+        self.request()
+        status, payload = self.request("wrong", headers={"X-Real-IP": "192.0.2.2"})
+        self.assertEqual(status, 401)
+        self.assertEqual(payload, {"error": "invalid_password", "retry_after_seconds": 0})
+        status, payload = self.request("wrong", headers={"X-Real-IP": "192.0.2.2"})
+        self.assertEqual(status, 429)
+        self.assertEqual(payload["error"], "locked")
+        self.assertNotIn("cooldown_seconds", payload)
+        self.assertNotIn("requested_at", payload)
+        self.assertNotIn("last_result", payload)
+        self.dispatch.assert_called_once()
+
+    def test_repeated_correct_password_never_restarts_or_extends_cooldown(self):
+        now = [1000.0]
+        self.store.clock = lambda: now[0]
+        self.assertEqual(self.request()[0], 202)
+        for seconds, ip in ((1, "192.0.2.1"), (50, "192.0.2.2"), (150, "192.0.2.3"), (299, "192.0.2.1")):
+            now[0] = 1000 + seconds
+            status, payload = self.request(headers={"X-Real-IP": ip})
+            self.assertEqual(status, 429)
+            self.assertEqual(payload, {"error": "cooldown", "retry_after_seconds": 300 - seconds})
+            self.assertEqual(self.store.status()["requested_at"], 1000)
+            self.dispatch.assert_called_once()
+        now[0] = 1300
+        self.assertEqual(self.request()[0], 202)
+        self.assertEqual(self.dispatch.call_count, 2)
+
+    def test_reopened_service_still_rejects_correct_password_in_cooldown(self):
+        self.assertEqual(self.request()[0], 202)
+        self.control.store = PolicyStore(self.store.path)
+        status, payload = self.request(headers={"X-Real-IP": "192.0.2.2"})
+        self.assertEqual((status, payload["error"]), (429, "cooldown"))
+        self.dispatch.assert_called_once()
+
+    def test_correct_password_during_failed_or_uncertain_dispatch_cooldown_is_blocked(self):
+        for outcome, status in (("failed", 502), ("unknown", 202)):
+            with self.subTest(outcome=outcome):
+                with self.store.connect() as db:
+                    db.execute("DELETE FROM restart")
+                self.dispatch.reset_mock()
+                self.dispatch.return_value = outcome
+                self.assertEqual(self.request()[0], status)
+                self.assertEqual(self.request()[1]["error"], "cooldown")
+                self.dispatch.assert_called_once()
+
+    def test_parallel_correct_passwords_from_distinct_ips_only_dispatch_once(self):
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+            results = list(pool.map(lambda ip: self.request(headers={"X-Real-IP": ip}),
+                                    ["192.0.2.1", "192.0.2.2", "192.0.2.3", "192.0.2.4"]))
+        self.assertEqual(sum(status == 202 for status, _ in results), 1)
+        self.assertEqual(sum(payload.get("error") == "cooldown" for _, payload in results), 3)
+        self.dispatch.assert_called_once()
 
     def test_audit_concurrent_errors_keep_request_identity_separate(self):
         with patch.object(self.control, "restart", side_effect=RuntimeError("private error")):
