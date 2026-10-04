@@ -79,6 +79,7 @@ python3 -B -m unittest discover -s server -p 'test_*.py' -v
 node --check app.js
 node --check history.js
 node server/test_overview.cjs
+node server/test_language_picker.cjs
 node server/test_not_found_ui.cjs
 python3 -B -m unittest discover -s server -p 'test_not_found_nginx.py' -v
 ```

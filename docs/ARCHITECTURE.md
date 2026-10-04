@@ -141,8 +141,17 @@ node --check app.js
 node --check history.js
 node server/test_overview.cjs
 node server/test_history_ui.cjs
+node server/test_language_picker.cjs
 python -B -m unittest discover -s server -p 'test_*.py'
 ```
+
+## Shared language menu
+
+Overview and History share their language menu in `app.js` and `styles.css`.
+It matches the standalone 404 picker, reads the same `homeenergy-language`
+preference (English by default), and keeps the `languagechange` event used by
+readings, charts and the restart dialog. Arrow keys, Home/End, initial-letter
+navigation, Escape and Tab are supported; reduced-motion preferences are respected.
 
 ## Security and maintenance checklist
 

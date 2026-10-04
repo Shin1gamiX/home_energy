@@ -201,27 +201,131 @@ window.energyI18n = (() => {
   }).filter(Boolean));
   const attributes = [...document.querySelectorAll('[aria-label], [title]')].flatMap(element => ['aria-label', 'title'].filter(name => element.hasAttribute(name)).map(name => ({ element, name, key: element.getAttribute(name) })));
   const pageTitle = document.title;
-  const control = document.createElement('label');
+  const languageNames = { en: 'English', ru: 'Русский', el: 'Ελληνικά' };
+  const control = document.createElement('div');
   control.className = 'language-control';
-  const symbol = document.createElement('span'); symbol.textContent = '◎'; symbol.setAttribute('aria-hidden', 'true');
-  const select = document.createElement('select'); select.id = 'language';
-  for (const [value, name] of [['en', 'English'], ['ru', 'Русский'], ['el', 'Ελληνικά']]) {
-    const option = document.createElement('option'); option.value = value; option.textContent = name; select.append(option);
+  function icon(shapes, className = '') {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    const attributes = {
+      viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.6',
+      'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true',
+      focusable: 'false', class: className
+    };
+    for (const [name, value] of Object.entries(attributes)) svg.setAttribute(name, value);
+    for (const [tag, attributes] of shapes) {
+      const shape = document.createElementNS('http://www.w3.org/2000/svg', tag);
+      for (const [name, value] of Object.entries(attributes)) shape.setAttribute(name, value);
+      svg.append(shape);
+    }
+    return svg;
   }
-  control.append(symbol, select);
+  const trigger = document.createElement('button');
+  trigger.type = 'button';
+  trigger.id = 'language';
+  trigger.className = 'language-trigger';
+  trigger.setAttribute('aria-haspopup', 'menu');
+  trigger.setAttribute('aria-expanded', 'false');
+  trigger.setAttribute('aria-controls', 'language-menu');
+  const languageName = document.createElement('span');
+  trigger.append(icon([
+    ['circle', { cx: '12', cy: '12', r: '9' }],
+    ['ellipse', { cx: '12', cy: '12', rx: '4', ry: '9' }],
+    ['path', { d: 'M3 12h18' }]
+  ]), languageName, icon([['path', { d: 'm7 10 5 5 5-5' }]], 'language-chevron'));
+  const menu = document.createElement('div');
+  menu.id = 'language-menu';
+  menu.className = 'language-menu';
+  menu.setAttribute('role', 'menu');
+  menu.hidden = true;
+  const options = Object.entries(languageNames).map(([value, name]) => {
+    const option = document.createElement('button');
+    option.type = 'button';
+    option.dataset.language = value;
+    option.tabIndex = -1;
+    option.setAttribute('role', 'menuitemradio');
+    const code = document.createElement('span');
+    code.className = 'language-code';
+    code.textContent = value.toUpperCase();
+    code.setAttribute('aria-hidden', 'true');
+    const label = document.createElement('span');
+    label.textContent = name;
+    label.setAttribute('lang', value);
+    option.append(code, label, icon([['path', { d: 'm5 12 4 4L19 6' }]], 'language-check'));
+    menu.append(option);
+    return option;
+  });
+  control.append(trigger, menu);
   document.querySelector('header').append(control);
   function apply() {
     document.documentElement.lang = language;
     document.title = t(pageTitle);
-    select.value = language; select.setAttribute('aria-label', t('Language'));
+    languageName.textContent = languageNames[language];
+    languageName.setAttribute('lang', language);
+    trigger.setAttribute('aria-label', `${t('Language')}: ${languageNames[language]}`);
+    menu.setAttribute('aria-label', t('Language'));
+    options.forEach(option => option.setAttribute('aria-checked', String(option.dataset.language === language)));
     texts.forEach(({ node, key }) => { node.textContent = t(key); });
     attributes.forEach(({ element, name, key }) => element.setAttribute(name, t(key)));
     document.querySelectorAll('[data-i18n]').forEach(element => { element.textContent = t(element.dataset.i18n); });
   }
-  select.addEventListener('change', () => {
-    language = select.value;
+  function closeMenu(restoreFocus = false) {
+    menu.hidden = true;
+    trigger.setAttribute('aria-expanded', 'false');
+    if (restoreFocus) trigger.focus();
+  }
+  function openMenu(index = 0) {
+    menu.hidden = false;
+    trigger.setAttribute('aria-expanded', 'true');
+    options[index].focus();
+  }
+  trigger.addEventListener('click', () => {
+    if (menu.hidden) openMenu();
+    else closeMenu(true);
+  });
+  trigger.addEventListener('keydown', event => {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      openMenu(event.key === 'ArrowUp' ? options.length - 1 : 0);
+    }
+  });
+  options.forEach(option => option.addEventListener('click', () => {
+    const next = option.dataset.language;
+    if (!Object.hasOwn(languageNames, next)) return;
+    language = next;
     try { localStorage.setItem('homeenergy-language', language); } catch { /* Still works for this page. */ }
-    apply(); window.dispatchEvent(new Event('languagechange'));
+    apply();
+    closeMenu(true);
+    window.dispatchEvent(new Event('languagechange'));
+  }));
+  menu.addEventListener('keydown', event => {
+    const index = options.indexOf(document.activeElement);
+    if (event.key === 'Escape' || event.key === 'Tab') {
+      // Let normal Tab navigation continue from the trigger, not a hidden item.
+      if (event.key === 'Escape') event.preventDefault();
+      closeMenu(true);
+    } else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+      event.preventDefault();
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? options.length - 1
+        : (index + (event.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length;
+      options[next].focus();
+    } else if (event.key.length === 1 && !event.altKey && !event.ctrlKey && !event.metaKey && event.key !== ' ') {
+      const key = event.key.toLocaleLowerCase();
+      for (let offset = 1; offset <= options.length; offset += 1) {
+        const option = options[(index + offset) % options.length];
+        const code = option.dataset.language;
+        if (code.startsWith(key) || languageNames[code].toLocaleLowerCase().startsWith(key)) {
+          event.preventDefault();
+          option.focus();
+          break;
+        }
+      }
+    }
+  });
+  document.addEventListener('pointerdown', event => {
+    if (!menu.hidden && !control.contains(event.target)) closeMenu();
+  });
+  control.addEventListener('focusout', event => {
+    if (!control.contains(event.relatedTarget)) closeMenu();
   });
   apply();
   return { t, get locale() { return { en: 'en-GB', ru: 'ru-RU', el: 'el-GR' }[language]; } };
