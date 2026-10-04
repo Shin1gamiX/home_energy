@@ -12,6 +12,7 @@ This repository contains application code and generic deployment examples, **not
 - Supports metric filters, averaging intervals, drag-to-zoom, synchronized inspection and optional minimum/maximum indicators.
 - Publishes a deliberately public, no-login view. It does not change inverter settings.
 - Offers an optional **Restart dongle** password dialog: two wrong passwords lock out the client network for five minutes; a five-minute restart cooldown is global. It remains unavailable until privately configured. See [Collector restart setup and security](docs/CONTROL.md).
+- Records credential-free restart security events in the private system journal, accessible to server administrators over SSH; see [log access and event meanings](docs/CONTROL.md#private-security-event-log).
 
 ## How it works
 

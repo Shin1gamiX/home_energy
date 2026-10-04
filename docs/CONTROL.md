@@ -54,6 +54,93 @@ and never reuse another account's password. Avoiding Cloudflare's visibility wou
 require a separately approved direct/VPN endpoint or different authentication
 design; hashing a password in frontend JavaScript is not a substitute.
 
+## Private security-event log
+
+The control service emits allowlisted, single-line JSON events to standard output,
+which its systemd unit sends to the system journal. Each record has
+`component=collector_security`. There is no dashboard log viewer, downloadable log
+file, new API, login session or extra dependency. No Nginx, token, password,
+lockout, cooldown or public-response policy changes are needed for logging.
+
+### Administrator access
+
+Connect to the server with SSH, then use sudo:
+
+```sh
+# Today's events, with journal timestamps displayed in Athens time:
+sudo env TZ=Europe/Athens journalctl -u homeenergy-control.service --since today -o short-iso
+
+# Follow new events (Ctrl+C exits the viewer, not the service):
+sudo env TZ=Europe/Athens journalctl -u homeenergy-control.service -f -o short-iso
+
+# JSON message bodies, convenient for searching a client IP or request ID:
+sudo journalctl -u homeenergy-control.service --since '1 hour ago' -o cat --no-pager
+```
+
+The JSON `timestamp` is always UTC ISO 8601 with an explicit offset. The outer
+journal timestamp can be displayed in Athens time with the commands above.
+Journal access is controlled by server permissions: root, sudo administrators
+and authorized journal-reader groups can read it, not website visitors. Do not
+add ordinary users to `adm` or `systemd-journal` to share these logs. Root cannot
+be excluded. The current host forwards journal records to its restricted syslog
+as well; that copy has its own retention/access rules. IP addresses are personal
+information even though credentials are excluded.
+
+### Event fields and interpretation
+
+| Field | Meaning |
+| --- | --- |
+| `request_id` | Server-generated correlation ID linking one POST's authentication, dispatch and result; never taken from a header |
+| `client_ip` | Validated full client IP supplied by the trusted local proxy; null if identity cannot be established |
+| `client_bucket` | IPv4 /32 or IPv6 /64 used by the existing limiter, not a second client |
+| `attempt_number` | Password-verification slot in the current failure window, assigned under the existing transaction; omitted when no slot is allocated |
+| `failed_attempts` | Failure count at the event; successful authentication clears it. Concurrent checks can finish in a different order from their slot numbers |
+| `password_checked` | Whether a password comparison actually ran; blocked requests are not extra wrong-password guesses |
+| `blocked` | Whether this request was refused; this alone does not mean a five-minute lockout started |
+| `lockout_started` | True only for a checked wrong password that reaches the failure threshold |
+| `retry_after_seconds` | Lockout, capacity/budget or cooldown wait at that event |
+| `reason`, `http_status` | Fixed safe outcome category and response status when known |
+
+`password_rejected` records checked wrong passwords. `restart_blocked` distinguishes
+`lockout`, `concurrent_verification`, `global_budget`, `verification_expired` and
+`cooldown`. `request_rejected` records malformed/forbidden POSTs without copying
+their contents. `authentication_accepted` means the password was accepted; a
+concurrent request can still reserve the cooldown first. `restart_requested`
+means dispatch is about to be attempted, not that the dongle rebooted.
+`restart_accepted` means Home Assistant acknowledged the request;
+`restart_failed` means it rejected the request; `restart_unknown` means transport
+uncertainty. None is independent proof of a physical reboot. `service_ready`
+records startup and whether configuration enabled control. `control_error`
+records a fixed error category, never exception text or a traceback.
+
+Never serialized: passwords (including wrong guesses), password hashes/salts,
+Home Assistant tokens, cookies, authorization headers, request bodies, paths,
+query strings, Origin/User-Agent values, entity IDs, or raw exception messages.
+Field names, event types and reason codes are allowlisted; addresses, request IDs,
+numbers and booleans are validated before serialization.
+
+### Retention and coverage limits
+
+- Routine successful status polling is not logged. Requests rejected by Nginx or
+  Cloudflare before reaching Python, or malformed HTTP rejected before POST
+  handling, are outside this service log's coverage.
+- To bound log flooding, at most 60 request-rejection, pre-verification-block or
+  generic error details are emitted per 60-second monotonic window, shared across
+  clients. Further events are counted, not individually attributed. A periodic
+  `audit_suppressed` summary reports the omitted count, even when no new POST
+  arrives. This limits logging only; it does not change API request limits.
+- Actual password-result and restart-dispatch events are not dropped by that
+  application logging cap. Existing authentication limits bound their frequency.
+  Journald may still apply its own limits, retention and disk-space policies.
+- Journal rotation/retention remains under existing server policy; logging does
+  not change system-wide settings or guarantee a particular number of days.
+- An output failure does not bypass authentication, prevent a valid request, or
+  retry an action. The next successful record includes `prior_log_write_failures`.
+  Abrupt shutdown/disk failure can lose records or a pending suppression summary;
+  this is not a tamper-proof forensic archive.
+- IPs identify connections, not people. NAT, VPNs and mobile networks may share or
+  change addresses. No username exists for this single-password feature.
+
 ## Deployment (administrator-run)
 
 These are manual instructions, not an automatic installer. They require root/sudo
@@ -190,6 +277,12 @@ node server/test_overview.cjs
 
 ## Verification record — 03/10/2026
 
+- The security-logging update passed all 56 isolated backend tests on Linux.
+  Coverage includes redaction of secret-bearing inputs/errors, atomic attempt
+  metadata, IPv6 attribution, concurrent request/error correlation, bounded log
+  flooding, suppressed-event summaries, and output-failure behavior. Test
+  dispatchers are fake; no device restart is needed to run this suite. These
+  results do not by themselves confirm production activation.
 - All 34 backend tests passed on the Linux deployment host, including systemd
   credential permissions, persistent limits, concurrent requests and fail-closed
   configuration handling. The 11 Unix permission tests are skipped on Windows.

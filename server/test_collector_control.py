@@ -1,6 +1,7 @@
 import concurrent.futures
 import getpass
 import http.client
+import io
 import json
 import os
 from pathlib import Path
@@ -14,9 +15,70 @@ from unittest.mock import MagicMock, patch
 from urllib.error import HTTPError, URLError
 from urllib.request import ProxyHandler
 
-from collector_control import (CollectorControl, ControlServer, NoRedirect, PolicyStore,
+from collector_control import (CollectorControl, ControlServer, NoRedirect, PolicyStore, SecurityAudit,
                                SYSTEMD_CREDENTIAL_DIRECTORY, password_record, prompt_secret,
                                read_private, verify_password, write_new_private)
+
+
+class SecurityAuditTests(unittest.TestCase):
+    def setUp(self):
+        self.output = io.StringIO()
+        self.now = 0.0
+        self.audit = SecurityAudit(self.output, lambda: self.now)
+
+    def events(self):
+        return [json.loads(line) for line in self.output.getvalue().splitlines()]
+
+    def test_only_allowlisted_fields_and_values_are_serialized(self):
+        secret = "DO-NOT-LOG-THIS\nforged-event"
+        self.audit.emit("request_rejected", reason=secret, request_id=secret,
+                        client_ip=secret, client_bucket=secret, password=secret,
+                        token=secret, headers={"Authorization": secret}, body=secret,
+                        http_status=secret, attempt_number=True, blocked=secret)
+        self.audit.emit(secret, password=secret)
+        self.audit.emit([], reason=[])
+        self.audit.emit("control_error", reason=[])
+        self.assertNotIn("DO-NOT-LOG", self.output.getvalue())
+        self.assertEqual(len(self.events()), 2)
+        event = self.events()[0]
+        self.assertEqual(set(event), {"timestamp", "component", "event", "client_ip", "client_bucket"})
+        self.assertIsNone(event["client_ip"])
+        self.assertTrue(event["timestamp"].endswith("+00:00"))
+
+    def test_scope_id_cannot_smuggle_text_into_an_ipv6_address(self):
+        self.audit.emit("request_rejected", client_ip="fe80::1%secret", client_bucket="fe80::1%secret/64")
+        self.assertIsNone(self.events()[0]["client_ip"])
+        self.assertIsNone(self.events()[0]["client_bucket"])
+        self.assertNotIn("secret", self.output.getvalue())
+
+    def test_noise_is_bounded_but_password_checks_and_actions_are_retained(self):
+        for _ in range(100):
+            self.audit.emit("request_rejected", reason="invalid_origin", client_ip="192.0.2.1")
+        self.audit.emit("password_rejected", failed_attempts=2, lockout_started=True)
+        self.audit.emit("restart_accepted")
+        self.assertEqual(len(self.events()), 62)
+        self.now = 60
+        self.audit.flush_suppressed()
+        self.assertEqual(self.events()[-1]["event"], "audit_suppressed")
+        self.assertEqual(self.events()[-1]["suppressed_events"], 40)
+        self.audit.flush_suppressed()
+        self.audit.emit("request_rejected", reason="invalid_origin")
+        self.assertEqual(len(self.events()), 64)
+
+    def test_concurrent_noise_keeps_exact_budget_and_valid_json(self):
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+            list(pool.map(lambda _: self.audit.emit("restart_blocked", reason="lockout"), range(100)))
+        self.assertEqual(len(self.events()), 60)
+        self.now = 60
+        self.audit.flush_suppressed()
+        self.assertEqual(self.events()[-1]["suppressed_events"], 40)
+
+    def test_logging_failure_is_contained_and_reported_after_recovery(self):
+        with patch.object(self.output, "write", side_effect=OSError("secret error detail")):
+            self.audit.emit("authentication_accepted")
+        self.audit.emit("restart_accepted")
+        self.assertEqual(self.events()[0]["prior_log_write_failures"], 1)
+        self.assertNotIn("secret", self.output.getvalue())
 
 
 @unittest.skipIf(os.name == "nt", "Unix credential permissions; also run on deployment host")
@@ -201,14 +263,19 @@ class HttpTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.store = PolicyStore(Path(self.temp.name) / "state.sqlite3")
+        self.audit_output = io.StringIO()
         self.control = CollectorControl(self.store, ["https://energy.example.test"],
-                                        self.record, "test-token", "button.example_restart_collector")
+                                        self.record, "test-token", "button.example_restart_collector",
+                                        audit=SecurityAudit(self.audit_output))
         self.dispatch = patch.object(self.control, "dispatch_restart", return_value="requested").start()
         self.addCleanup(patch.stopall)
         self.server = ControlServer(("127.0.0.1", 0), self.control)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
         self.addCleanup(self.stop_server)
+
+    def audit_events(self):
+        return [json.loads(line) for line in self.audit_output.getvalue().splitlines()]
 
     def stop_server(self):
         self.server.shutdown()
@@ -299,6 +366,162 @@ class HttpTests(unittest.TestCase):
             results = list(pool.map(lambda _: self.request(), range(2)))
         self.assertEqual(sum(status == 202 for status, _ in results), 1)
         self.dispatch.assert_called_once()
+
+    def test_audit_failure_attempts_lockout_and_no_password_check_while_blocked(self):
+        self.request("wrong-first")
+        self.request("wrong-second")
+        self.request()
+        first, second, blocked = self.audit_events()
+        self.assertEqual((first["attempt_number"], first["failed_attempts"]), (1, 1))
+        self.assertFalse(first["lockout_started"])
+        self.assertEqual((second["attempt_number"], second["failed_attempts"]), (2, 2))
+        self.assertTrue(second["lockout_started"])
+        self.assertEqual(second["retry_after_seconds"], 300)
+        self.assertEqual(blocked["event"], "restart_blocked")
+        self.assertEqual(blocked["reason"], "lockout")
+        self.assertEqual(blocked["failed_attempts"], 2)
+        self.assertFalse(blocked["password_checked"])
+        self.assertNotIn("attempt_number", blocked)
+        self.assertEqual(len({event["request_id"] for event in self.audit_events()}), 3)
+        self.assertNotIn("wrong-first", self.audit_output.getvalue())
+        self.assertNotIn("wrong-second", self.audit_output.getvalue())
+
+    def test_audit_success_links_authentication_dispatch_and_result(self):
+        _, payload = self.request()
+        events = self.audit_events()
+        self.assertEqual([event["event"] for event in events],
+                         ["authentication_accepted", "restart_requested", "restart_accepted"])
+        self.assertEqual(len({event["request_id"] for event in events}), 1)
+        self.assertTrue(events[0]["password_checked"])
+        self.assertEqual(events[0]["attempt_number"], 1)
+        self.assertNotIn("request_id", payload)  # No new public status fields.
+        for secret in (self.password, "test-token", self.record["digest"], self.record["salt"]):
+            self.assertNotIn(secret, self.audit_output.getvalue())
+
+    def test_audit_cooldown_is_not_a_failed_password_attempt(self):
+        self.request()
+        self.request(headers={"X-Real-IP": "192.0.2.2"})
+        event = self.audit_events()[-1]
+        self.assertEqual(event["reason"], "cooldown")
+        self.assertEqual(event["client_ip"], "192.0.2.2")
+        self.assertFalse(event["password_checked"])
+        self.assertNotIn("attempt_number", event)
+        self.dispatch.assert_called_once()
+
+    def test_audit_keeps_full_ipv6_ip_separate_from_shared_bucket(self):
+        self.request("wrong", headers={"X-Real-IP": "2001:db8:1::abcd"})
+        event = self.audit_events()[0]
+        self.assertEqual(event["client_ip"], "2001:db8:1::abcd")
+        self.assertEqual(event["client_bucket"], "2001:db8:1::/64")
+
+    def test_audit_bad_origin_does_not_log_headers_body_or_query(self):
+        marker = "private-marker-not-for-logs"
+        self.request(marker, headers={"Origin": "https://" + marker,
+                     "Authorization": "Bearer " + marker, "Cookie": marker, "User-Agent": marker})
+        self.request(raw=marker)
+        self.request(path="/api/collector/restart?password=" + marker)
+        self.request(headers={"X-Real-IP": marker})
+        events = self.audit_events()
+        self.assertEqual([event["reason"] for event in events],
+                         ["invalid_origin", "invalid_body", "not_found", "invalid_client_identity"])
+        self.assertEqual(events[0]["client_ip"], "192.0.2.1")
+        self.assertIsNone(events[-1]["client_ip"])
+        self.assertNotIn(marker, self.audit_output.getvalue())
+        self.dispatch.assert_not_called()
+
+    def test_audit_ignores_normal_status_polling(self):
+        self.request(method="GET", path="/api/collector/status", headers={"X-Real-IP": "127.0.0.1"})
+        self.assertEqual(self.audit_events(), [])
+
+    def test_audit_upstream_failure_and_uncertainty_are_distinct(self):
+        self.dispatch.return_value = "unknown"
+        self.request()
+        self.assertEqual(self.audit_events()[-1]["event"], "restart_unknown")
+
+    def test_audit_upstream_rejection_is_not_success(self):
+        self.dispatch.return_value = "failed"
+        self.request()
+        self.assertEqual(self.audit_events()[-1]["event"], "restart_failed")
+
+    def test_audit_distinguishes_global_budget_from_ip_lockout(self):
+        for index in range(30):
+            self.store.reserve_verification("198.51.100." + str(index))
+        self.request()
+        event = self.audit_events()[0]
+        self.assertEqual(event["reason"], "global_budget")
+        self.assertFalse(event["password_checked"])
+        self.assertNotIn("attempt_number", event)
+        self.dispatch.assert_not_called()
+
+    def test_audit_distinguishes_pending_checks_from_global_budget(self):
+        self.store.reserve_verification("192.0.2.1")
+        self.store.reserve_verification("192.0.2.1")
+        self.request()
+        self.assertEqual(self.audit_events()[0]["reason"], "concurrent_verification")
+        self.dispatch.assert_not_called()
+
+    def test_audit_unexpected_exception_never_logs_exception_text(self):
+        with patch.object(self.control, "restart", side_effect=RuntimeError("secret-exception-marker")):
+            with self.assertRaises(http.client.RemoteDisconnected):
+                self.request()
+        self.assertEqual(self.audit_events()[-1]["reason"], "internal_error")
+        self.assertEqual(self.audit_events()[-1]["client_ip"], "192.0.2.1")
+        self.assertRegex(self.audit_events()[-1]["request_id"], r"^[0-9a-f]{32}$")
+        self.assertNotIn("secret-exception-marker", self.audit_output.getvalue())
+
+    def test_audit_storage_failure_never_logs_exception_text(self):
+        with patch.object(self.store, "status", side_effect=OSError("secret-storage-marker")):
+            self.assertEqual(self.request()[0], 503)
+        self.assertEqual(self.audit_events()[-1]["reason"], "storage_error")
+        self.assertNotIn("secret-storage-marker", self.audit_output.getvalue())
+        self.dispatch.assert_not_called()
+
+    def test_audit_concurrent_errors_keep_request_identity_separate(self):
+        with patch.object(self.control, "restart", side_effect=RuntimeError("private error")):
+            def failed_request(ip):
+                with self.assertRaises(http.client.RemoteDisconnected):
+                    self.request(headers={"X-Real-IP": ip})
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+                list(pool.map(failed_request, ["192.0.2.1", "192.0.2.2"]))
+        events = self.audit_events()
+        self.assertEqual({event["client_ip"] for event in events}, {"192.0.2.1", "192.0.2.2"})
+        self.assertEqual(len({event["request_id"] for event in events}), 2)
+
+    def test_audit_stream_failure_does_not_repeat_or_prevent_restart(self):
+        with patch.object(self.audit_output, "write", side_effect=OSError("stream unavailable")):
+            self.assertEqual(self.request()[0], 202)
+        self.dispatch.assert_called_once()
+
+    def test_audit_parallel_attempt_numbers_and_failed_counts_are_atomic(self):
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            list(pool.map(lambda _: self.request("wrong"), range(2)))
+        events = self.audit_events()
+        self.assertEqual(sorted(event["attempt_number"] for event in events), [1, 2])
+        self.assertEqual(sorted(event["failed_attempts"] for event in events), [1, 2])
+        self.assertEqual(sum(event["lockout_started"] for event in events), 1)
+
+    def test_audit_attempt_count_starts_again_after_lockout_expiry(self):
+        self.request("wrong")
+        self.request("wrong")
+        with patch.object(self.store, "clock", return_value=self.store.clock() + 301):
+            self.request("wrong")
+        self.assertEqual(self.audit_events()[-1]["attempt_number"], 1)
+
+    def test_audit_expired_ticket_never_reports_accepted_authentication(self):
+        original_finish = self.store.finish_verification
+
+        def expired(ticket, valid, audit):
+            with self.store.connect() as db:
+                db.execute("DELETE FROM attempts")
+            return original_finish(ticket, valid, audit)
+
+        with patch.object(self.store, "finish_verification", side_effect=expired):
+            self.assertEqual(self.request()[0], 429)
+        event = self.audit_events()[0]
+        self.assertEqual(event["reason"], "verification_expired")
+        self.assertTrue(event["password_checked"])
+        self.dispatch.assert_not_called()
 
 
 class DispatchTests(unittest.TestCase):
