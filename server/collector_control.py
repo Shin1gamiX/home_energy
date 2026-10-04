@@ -31,6 +31,8 @@ from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_ope
 
 COOLDOWN = 300
 LOCKOUT = 300
+GLOBAL_VERIFICATION_LIMIT = 5
+GLOBAL_VERIFICATION_WINDOW = 20 * 60
 ITERATIONS = 600_000
 MAX_BODY = 1024
 SYSTEMD_CREDENTIAL_DIRECTORY = Path("/run/credentials/homeenergy-control.service")
@@ -205,7 +207,7 @@ class PolicyStore:
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             db.execute("DELETE FROM attempts WHERE created <= ?", (now - 30,))
-            db.execute("DELETE FROM budget WHERE created <= ?", (now - LOCKOUT,))
+            db.execute("DELETE FROM budget WHERE created <= ?", (now - GLOBAL_VERIFICATION_WINDOW,))
             db.execute("DELETE FROM failures WHERE locked_until <= ? AND window_start <= ?",
                        (now, now - LOCKOUT))
             row = db.execute("SELECT count, window_start, locked_until FROM failures WHERE ip=?", (ip,)).fetchone()
@@ -220,11 +222,14 @@ class PolicyStore:
                 if audit is not None:
                     audit["reason"] = "concurrent_verification"
                 return None, "busy", 30
-            budget = db.execute("SELECT COUNT(*), MIN(created) FROM budget").fetchone()
-            if budget[0] >= 30:
+            # The fifth-newest check determines when a slot opens, even if a
+            # previous, larger limit left more than five persisted checks.
+            budget = db.execute("SELECT created FROM budget ORDER BY created DESC LIMIT 1 OFFSET ?",
+                                (GLOBAL_VERIFICATION_LIMIT - 1,)).fetchone()
+            if budget:
                 if audit is not None:
                     audit["reason"] = "global_budget"
-                return None, "busy", max(1, math.ceil(budget[1] + LOCKOUT - now))
+                return None, "busy", max(1, math.ceil(budget[0] + GLOBAL_VERIFICATION_WINDOW - now))
             ticket = secrets.token_hex(16)
             db.execute("INSERT INTO attempts VALUES(?,?,?)", (ticket, ip, now))
             db.execute("INSERT INTO budget VALUES(?)", (now,))

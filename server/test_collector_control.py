@@ -213,11 +213,68 @@ class PolicyTests(unittest.TestCase):
         self.assertEqual(reopened.reserve_restart(), 0)
 
     def test_global_verification_budget(self):
-        for index in range(30):
+        for index in range(5):
             self.assertIsNotNone(self.store.reserve_verification("192.0.2." + str(index))[0])
-        self.assertEqual(self.store.reserve_verification("198.51.100.1"), (None, "busy", 300))
+        self.assertEqual(self.store.reserve_verification("198.51.100.1"), (None, "busy", 1200))
         self.now += 300
+        self.assertEqual(self.store.reserve_verification("198.51.100.1"), (None, "busy", 900))
+        self.now += 899.5
+        self.assertEqual(self.store.reserve_verification("198.51.100.1"), (None, "busy", 1))
+        self.now += 0.5
         self.assertIsNotNone(self.store.reserve_verification("198.51.100.1")[0])
+
+    def test_global_budget_persists_and_blocked_requests_do_not_extend_it(self):
+        for index in range(5):
+            ticket, error, _ = self.store.reserve_verification("192.0.2." + str(index))
+            self.assertIsNone(error)
+            self.store.finish_verification(ticket, index % 2 == 0)
+        reopened = PolicyStore(self.path, lambda: self.now)
+        for elapsed in (1, 300, 600, 1199):
+            self.now = 1000 + elapsed
+            self.assertEqual(reopened.reserve_verification("198.51.100.1"),
+                             (None, "busy", 1200 - elapsed))
+        with reopened.connect() as db:
+            self.assertEqual(db.execute("SELECT COUNT(*), MIN(created), MAX(created) FROM budget").fetchone(),
+                             (5, 1000.0, 1000.0))
+        self.now = 2200
+        self.assertIsNotNone(reopened.reserve_verification("198.51.100.1")[0])
+
+    def test_rolling_budget_releases_only_expired_slots(self):
+        for index in range(5):
+            self.now = 1000 + index * 10
+            self.assertIsNotNone(self.store.reserve_verification("192.0.2." + str(index))[0])
+        self.assertEqual(self.store.reserve_verification("198.51.100.1"), (None, "busy", 1160))
+        self.now = 2200
+        self.assertIsNotNone(self.store.reserve_verification("198.51.100.1")[0])
+        self.assertEqual(self.store.reserve_verification("198.51.100.2"), (None, "busy", 10))
+        self.now = 2210
+        self.assertIsNotNone(self.store.reserve_verification("198.51.100.2")[0])
+        self.assertEqual(self.store.reserve_verification("198.51.100.3"), (None, "busy", 10))
+
+    def test_concurrent_global_budget_cannot_be_bypassed_by_distinct_ips(self):
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+            results = list(pool.map(lambda index: self.store.reserve_verification("192.0.2." + str(index)),
+                                    range(12)))
+        self.assertEqual(sum(ticket is not None for ticket, _, _ in results), 5)
+        self.assertEqual(results.count((None, "busy", 1200)), 7)
+
+    def test_budget_handles_records_retained_from_previous_larger_limit(self):
+        with self.store.connect() as db:
+            db.executemany("INSERT INTO budget VALUES(?)", [(self.now - index * 10,) for index in range(7)])
+        self.assertEqual(self.store.reserve_verification("198.51.100.1"), (None, "busy", 1160))
+        self.now += 1159
+        self.assertEqual(self.store.reserve_verification("198.51.100.1"), (None, "busy", 1))
+        self.now += 1
+        self.assertIsNotNone(self.store.reserve_verification("198.51.100.1")[0])
+
+    def test_ip_lockout_rejections_do_not_consume_global_budget(self):
+        self.record_failure()
+        self.record_failure()
+        for _ in range(5):
+            self.assertEqual(self.store.reserve_verification("192.0.2.1"), (None, "locked", 300))
+        for index in range(2, 5):
+            self.assertIsNotNone(self.store.reserve_verification("192.0.2." + str(index))[0])
+        self.assertEqual(self.store.reserve_verification("198.51.100.1"), (None, "busy", 1200))
 
     def test_success_clears_failed_attempt(self):
         self.record_failure()
@@ -293,6 +350,8 @@ class HttpTests(unittest.TestCase):
         payload = json.loads(response.read())
         status = response.status
         self.assertEqual(response.getheader("Cache-Control"), "no-store")
+        if payload.get("retry_after_seconds"):
+            self.assertEqual(response.getheader("Retry-After"), str(payload["retry_after_seconds"]))
         connection.close()
         return status, payload
 
@@ -445,7 +504,7 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(self.audit_events()[-1]["event"], "restart_failed")
 
     def test_audit_distinguishes_global_budget_from_ip_lockout(self):
-        for index in range(30):
+        for index in range(5):
             self.store.reserve_verification("198.51.100." + str(index))
         self.request()
         event = self.audit_events()[0]
@@ -503,7 +562,7 @@ class HttpTests(unittest.TestCase):
         now = [1000.0]
         self.store.clock = lambda: now[0]
         self.assertEqual(self.request()[0], 202)
-        for seconds, ip in ((1, "192.0.2.1"), (50, "192.0.2.2"), (150, "192.0.2.3"), (299, "192.0.2.1")):
+        for seconds, ip in ((1, "192.0.2.1"), (150, "192.0.2.3"), (299, "192.0.2.1")):
             now[0] = 1000 + seconds
             status, payload = self.request(headers={"X-Real-IP": ip})
             self.assertEqual(status, 429)
@@ -513,6 +572,34 @@ class HttpTests(unittest.TestCase):
         now[0] = 1300
         self.assertEqual(self.request()[0], 202)
         self.assertEqual(self.dispatch.call_count, 2)
+
+    def test_global_budget_counts_correct_wrong_and_cooldown_password_checks(self):
+        now = [1000.0]
+        self.store.clock = lambda: now[0]
+        with patch("collector_control.verify_password", wraps=verify_password) as verify:
+            self.assertEqual(self.request("wrong", headers={"X-Real-IP": "192.0.2.1"})[0], 401)
+            self.assertEqual(self.request(headers={"X-Real-IP": "192.0.2.2"})[0], 202)
+            self.assertEqual(self.request(headers={"X-Real-IP": "192.0.2.3"})[1]["error"], "cooldown")
+            for ip in ("192.0.2.4", "192.0.2.5"):
+                self.assertEqual(self.request("wrong", headers={"X-Real-IP": ip})[0], 401)
+            status, payload = self.request(headers={"X-Real-IP": "192.0.2.6"})
+            self.assertEqual((status, payload), (429, {"error": "busy", "retry_after_seconds": 1200}))
+            now[0] += 300
+            self.assertEqual(self.store.status()["cooldown_seconds"], 0)
+            status, payload = self.request(headers={"X-Real-IP": "192.0.2.7"})
+            self.assertEqual((status, payload), (429, {"error": "busy", "retry_after_seconds": 900}))
+            self.assertEqual(verify.call_count, 5)
+            self.dispatch.assert_called_once()
+            blocked = self.audit_events()[-1]
+            self.assertEqual(blocked["reason"], "global_budget")
+            self.assertEqual(blocked["retry_after_seconds"], 900)
+            self.assertFalse(blocked["password_checked"])
+            self.assertNotIn("requested_at", payload)
+            self.assertNotIn("last_result", payload)
+            now[0] = 2200
+            self.assertEqual(self.request(headers={"X-Real-IP": "192.0.2.7"})[0], 202)
+            self.assertEqual(verify.call_count, 6)
+            self.assertEqual(self.dispatch.call_count, 2)
 
     def test_reopened_service_still_rejects_correct_password_in_cooldown(self):
         self.assertEqual(self.request()[0], 202)

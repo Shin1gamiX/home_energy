@@ -92,11 +92,21 @@ function fixture() {
   {
     const f = fixture();
     await f.open();
-    f.setPost(async () => ({ ok: false, json: async () => ({ error: 'busy', retry_after_seconds: 300 }) }));
+    f.setPost(async () => ({ ok: false, json: async () => ({ error: 'busy', retry_after_seconds: 1200 }) }));
     await f.submit('test-only-password');
+    assert.match(f.feedback(), /20m 0s/);
     await f.advance(5);
     assert.match(f.feedback(), /temporarily limited/);
     assert.equal(f.nodes['collector-submit'].disabled, true);
+    f.nodes['collector-cancel'].fire('click');
+    await f.open();
+    assert.match(f.feedback(), /19m 55s/);
+    await f.advance(1194);
+    assert.equal(f.nodes['collector-submit'].disabled, true);
+    await f.advance(1);
+    assert.equal(f.nodes['collector-submit'].disabled, false);
+    assert.match(f.feedback(), /Enter your password/);
+    assert.equal(f.calls.length, 1);
   }
   {
     const f = fixture();

@@ -25,9 +25,13 @@ is supplied by this repository. No new Python packages are required.
 - IPv4 is limited per public IP (shared NAT users share a lockout). IPv6 privacy
   addresses share a /64 bucket. Cookies, page reloads and another browser do not
   reset this state. Changing networks can change the client bucket.
-- An additional global budget permits at most 30 password verifications in a
-  rolling five-minute period. It limits distributed guessing and password-hash
-  CPU load. An attacker can temporarily exhaust this budget and deny restart
+- An additional global budget permits at most **five password verifications in a
+  rolling 20-minute period**, shared across all client IPs. Once full, further
+  checks are rejected until a counted check expires; this is not a separate
+  five-minute block or an all-at-once counter reset. Correct and incorrect
+  password checks both consume a slot. Requests already blocked by a rate limit
+  do not extend the wait or consume additional slots. It limits distributed
+  guessing and password-hash CPU load. An attacker can temporarily exhaust this budget and deny restart
   access; public monitoring remains unaffected. This is not DDoS protection.
 - The **five-minute restart cooldown is global**, reserved atomically before
   contacting Home Assistant. Concurrent clients cannot send duplicate restarts.
@@ -318,6 +322,23 @@ node --check collector-control.js
 node server/test_collector_ui.cjs
 node server/test_overview.cjs
 ```
+
+## Verification record — 04/10/2026 (global budget, pre-deployment)
+
+- All 68 isolated backend tests passed on Linux. Coverage includes the fifth
+  allowed check and sixth rejection, 20-minute expiry boundaries, rolling slot
+  release, distinct-IP concurrency, database reopen, retained records from the
+  previous larger budget and blocked requests not extending the wait.
+- HTTP tests confirm correct, incorrect and cooldown password checks consume
+  the same global budget. Budget rejection performs no password check or device
+  action, returns the wait in `Retry-After`, and retains secret-free audit events.
+- All 11 isolated dialog scenarios passed, including the existing countdown at
+  20 minutes, close/reopen and expiry without automatic resubmission. No production
+  frontend changes are needed. Per-IP lockout and restart cooldown remain five
+  minutes; no production restart POST was used to validate this update.
+- Activation changes only the control-service source and restarts that service.
+  Keep the existing state database and credentials. These test results alone do
+  not confirm production activation.
 
 ## Verification record — 04/10/2026 (private status, pre-deployment)
 
