@@ -114,6 +114,10 @@ Missing URLs use a small branded page with Overview/History links and English,
 Russian and Greek translations. It uses the saved `homeenergy-language` preference,
 defaults to English and remains navigable without JavaScript. It does not load
 telemetry or restart controls, or display the requested path or query string.
+The styled language menu supports pointer/touch, arrow keys, Home/End, initial-letter
+navigation and Escape; Tab leaves the menu without trapping focus. Its semantics follow
+the [WAI-ARIA menu-button pattern](https://www.w3.org/WAI/ARIA/apg/patterns/menu-button/).
+Menu animation is disabled when the browser requests reduced motion.
 
 Deploy all three `404.*` files before enabling the **Home Energy not found** block
 in the Nginx example. Merge that block into the existing HTTPS server; do not replace

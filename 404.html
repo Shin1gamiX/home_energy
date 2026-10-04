@@ -6,9 +6,9 @@
   <meta name="theme-color" content="#eff7f6">
   <meta name="robots" content="noindex">
   <title>Page not found · Home Energy</title>
-  <link rel="stylesheet" href="/404.css?v=20261004">
+  <link rel="stylesheet" href="/404.css?v=20261004-2">
   <link rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2218%22%20fill%3D%22%23284e43%22%2F%3E%3Cpath%20fill%3D%22%23f0f6e9%22%20fill-rule%3D%22evenodd%22%20d%3D%22M10%2029%2030%2011Q32%209%2034%2011L43%2019V15H49V25L55%2030Q57%2032%2054%2032H49V52H15V32H10Q7%2032%2010%2029ZM35%2021%2023%2036Q22%2038%2024%2038H31L28%2048%2042%2032H33Z%22%2F%3E%3C%2Fsvg%3E">
-  <script src="/404.js?v=20261004" defer></script>
+  <script src="/404.js?v=20261004-2" defer></script>
 </head>
 <body class="not-found">
   <div class="not-found-shell">
@@ -20,19 +20,32 @@
         </svg>
         <span>shin1gamix<span class="not-found-brand-sub" data-not-found-text="brand">HOME ENERGY</span></span>
       </a>
-      <label class="not-found-language" id="not-found-language-control" hidden>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" focusable="false">
-          <circle cx="12" cy="12" r="9"/>
-          <ellipse cx="12" cy="12" rx="4" ry="9"/>
-          <path d="M3 12h18"/>
-        </svg>
-        <span class="not-found-sr-only" data-not-found-text="language">Language</span>
-        <select id="not-found-language">
-          <option value="en" lang="en">English</option>
-          <option value="ru" lang="ru">Русский</option>
-          <option value="el" lang="el">Ελληνικά</option>
-        </select>
-      </label>
+      <div class="not-found-language" id="not-found-language-control" hidden>
+        <button class="not-found-language-trigger" id="not-found-language" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="not-found-language-menu" aria-labelledby="not-found-language-label not-found-language-name">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" focusable="false">
+            <circle cx="12" cy="12" r="9"/>
+            <ellipse cx="12" cy="12" rx="4" ry="9"/>
+            <path d="M3 12h18"/>
+          </svg>
+          <span class="not-found-sr-only" id="not-found-language-label" data-not-found-text="language">Language</span>
+          <span id="not-found-language-name" lang="en">English</span>
+          <svg class="not-found-language-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 8 4 4 4-4"/></svg>
+        </button>
+        <div class="not-found-language-menu" id="not-found-language-menu" role="menu" aria-labelledby="not-found-language-label" hidden>
+          <button type="button" role="menuitemradio" aria-checked="true" tabindex="-1" data-language="en" lang="en">
+            <span class="not-found-language-code" aria-hidden="true">EN</span><span>English</span>
+            <svg class="not-found-language-check" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m4.5 10 3.5 3.5 7.5-7.5"/></svg>
+          </button>
+          <button type="button" role="menuitemradio" aria-checked="false" tabindex="-1" data-language="ru" lang="ru">
+            <span class="not-found-language-code" aria-hidden="true">RU</span><span>Русский</span>
+            <svg class="not-found-language-check" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m4.5 10 3.5 3.5 7.5-7.5"/></svg>
+          </button>
+          <button type="button" role="menuitemradio" aria-checked="false" tabindex="-1" data-language="el" lang="el">
+            <span class="not-found-language-code" aria-hidden="true">EL</span><span>Ελληνικά</span>
+            <svg class="not-found-language-check" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m4.5 10 3.5 3.5 7.5-7.5"/></svg>
+          </button>
+        </div>
+      </div>
     </header>
     <main class="not-found-main">
       <section class="not-found-card" aria-labelledby="not-found-title" aria-describedby="not-found-description">
