@@ -79,6 +79,8 @@ python3 -B -m unittest discover -s server -p 'test_*.py' -v
 node --check app.js
 node --check history.js
 node server/test_overview.cjs
+node server/test_not_found_ui.cjs
+python3 -B -m unittest discover -s server -p 'test_not_found_nginx.py' -v
 ```
 
 Node is needed only for these optional JavaScript syntax checks. Tests use synthetic in-memory/temporary databases, never a live Home Assistant database. Tests do not certify hardware accuracy or compatibility with every Home Assistant version.
@@ -89,7 +91,7 @@ The intended backend target is Linux. On Windows, Python may lack IANA timezone 
 
 These are manual preparation steps, not an automated installer. Review examples for your host before applying them.
 
-1. Place the six root HTML/CSS/JS files in `/var/www/homeenergy/public/`.
+1. Place `index.html`, `styles.css`, `app.js`, `history.html`, `history.css`, `history.js`, `404.html`, `404.css` and `404.js` in `/var/www/homeenergy/public/`. The optional restart dialog has separate [deployment instructions](docs/CONTROL.md).
 2. Place `server/export_energy.py` and `server/history_store.py` in `/var/www/homeenergy/server/`.
 3. Create `/var/www/homeenergy/runtime/`, writable by a dedicated exporter account, e.g. `homeenergy`. Keep scripts and public source non-writable by that account where practical.
 4. Set the environment values below and verify every entity suffix in `FIELDS`, plus `grid_to_battery_power`, `inverter_time` and `operating_mode`.
@@ -105,6 +107,34 @@ These are manual preparation steps, not an automated installer. Review examples 
 | `ENERGY_ENTITY_PREFIX` | `sensor.anenji_anj_11kw_48v_wifi_p_` | Prefix prepended to entity suffixes |
 
 The supplied service restricts writes to runtime and network socket families to local Unix sockets. Adjust its paths/account deliberately; copying the repository alone does not deploy anything.
+
+### Custom not-found page
+
+Missing URLs use a small branded page with Overview/History links and English,
+Russian and Greek translations. It uses the saved `homeenergy-language` preference,
+defaults to English and remains navigable without JavaScript. It does not load
+telemetry or restart controls, or display the requested path or query string.
+
+Deploy all three `404.*` files before enabling the **Home Energy not found** block
+in the Nginx example. Merge that block into the existing HTTPS server; do not replace
+an installed vhost or its collector-control configuration with the generic example.
+Root-absolute asset URLs work even for missing nested paths. Keep `error_page 404
+/404.html;` without `=200`: the original request must remain HTTP 404. The exact
+HTML location is internal, and the existing public-file allowlist stays intact.
+
+All responses using this error page have access logging disabled, including the
+blocked collector-status route. This intentionally sacrifices missing-page access
+statistics to preserve the control route's privacy after Nginx's internal redirect.
+Private control-service security events are unaffected. See Nginx's
+[error-page](https://nginx.org/en/docs/http/ngx_http_core_module.html#error_page) and
+[access-log](https://nginx.org/en/docs/http/ngx_http_log_module.html#access_log) semantics.
+
+The Node test checks translations and isolated browser logic. The Python integration
+test starts an installed Nginx on an ephemeral loopback port with synthetic control
+routes; it never contacts Home Assistant or requests a real restart. It skips when
+Nginx is unavailable. A plain Python static server can preview `/404.html`, but does
+not reproduce production error routing: verify missing/deep URLs and the blocked
+status route against Nginx before considering deployment complete.
 
 ## Privacy and operational limits
 

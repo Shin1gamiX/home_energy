@@ -14,6 +14,8 @@ The original installation uses an ANENJI ANJ-HHS-11KW-48V-WIFI inverter and an A
 | `app.js` | Overview translations, fetch/presentation, freshness, mode and animation |
 | `history.html`, `history.css` | History controls and chart layout |
 | `history.js` | History fetch, aggregation, summaries, SVG charts, zoom, shared cursor, peaks, translations |
+| `404.html`, `404.css`, `404.js` | Standalone translated not-found page; no telemetry or control requests |
+| `server/test_not_found_ui.cjs`, `server/test_not_found_nginx.py` | Error-page UI checks and isolated Nginx status, routing and logging-privacy checks |
 | `server/export_energy.py` | Read-only Recorder query, validation, live snapshot publication, recording loop |
 | `server/history_store.py` | Deduplication, minute totals/counts, private SQLite and public daily JSON |
 | `server/test_export_energy.py` | Synthetic Recorder tests: freshness, invalid readings, grid composition |

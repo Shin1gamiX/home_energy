@@ -22,6 +22,19 @@ server {
     add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'" always;
     add_header Cache-Control "no-store, max-age=0" always;
 
+    # BEGIN Home Energy not found
+    error_page 404 /404.html;
+    location = /404.html {
+        internal;
+        # Internal redirects use this location's logging policy. Keep blocked
+        # collector-status requests (including query strings) out of access logs.
+        access_log off;
+        try_files $uri =404;
+    }
+    location = /404.css { try_files $uri =404; }
+    location = /404.js { try_files $uri =404; }
+    # END Home Energy not found
+
     location = /api/energy {
         alias /var/www/homeenergy/runtime/energy.json;
         default_type application/json;
