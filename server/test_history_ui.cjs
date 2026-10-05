@@ -12,6 +12,23 @@ function readFunction(name, context = {}) {
   return context.result;
 }
 const energyTotals = readFunction('energyTotals');
+const interpolate = (key, values) => key.replace(/\{(\w+)\}/g, (_, name) => values[name]);
+const formatRecordedDuration = readFunction('formatRecordedDuration', {
+  window: {energyI18n: {locale: 'en-GB'}}, t: interpolate
+});
+for (const [hours, expected] of [[0, '0 h'], [1, '1 h'], [21.2, '21.2 h'],
+  [141.2, '5 d - 21.2 h'], [1503.69, '62 d - 15.7 h'], [24, '1 d - 0 h'],
+  [23.94, '23.9 h'], [23.96, '1 d - 0 h'], [47.96, '2 d - 0 h']]) {
+  assert.equal(formatRecordedDuration(hours * 3600), expected);
+}
+for (const value of [-1, NaN, Infinity, null]) assert.equal(formatRecordedDuration(value), '—');
+for (const locale of ['ru-RU', 'el-GR']) {
+  const localized = readFunction('formatRecordedDuration', {
+    window: {energyI18n: {locale}}, t: interpolate
+  });
+  assert.equal(localized(141.2 * 3600), '5 d - 21,2 h');
+}
+console.log('Recorded days/hours formatting and rollover checks passed.');
 const row = (t, values) => ({t, values});
 const base = {load: 500, grid: 420, battery: 0, pv: 0};
 const total = values => energyTotals([row(0, values)], 0, 60, 60).solar_to_house;

@@ -495,6 +495,15 @@ function energyTotals(rows, from, to, cutoff) {
   totals.solar_to_house = solarToHouse;
   return totals;
 }
+function formatRecordedDuration(seconds) {
+  if (!Number.isFinite(seconds) || seconds < 0) return '—';
+  // Round before splitting so the hour remainder never displays as 24 h.
+  const tenths = Math.round(seconds / 360);
+  const days = Math.floor(tenths / 240);
+  const format = new Intl.NumberFormat(window.energyI18n.locale, { maximumFractionDigits: 1 });
+  const values = { days: format.format(days), hours: format.format((tenths % 240) / 10) };
+  return t(days ? '{days} d - {hours} h' : '{hours} h', values);
+}
 function renderSummary() {
   const section = document.querySelector('#energy-summary');
   section.replaceChildren();
@@ -513,7 +522,7 @@ function renderSummary() {
     const number = document.createElement('strong'); number.textContent = !loading && !hasError && totals[key].seconds ? format(totals[key].kwh) : '—';
     const unit = document.createElement('span'); unit.textContent = ' kWh'; value.append(number, unit);
     const coverage = document.createElement('p');
-    coverage.textContent = loading ? t('Loading…') : hasError ? t('History unavailable.') : totals[key].seconds ? t('{hours} h recorded', { hours: format(totals[key].seconds / 3600) }) : t('No report');
+    coverage.textContent = loading ? t('Loading…') : hasError ? t('History unavailable.') : totals[key].seconds ? t('{duration} recorded', { duration: formatRecordedDuration(totals[key].seconds) }) : t('No report');
     card.append(label, value, coverage); cards.append(card);
   }
   const note = document.createElement('p'); note.className = 'summary-note';
@@ -555,7 +564,7 @@ function renderAllTime() {
   const hasData = ready && allTimeSummary.months.length > 0;
   const format = value => new Intl.NumberFormat(window.energyI18n.locale, { maximumFractionDigits: 2 }).format(value);
   const percent = (value, span) => new Intl.NumberFormat(window.energyI18n.locale, { style: 'percent', maximumFractionDigits: 1 }).format(span > 0 ? value.seconds / span : 0);
-  const coverageText = (value, span) => t('{percent} recorded · {hours} h', { percent: percent(value, span), hours: format(value.seconds / 3600) });
+  const coverageText = (value, span) => t('{percent} recorded · {duration}', { percent: percent(value, span), duration: formatRecordedDuration(value.seconds) });
   const error = t(summaryUnavailable ? 'All-time totals are not available yet. Day, week and month still work.' : 'History is unavailable. Please try again shortly.');
   document.querySelector('#range-label').textContent = hasData
     ? `${dateFormat.format(allTimeSummary.from * 1000)} – ${dateFormat.format(allTimeSummary.to * 1000)} · ${t('Athens time')}`

@@ -158,6 +158,9 @@ History's **All time** option shows recorded Solar generated, Grid consumed,
 House usage, Battery supplied and Solar to house in kWh. It includes the recording
 date span, coverage for each reading, monthly totals and a grand total. Select a
 month to open its existing graphs; Today returns to the current day.
+Recorded duration uses days plus remaining hours (for example, `5 d - 21.2 h`),
+or just hours below one day. Hours are rounded to one decimal for display only;
+one recorded day represents 24 hours of data, not a calendar day.
 
 These are totals **since this project began recording**, not inverter lifetime
 counters. Outages are excluded, not filled with zeros. Totals use unrounded minute
