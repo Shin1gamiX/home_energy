@@ -8,7 +8,7 @@ This repository contains application code and generic deployment examples, **not
 
 - Displays solar, estimated grid import, house consumption, battery charge percentage and signed battery power, with available voltage/current readings.
 - Shows inverter mode and a translated communication-loss warning when reports stop arriving.
-- Records fresh readings into minute aggregates, with daily, weekly and monthly history and energy summaries.
+- Records fresh readings into minute aggregates, with daily, weekly and monthly history, plus all-time kWh totals and a monthly breakdown.
 - Supports metric filters, averaging intervals, drag-to-zoom, synchronized inspection and optional minimum/maximum indicators.
 - Publishes a deliberately public, no-login view. It does not change inverter settings.
 - Offers an optional **Restart dongle** password dialog: two wrong passwords lock out the client network for five minutes; a five-minute restart cooldown is global. It remains unavailable until privately configured. See [Collector restart setup and security](docs/CONTROL.md).
@@ -70,7 +70,7 @@ For synthetic history:
 python3 -B server/preview_history.py
 ```
 
-Open `http://127.0.0.1:8767/history.html`. This development helper supplies a subset of metrics for today's date; it is not a production server or complete hardware simulator.
+Open `http://127.0.0.1:8766/history.html` and select **All time**. Run only one of these preview servers at a time. The history helper supplies three calendar months of simulated readings, including gaps, and uses the same cumulative-energy calculations as the exporter. It is not a production server or complete hardware simulator; none of its readings are real.
 
 ## Checks
 
@@ -79,6 +79,7 @@ python3 -B -m unittest discover -s server -p 'test_*.py' -v
 node --check app.js
 node --check history.js
 node server/test_overview.cjs
+node server/test_history_ui.cjs
 node server/test_language_picker.cjs
 node server/test_not_found_ui.cjs
 python3 -B -m unittest discover -s server -p 'test_not_found_nginx.py' -v
@@ -93,7 +94,7 @@ The intended backend target is Linux. On Windows, Python may lack IANA timezone 
 These are manual preparation steps, not an automated installer. Review examples for your host before applying them.
 
 1. Place `index.html`, `styles.css`, `app.js`, `history.html`, `history.css`, `history.js`, `404.html`, `404.css` and `404.js` in `/var/www/homeenergy/public/`. The optional restart dialog has separate [deployment instructions](docs/CONTROL.md).
-2. Place `server/export_energy.py` and `server/history_store.py` in `/var/www/homeenergy/server/`.
+2. Place `server/export_energy.py`, `server/history_store.py` and `server/energy_summary.py` in `/var/www/homeenergy/server/`.
 3. Create `/var/www/homeenergy/runtime/`, writable by a dedicated exporter account, e.g. `homeenergy`. Keep scripts and public source non-writable by that account where practical.
 4. Set the environment values below and verify every entity suffix in `FIELDS`, plus `grid_to_battery_power`, `inverter_time` and `operating_mode`.
 5. Give the exporter read/traverse access to the Recorder database and required SQLite WAL/shared-memory files and directories. Keep the source database private. Read-only WAL access can require existing readable sidecar files; test under the service account rather than granting broad write access or copying only a live `.db` file.
@@ -150,6 +151,27 @@ Grid import and some derived readings are estimates, not billing-grade measureme
 ## Working on this project later
 
 Start with this README and [ARCHITECTURE.md](docs/ARCHITECTURE.md), then inspect current code and deployment settings. Do not assume repository defaults describe an existing server. Production updates and inverter-setting changes are separate operations requiring explicit approval. This initial publication intentionally leaves the deployed installation untouched.
+
+## All-time energy
+
+History's **All time** option shows recorded Solar generated, Grid consumed,
+House usage, Battery supplied and Solar to house in kWh. It includes the recording
+date span, coverage for each reading, monthly totals and a grand total. Select a
+month to open its existing graphs; Today returns to the current day.
+
+These are totals **since this project began recording**, not inverter lifetime
+counters. Outages are excluded, not filled with zeros. Totals use unrounded minute
+averages; displayed monthly values may differ from the displayed grand total by
+a rounding fraction. Monthly rows include completely missing months and mark the
+current month as in progress. The solar aggregate is counted once; PV1 and PV2
+are not added on top of it.
+
+On the first fresh report after installing the backend update, the exporter
+builds a derived daily cache from existing private history SQLite rows and adds
+compact monthly totals to the existing public `history/index.json`. All time does
+not fetch every daily history file. No additional service, route or dependency is
+required. Until that summary exists, the UI explains that it is unavailable;
+Day, Week and Month continue to work. See [the cache contract](docs/ARCHITECTURE.md#cumulative-energy-cache).
 
 ## Supply-mode history
 

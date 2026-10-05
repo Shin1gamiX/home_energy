@@ -35,6 +35,9 @@ const refreshButton = document.querySelector('#refresh-history');
 const refreshCooldown = 5 * 60 * 1000;
 let nextRefreshAt = 0;
 let indexPromise;
+let allTimeSummary = null;
+let summaryUnavailable = false;
+const summaryLabels = { pv: 'Solar generated', grid: 'Grid consumed', load: 'House usage', battery: 'Battery supplied', solar_to_house: 'Solar to house' };
 const dayCache = new Map();
 let rawRows = [];
 let modeRows = [];
@@ -200,13 +203,26 @@ async function load({ refresh = false } = {}) {
   statusElement.textContent = t('Loading history…');
   loading = true;
   hasError = false;
+  summaryUnavailable = false;
+  if (period === 'all') allTimeSummary = null;
   updateRefreshButton();
-  if (!rawRows.length) render();
+  if (!rawRows.length || period === 'all') render();
   try {
     indexPromise ??= json('/history/index.json').then(data => ({ data, observedAt: Date.now() / 1000 }))
       .catch(error => { indexPromise = undefined; throw error; });
     const { data: index, observedAt } = await indexPromise;
+    if (id !== requestId) return;
     if (!Array.isArray(index.days)) throw new Error('Invalid history');
+    if (period === 'all') {
+      summaryUnavailable = !index.energy_summary;
+      allTimeSummary = validateEnergySummary(index.energy_summary, index.updated_at);
+      snapshotTime = index.updated_at;
+      snapshotObservedAt = observedAt;
+      loading = false;
+      if (refresh || !nextRefreshAt) nextRefreshAt = Date.now() + refreshCooldown;
+      render();
+      return;
+    }
     const days = [...new Set(index.days)].filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d) && d >= current.start && d < current.end);
     const files = await Promise.all(days.map(day => {
       if (!dayCache.has(day)) dayCache.set(day, json(`/history/${day}.json`).catch(error => { dayCache.delete(day); throw error; }));
@@ -265,6 +281,12 @@ function chartScale(minimum, maximum) {
   return { low: ticks[0], high: ticks[ticks.length - 1], ticks };
 }
 function render() {
+  const allTime = period === 'all';
+  document.body.classList.toggle('all-time-view', allTime);
+  document.querySelectorAll('.chart-settings, .chart-options, #chart-jumps, #fit-history, #charts').forEach(element => { element.hidden = allTime; });
+  document.querySelectorAll('#previous, #next, #date-display, .date-picker, .date-controls>span').forEach(element => { element.hidden = allTime; });
+  document.querySelector('#monthly-breakdown').hidden = !allTime;
+  if (allTime) { renderAllTime(); return; }
   document.querySelector('#range-label').textContent = `${dateFormat.format(range.from * 1000)} – ${dateFormat.format((range.to - 1) * 1000)} · ${t('Athens time')}`;
   peaksToggle.nextElementSibling.textContent = t('Show peaks');
   document.querySelector('#fit-history').disabled = loading || hasError || !recordedRange(rawRows, modeRows, range, snapshotTime);
@@ -484,7 +506,7 @@ function renderSummary() {
   cards.setAttribute('aria-label', t('Energy summaries. Scroll to see more.'));
   const totals = energyTotals(rawRows, range.from, range.to, snapshotTime);
   const format = value => new Intl.NumberFormat(window.energyI18n.locale, { maximumFractionDigits: 2 }).format(value);
-  for (const [key, name] of Object.entries({ pv: 'Solar generated', grid: 'Grid consumed', load: 'House usage', battery: 'Battery supplied', solar_to_house: 'Solar to house' })) {
+  for (const [key, name] of Object.entries(summaryLabels)) {
     const card = document.createElement('article'); card.className = 'summary-card'; card.style.setProperty('--summary-color', metrics[key === 'solar_to_house' ? 'pv' : key].color);
     const label = document.createElement('h3'); label.textContent = t(name);
     const value = document.createElement('div'); value.className = 'summary-value';
@@ -497,6 +519,107 @@ function renderSummary() {
   const note = document.createElement('p'); note.className = 'summary-note';
   note.textContent = t('Estimated from recorded readings only; missing periods are excluded.');
   section.append(cards, note);
+}
+// An older exporter can still serve day/week/month while awaiting this feature.
+// Reject inconsistent totals instead of presenting partial results as complete.
+function validateEnergySummary(summary, cutoff) {
+  const keys = ['pv', 'grid', 'load', 'battery', 'solar_to_house'];
+  if (!summary || summary.version !== 1 || !Array.isArray(summary.months)) throw new Error('Invalid energy summary');
+  const empty = summary.from === null && summary.to === null && summary.months.length === 0;
+  if (!empty && (!Number.isFinite(summary.from) || !Number.isFinite(summary.to) || summary.to < summary.from || summary.to !== cutoff)) throw new Error('Invalid summary range');
+  function validTotals(totals, span) {
+    return keys.every(key => Number.isFinite(totals?.[key]?.kwh) && totals[key].kwh >= 0
+      && Number.isFinite(totals[key].seconds) && totals[key].seconds >= 0 && totals[key].seconds <= span + .001
+      && (totals[key].seconds > 0 || totals[key].kwh === 0));
+  }
+  if (!validTotals(summary.totals, empty ? 0 : summary.to - summary.from)) throw new Error('Invalid totals');
+  let end = summary.from;
+  let previousMonth = '';
+  const sums = Object.fromEntries(keys.map(key => [key, { kwh: 0, seconds: 0 }]));
+  for (const row of summary.months) {
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(row.month) || row.month <= previousMonth || row.from !== end
+      || !Number.isFinite(row.to) || row.to < row.from || row.to > summary.to || !validTotals(row.totals, row.to - row.from)) throw new Error('Invalid monthly totals');
+    for (const key of keys) for (const field of ['kwh', 'seconds']) sums[key][field] += row.totals[key][field];
+    end = row.to;
+    previousMonth = row.month;
+  }
+  if (end !== summary.to || keys.some(key => ['kwh', 'seconds'].some(field => Math.abs(sums[key][field] - summary.totals[key][field]) > Math.max(1, summary.totals[key][field]) * 1e-9))) throw new Error('Summary does not reconcile');
+  return summary;
+}
+function renderAllTime() {
+  const section = document.querySelector('#energy-summary');
+  const breakdown = document.querySelector('#monthly-breakdown');
+  section.replaceChildren();
+  breakdown.replaceChildren();
+  const ready = !loading && !hasError && allTimeSummary;
+  const hasData = ready && allTimeSummary.months.length > 0;
+  const format = value => new Intl.NumberFormat(window.energyI18n.locale, { maximumFractionDigits: 2 }).format(value);
+  const percent = (value, span) => new Intl.NumberFormat(window.energyI18n.locale, { style: 'percent', maximumFractionDigits: 1 }).format(span > 0 ? value.seconds / span : 0);
+  const coverageText = (value, span) => t('{percent} recorded · {hours} h', { percent: percent(value, span), hours: format(value.seconds / 3600) });
+  const error = t(summaryUnavailable ? 'All-time totals are not available yet. Day, week and month still work.' : 'History is unavailable. Please try again shortly.');
+  document.querySelector('#range-label').textContent = hasData
+    ? `${dateFormat.format(allTimeSummary.from * 1000)} – ${dateFormat.format(allTimeSummary.to * 1000)} · ${t('Athens time')}`
+    : t('All available recorded history');
+  const heading = document.createElement('h2'); heading.textContent = t('Total recorded'); section.append(heading);
+  const cards = document.createElement('div'); cards.className = 'summary-cards';
+  for (const [key, name] of Object.entries(summaryLabels)) {
+    const value = hasData ? allTimeSummary.totals[key] : null;
+    const card = document.createElement('article'); card.className = 'summary-card';
+    card.style.setProperty('--summary-color', metrics[key === 'solar_to_house' ? 'pv' : key].color);
+    const label = document.createElement('h3'); label.textContent = t(name);
+    const reading = document.createElement('div'); reading.className = 'summary-value';
+    const number = document.createElement('strong'); number.textContent = value?.seconds ? format(value.kwh) : '—';
+    const unit = document.createElement('span'); unit.textContent = ' kWh'; reading.append(number, unit);
+    const coverage = document.createElement('p'); coverage.textContent = loading ? t('Loading…') : hasError ? t('History unavailable.') : value?.seconds
+      ? coverageText(value, allTimeSummary.to - allTimeSummary.from) : t('No report');
+    card.append(label, reading, coverage); cards.append(card);
+  }
+  const note = document.createElement('p'); note.className = 'summary-note';
+  note.textContent = t('Totals since recording began, not inverter lifetime totals. Missing periods are excluded; coverage is shown for each reading.');
+  section.append(cards, note);
+  statusElement.textContent = loading ? t('Loading history…') : hasError ? error : hasData ? t('Recorded energy · kWh') : t('No recorded energy yet.');
+  if (!hasData) return;
+  const header = document.createElement('div'); header.className = 'monthly-heading';
+  const title = document.createElement('h2'); title.id = 'monthly-title'; title.textContent = t('Monthly breakdown');
+  const hint = document.createElement('p'); hint.textContent = t('Select a month to open its graphs. All values in kWh.'); header.append(title, hint);
+  const scroll = document.createElement('div'); scroll.className = 'monthly-scroll'; scroll.tabIndex = 0;
+  scroll.setAttribute('role', 'region'); scroll.setAttribute('aria-label', t('Monthly energy totals. Scroll to see all columns.'));
+  const table = document.createElement('table'); table.className = 'monthly-table';
+  const caption = document.createElement('caption'); caption.textContent = t('Monthly energy totals in kWh'); caption.className = 'visually-hidden'; table.append(caption);
+  const head = document.createElement('thead'); const labels = document.createElement('tr');
+  for (const name of ['Month', ...Object.values(summaryLabels)]) { const cell = document.createElement('th'); cell.scope = 'col'; cell.textContent = t(name); labels.append(cell); }
+  head.append(labels); table.append(head);
+  const body = document.createElement('tbody');
+  const monthFormat = new Intl.DateTimeFormat(window.energyI18n.locale, { timeZone: timezone, month: 'long', year: 'numeric' });
+  function appendValues(row, totals, span) {
+    for (const key of Object.keys(summaryLabels)) {
+      const cell = document.createElement('td'); const value = totals[key];
+      const number = document.createElement('strong'); number.textContent = value.seconds ? format(value.kwh) : '—';
+      const coverage = document.createElement('small'); coverage.textContent = value.seconds ? t('{percent} recorded', { percent: percent(value, span) }) : t('No report');
+      cell.title = coverageText(value, span); cell.append(number, coverage); row.append(cell);
+    }
+  }
+  for (const month of [...allTimeSummary.months].reverse()) {
+    const row = document.createElement('tr'); const cell = document.createElement('th'); cell.scope = 'row';
+    const button = document.createElement('button'); button.type = 'button'; button.className = 'month-link';
+    const name = monthFormat.format(new Date(`${month.month}-01T12:00:00Z`)); button.textContent = name;
+    button.setAttribute('aria-label', t('Open {month} history', { month: name }));
+    const arrow = svgElement('svg', { viewBox: '0 0 24 24', width: 14, height: 14, 'aria-hidden': 'true', fill: 'none', stroke: 'currentColor', 'stroke-width': 1.6 });
+    arrow.append(svgElement('path', { d: 'M5 12h14m-5-5 5 5-5 5' })); button.append(arrow);
+    button.addEventListener('click', () => {
+      dateInput.value = `${month.month}-01`;
+      document.querySelector('[data-period="month"]').click();
+      document.querySelector('[data-period="month"]').focus();
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    });
+    cell.append(button);
+    if (month.month === today().slice(0, 7)) { const current = document.createElement('small'); current.textContent = t('Month in progress'); cell.append(current); }
+    row.append(cell); appendValues(row, month.totals, month.to - month.from); body.append(row);
+  }
+  const foot = document.createElement('tfoot'); const totalRow = document.createElement('tr');
+  const label = document.createElement('th'); label.scope = 'row'; label.textContent = t('Grand total'); totalRow.append(label);
+  appendValues(totalRow, allTimeSummary.totals, allTimeSummary.to - allTimeSummary.from); foot.append(totalRow);
+  table.append(body, foot); scroll.append(table); breakdown.append(header, scroll);
 }
 function historyCutoffs(view, observedAt, now) {
   const present = Math.min(view.to, now);

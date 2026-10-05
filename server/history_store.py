@@ -6,6 +6,7 @@ from contextlib import closing
 from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
+from energy_summary import update_summary
 
 # Generic PV voltage remains in old rows, but only channel voltages are recorded now.
 KEYS = ('grid', 'pv', 'battery', 'soc', 'load', 'grid_voltage',
@@ -72,6 +73,7 @@ def record(payload, runtime):
         intervals = [{'start': max(a, start.timestamp()), 'end': min(b, end.timestamp()), 'state': s}
                      for a, b, s in db.execute('SELECT start,end,state FROM supply_intervals WHERE end>? AND start<? ORDER BY start', (start.timestamp(), end.timestamp()))]
         recorded_from = db.execute('SELECT MIN(start) FROM supply_intervals').fetchone()[0]
+        energy_summary = update_summary(db, days, day, stamp, previous[0] if previous else None)
     points = {}
     for timestamp, key, total, count in rows:
         point = points.setdefault(timestamp, {'t': timestamp, 'values': {}, 'counts': {}})
@@ -80,7 +82,9 @@ def record(payload, runtime):
     destination = runtime / 'history'
     destination.mkdir(exist_ok=True)
     atomic_json(destination / (day + '.json'), {'day': day, 'points': list(points.values()), 'modes': intervals})
-    atomic_json(destination / 'index.json', {'days': days, 'updated_at': stamp, 'mode_recorded_from': recorded_from})
+    atomic_json(destination / 'index.json', {'days': days, 'updated_at': stamp,
+                                           'mode_recorded_from': recorded_from,
+                                           'energy_summary': energy_summary})
 
 
 def atomic_json(path, data):

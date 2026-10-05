@@ -18,6 +18,8 @@ The original installation uses an ANENJI ANJ-HHS-11KW-48V-WIFI inverter and an A
 | `server/test_not_found_ui.cjs`, `server/test_not_found_nginx.py` | Error-page UI checks and isolated Nginx status, routing and logging-privacy checks |
 | `server/export_energy.py` | Read-only Recorder query, validation, live snapshot publication, recording loop |
 | `server/history_store.py` | Deduplication, minute totals/counts, private SQLite and public daily JSON |
+| `server/energy_summary.py` | Versioned derived daily cache, monthly and all-time energy totals |
+| `server/test_energy_summary.py` | Summary integration, cache, timezone, missing-data and browser-parity tests |
 | `server/test_export_energy.py` | Synthetic Recorder tests: freshness, invalid readings, grid composition |
 | `server/test_history_store.py` | History tests: deduplication, averages, signs and missing values |
 | `server/preview_history.py` | Loopback-only synthetic history preview |
@@ -76,7 +78,7 @@ The heartbeat is a device-level freshness check, not proof that every individual
 Only fresh `live`/`partial` reports with a newer heartbeat than the last recorded report are accepted. Each metric stores a sum and count in a UTC minute bucket. `Europe/Athens` determines its calendar day, including daylight-saving transitions.
 
 - Private `runtime/history.sqlite3`: `metadata` checkpoint and `readings` minute/day/metric/total/count rows.
-- Public `runtime/history/index.json`: available day strings and latest recorded timestamp.
+- Public `runtime/history/index.json`: available day strings, latest recorded timestamp and compact `energy_summary` totals.
 - Public `runtime/history/YYYY-MM-DD.json`: `day` and `points`; each point has Unix timestamp `t`, per-metric `values` averages and `counts`.
 
 Missing values are excluded from each metric's denominator. Daily files and the index are atomically replaced individually, not as one multi-file transaction. The private store has no automatic pruning. Monitor disk growth and back it up using a SQLite-consistent method.
@@ -108,6 +110,41 @@ Energy summaries integrate minute-average watts over represented time, dividing 
 - House usage: integrated load power.
 - Battery supplied: integrated `max(0, -battery_power)`; charging is not subtracted from discharge energy.
 - Solar to house: matching intervals of `min(pv, max(0, load - grid - max(0, -battery_power)))`. All four readings must be available. Each interval is bounded by reported PV generation, preventing nighttime measurement residuals from being counted as solar. This remains an estimate and assumes grid charging is disabled; conversion losses, timing differences and estimated entities affect accuracy. Existing recorded data is unchanged; summaries are recalculated when viewed.
+
+### Cumulative energy cache
+
+All time reads `energy_summary` from the existing history index, without loading
+all daily JSON files. The version-1 contract contains `from`/`to` Unix timestamps,
+`totals` for `pv`, `grid`, `load`, `battery`, `solar_to_house`, and ascending `months`
+rows with `month` (`YYYY-MM`), `from`, `to` and the same totals. Every metric stores
+unrounded `kwh` and represented `seconds`. Empty history uses null boundaries and
+no month rows. The browser validates bounds and verifies that monthly totals
+reconcile with the grand total before displaying them.
+
+`energy_daily_summary` is a derived table in private history SQLite, not new raw
+telemetry. On the next accepted fresh report, missing or old-version cached days
+are calculated from minute averages. Subsequent reports recalculate the current
+day and last observed day (to finalize the previous day's partial last minute).
+Older cached days are not scanned again. The small daily summaries are combined
+into monthly and overall totals; changes commit with the normal history record.
+The existing raw day/metric rows and heartbeat deduplication remain unchanged.
+
+Integration matches `energyTotals` in `history.js`: each recorded minute contributes
+at most 60 seconds, clipped at the latest report timestamp. Missing minutes and
+invalid metric values contribute no represented time. Solar-to-house requires all
+four matching readings and is bounded by PV power. No imputation or rounding is
+applied before aggregation. Coverage is represented seconds divided by elapsed
+recording span, not a guarantee of individual-sample completeness or meter accuracy.
+Calendar months use Athens time, including daylight-saving changes. Entirely missing
+months have zero coverage and display No report, not a measured zero.
+
+The first backfill costs a scan of existing raw history. Deploy the helper alongside
+`history_store.py`; an offline exporter cannot publish the new summary until a
+fresh report arrives. A frontend-only update gracefully leaves All time unavailable.
+Back up private SQLite before deployment. If historical raw rows are deliberately
+repaired/imported later, invalidate the corresponding derived cache rows as part
+of that approved maintenance, or bump `SUMMARY_VERSION` when calculation rules
+change. Normal collection does not mutate completed historical days.
 
 Peaks refer to displayed averaged values in the visible range, not guaranteed instantaneous hardware extremes. Multi-series charts intentionally use solid lines and per-series min/max buttons below, avoiding overlapping peak callouts. Selecting a peak inspects its time and temporarily emphasizes that series. Single-series charts can show inline labels. A persisted toggle hides peak indicators.
 

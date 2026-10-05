@@ -4,11 +4,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname, '../history.js'), 'utf8');
-function readFunction(name) {
+function readFunction(name, context = {}) {
   const start = source.indexOf(`function ${name}(`);
   assert.ok(start >= 0, `Missing function: ${name}`);
   const next = source.indexOf('\nfunction ', start + 1);
-  const context = {};
   vm.runInNewContext(source.slice(start, next < 0 ? undefined : next) + `\nresult = ${name};`, context);
   return context.result;
 }
@@ -61,3 +60,63 @@ assert.equal(recordedRange([row(100, {pv: 0}), row(700, {pv: 20})], [], view, 73
 assert.equal(recordedRange([], [{start: 200, end: 800}], view, 900).from, 200);
 assert.equal(recordedRange([row(100, {pv: 0})], [], view, 120).to, 220, 'Very short data keeps a usable two-minute view');
 console.log('Supply timeline grouping and recorded-range regression checks passed.');
+
+const validateEnergySummary = readFunction('validateEnergySummary');
+const energyKeys = ['pv', 'grid', 'load', 'battery', 'solar_to_house'];
+const energyFields = (kwh, seconds) => Object.fromEntries(energyKeys.map(key => [key, {kwh, seconds}]));
+const cumulative = {
+  version: 1, from: 0, to: 120, totals: energyFields(2, 120),
+  months: [{month: '2026-08', from: 0, to: 60, totals: energyFields(1, 60)},
+    {month: '2026-09', from: 60, to: 120, totals: energyFields(1, 60)}]
+};
+assert.equal(validateEnergySummary(cumulative, 120), cumulative);
+const emptyCumulative = {version: 1, from: null, to: null, totals: energyFields(0, 0), months: []};
+assert.equal(validateEnergySummary(emptyCumulative, 0), emptyCumulative);
+assert.throws(() => validateEnergySummary(undefined, 120), 'Old exporters have no summary');
+assert.throws(() => validateEnergySummary(cumulative, 121), 'Snapshot boundaries must agree');
+for (const corrupt of [
+  data => { data.version = 2; },
+  data => { data.totals.pv.kwh = 3; },
+  data => { data.months[0].totals.pv.seconds = 61; },
+  data => { data.months[0].totals.pv.kwh = -1; },
+  data => { data.months[1].month = '2026-08'; },
+  data => { data.months[1].from = 59; },
+  data => { delete data.totals.grid; },
+  data => { data.months[0].totals.pv.kwh = Infinity; }
+]) {
+  const invalid = structuredClone(cumulative);
+  corrupt(invalid);
+  assert.throws(() => validateEnergySummary(invalid, 120));
+}
+console.log('All-time energy response validation checks passed.');
+
+// Small DOM stand-in: empty/error states must never leave old totals visible.
+function renderSummaryState(state) {
+  const elements = [];
+  function element(tag) {
+    const node = {tag, children: [], textContent: '', style: {setProperty() {}},
+      append(...children) { this.children.push(...children); },
+      replaceChildren() { this.children = []; }};
+    elements.push(node);
+    return node;
+  }
+  const sections = Object.fromEntries(['#energy-summary', '#monthly-breakdown', '#range-label'].map(id => [id, element('section')]));
+  const statusElement = element('status');
+  const context = {
+    loading: false, hasError: false, summaryUnavailable: false,
+    allTimeSummary: emptyCumulative, ...state, statusElement,
+    summaryLabels: Object.fromEntries(energyKeys.map(key => [key, key])),
+    metrics: Object.fromEntries(energyKeys.map(key => [key, {color: '#000'}])),
+    window: {energyI18n: {locale: 'en-GB'}}, t: key => key,
+    document: {querySelector: id => sections[id], createElement: element}
+  };
+  readFunction('renderAllTime', context)();
+  assert.equal(sections['#monthly-breakdown'].children.length, 0);
+  assert.equal(elements.filter(node => node.tag === 'strong' && node.textContent === '—').length, 5);
+  return statusElement.textContent;
+}
+assert.equal(renderSummaryState({}), 'No recorded energy yet.');
+assert.equal(renderSummaryState({loading: true}), 'Loading history…');
+assert.equal(renderSummaryState({hasError: true, summaryUnavailable: true}), 'All-time totals are not available yet. Day, week and month still work.');
+assert.equal(renderSummaryState({hasError: true, allTimeSummary: cumulative}), 'History is unavailable. Please try again shortly.');
+console.log('All-time loading, empty, old-exporter and failed-refresh UI checks passed.');

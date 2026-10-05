@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#eff7f6"><title>Energy history · Home</title>
-  <link rel="stylesheet" href="styles.css?v=20261004-language"><link rel="stylesheet" href="history.css?v=20261002-polish">
+  <link rel="stylesheet" href="styles.css?v=20261004-language"><link rel="stylesheet" href="history.css?v=20261005-all-time">
   <link rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2218%22%20fill%3D%22%23284e43%22%2F%3E%3Cpath%20fill%3D%22%23f0f6e9%22%20fill-rule%3D%22evenodd%22%20d%3D%22M10%2029%2030%2011Q32%209%2034%2011L43%2019V15H49V25L55%2030Q57%2032%2054%2032H49V52H15V32H10Q7%2032%2010%2029ZM35%2021%2023%2036Q22%2038%2024%2038H31L28%2048%2042%2032H33Z%22%2F%3E%3C%2Fsvg%3E">
 </head>
 <body class="history-page">
@@ -11,7 +11,7 @@
   <header><a class="brand" href="/" aria-label="Home energy overview"><span class="brand-mark" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="18" fill="#284e43"/><path fill="#f0f6e9" fill-rule="evenodd" d="M10 29 30 11Q32 9 34 11L43 19V15H49V25L55 30Q57 32 54 32H49V52H15V32H10Q7 32 10 29ZM35 21 23 36Q22 38 24 38H31L28 48 42 32H33Z"/></svg></span><span>shin1gamix<span class="brand-sub">HOME ENERGY</span></span></a><nav class="page-nav" aria-label="Main navigation"><a href="/" data-i18n="Overview">Overview</a><a href="history.html" aria-current="page" data-i18n="History">History</a></nav></header>
   <section class="intro"><div><h1>Energy history</h1><p>Your home, over time.</p></div></section>
   <div class="history-navigation">
-  <nav class="periods" aria-label="History period"><button data-period="day" aria-pressed="true">Day</button><button data-period="week" aria-pressed="false">Week</button><button data-period="month" aria-pressed="false">Month</button></nav>
+  <nav class="periods" aria-label="History period"><button data-period="day" aria-pressed="true">Day</button><button data-period="week" aria-pressed="false">Week</button><button data-period="month" aria-pressed="false">Month</button><button data-period="all" aria-pressed="false">All time</button></nav>
   <div class="date-controls"><button id="previous" aria-label="Previous period">‹</button><input id="date-display" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" aria-label="DD/MM/YYYY" maxlength="10"><label class="date-picker">▦<input id="history-date" type="date" aria-label="Choose date"></label><button id="next" aria-label="Next period">›</button><button id="today" type="button">Today</button><span>Athens time</span></div>
   <p id="range-label"></p>
   </div>
@@ -26,11 +26,12 @@
   <label class="peaks-toggle"><input id="show-peaks" type="checkbox" checked><span>Show peaks</span></label>
   </div>
   <div class="history-toolbar"><div><p id="history-status" role="status">Loading history…</p><p id="history-updated"></p></div><button id="refresh-history" type="button">↻ Refresh</button></div>
+  <section id="monthly-breakdown" class="monthly-breakdown" aria-labelledby="monthly-title" hidden></section>
   <nav id="chart-jumps" aria-label="History charts"></nav>
   <button id="fit-history" type="button" data-i18n="Fit recorded time">Fit recorded time</button>
   <section id="charts" aria-label="History charts"></section>
 </main>
-<script src="app.js?v=20261004-language"></script>
-<script src="history.js?v=20261002-polish"></script>
+<script src="app.js?v=20261005-all-time"></script>
+<script src="history.js?v=20261005-all-time"></script>
 </body>
 </html>

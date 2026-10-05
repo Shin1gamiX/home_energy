@@ -134,3 +134,42 @@
   .chart-card { scroll-margin-top: 160px; }
 }
 @media (max-width: 480px) { .mode-plot { grid-template-columns: 78px minmax(0, 1fr); gap: 6px; } .mode-axis { margin-left: 84px; } }
+
+/* All-time energy is a compact summary, not years of minute-level charts. */
+.history-navigation .periods button { min-width: 0; min-height: 40px; font-size: 13px; line-height: 1.3; }
+.all-time-view .history-navigation .date-controls { justify-content: flex-end; }
+.all-time-view .summary-cards { grid-template-columns: repeat(auto-fit, minmax(min(185px, 100%), 1fr)); }
+.all-time-view .summary-value { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px; white-space: nowrap; }
+.all-time-view .summary-value strong { font-size: clamp(21px, 2.5vw, 27px); }
+.all-time-view .summary-card p { font-variant-numeric: tabular-nums; }
+.all-time-view .history-toolbar { margin: 0 0 22px; }
+.monthly-breakdown { margin: 24px 0; min-width: 0; }
+.monthly-heading { margin-bottom: 14px; }
+.monthly-heading h2 { margin: 0 0 7px; font-size: 20px; font-weight: 600; letter-spacing: -.4px; }
+.monthly-heading p { margin: 0; font-size: 13px; line-height: 1.6; color: var(--muted); }
+.monthly-scroll { max-width: 100%; overflow-x: auto; border: 1px solid #dce8e2; border-radius: 16px; background: #fff; }
+.monthly-scroll:focus-visible { outline: 2px solid #32826c; outline-offset: 3px; }
+.monthly-table { width: 100%; min-width: 830px; border-collapse: separate; border-spacing: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.monthly-table .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.monthly-table th, .monthly-table td { padding: 17px 16px; border-bottom: 1px solid #e5ece8; }
+.monthly-table thead th { color: #526b62; font-size: 12px; font-weight: 500; line-height: 1.5; background: #f7faf8; }
+.monthly-table th:first-child { position: sticky; left: 0; z-index: 1; min-width: 168px; text-align: left; background: #fff; border-right: 1px solid #e5ece8; }
+.monthly-table thead th:first-child { background: #f7faf8; }
+.monthly-table td strong { font-size: 15px; font-weight: 600; color: #294b40; }
+.monthly-table small { display: block; margin-top: 5px; color: var(--muted); font-size: 11px; font-weight: 400; line-height: 1.4; white-space: nowrap; }
+.monthly-table tfoot th, .monthly-table tfoot td { background: #edf5f0; border-bottom: 0; font-size: 13px; }
+.monthly-table tfoot th:first-child { background: #edf5f0; }
+.month-link { display: inline-flex; align-items: center; gap: 8px; padding: 5px 0; border: 0; border-radius: 4px; text-align: left; color: #28644e; font-size: 13px; font-weight: 600; }
+.month-link:hover { background: transparent; text-decoration: underline; text-underline-offset: 4px; }
+.month-link svg { flex-shrink: 0; }
+@media (max-width: 700px) {
+  .history-navigation .periods button { padding: 8px 5px; font-size: 12px; }
+  .all-time-view .summary-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: visible; }
+  .all-time-view .summary-card:last-child { grid-column: 1 / -1; }
+  .all-time-view .summary-card { padding: 12px; }
+  .monthly-table th, .monthly-table td { padding: 14px 12px; }
+  .monthly-table th:first-child { min-width: 143px; }
+}
+@media (max-width: 360px) {
+  .all-time-view .summary-cards { grid-template-columns: 1fr; }
+}
