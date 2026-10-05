@@ -37,7 +37,8 @@ let nextRefreshAt = 0;
 let indexPromise;
 let allTimeSummary = null;
 let summaryUnavailable = false;
-const summaryLabels = { pv: 'Solar generated', grid: 'Grid consumed', load: 'House usage', battery: 'Battery supplied', solar_to_house: 'Solar to house' };
+const summaryLabels = { pv: 'Solar generated', grid: 'Grid consumed', load: 'House usage', battery: 'Battery supplied', battery_charged: 'Battery charged', solar_to_house: 'Solar to house' };
+const summaryMetricKeys = { solar_to_house: 'pv', battery_charged: 'soc' };
 const dayCache = new Map();
 let rawRows = [];
 let modeRows = [];
@@ -481,17 +482,18 @@ function render() {
 // Integrate the original minute averages, never the zoomed or smoothed graph.
 // A recorded minute represents up to 60 seconds; missing minutes contribute nothing.
 function energyTotals(rows, from, to, cutoff) {
-  const totals = Object.fromEntries(['pv', 'grid', 'load', 'battery'].map(key => [key, { kwh: 0, seconds: 0 }]));
+  const totals = Object.fromEntries(['pv', 'grid', 'load', 'battery', 'battery_charged'].map(key => [key, { kwh: 0, seconds: 0 }]));
   const solarToHouse = { kwh: 0, seconds: 0 };
   const minutes = new Map(rows.filter(row => Number.isFinite(row.t)).map(row => [row.t, row]));
   for (const row of minutes.values()) {
     const seconds = Math.max(0, Math.min(row.t + 60, to, cutoff) - Math.max(row.t, from));
     if (!seconds) continue;
     for (const key of Object.keys(totals)) {
-      const reading = row.values?.[key];
+      const reading = row.values?.[key === 'battery_charged' ? 'battery' : key];
       if (!Number.isFinite(reading)) continue;
-      // Battery power is negative during discharge; charging must not offset usage.
-      const watts = key === 'battery' ? Math.max(0, -reading) : reading;
+      // Count each direction separately; neither cancels the other out.
+      const watts = key === 'battery' ? Math.max(0, -reading)
+        : key === 'battery_charged' ? Math.max(0, reading) : reading;
       if (!Number.isFinite(watts) || watts < 0) continue;
       totals[key].kwh += watts * seconds / 3600000;
       totals[key].seconds += seconds;
@@ -530,7 +532,7 @@ function renderSummary() {
   const totals = energyTotals(rawRows, range.from, range.to, snapshotTime);
   const format = value => new Intl.NumberFormat(window.energyI18n.locale, { maximumFractionDigits: 2 }).format(value);
   for (const [key, name] of Object.entries(summaryLabels)) {
-    const card = document.createElement('article'); card.className = 'summary-card'; card.style.setProperty('--summary-color', metrics[key === 'solar_to_house' ? 'pv' : key].color);
+    const card = document.createElement('article'); card.className = 'summary-card'; card.style.setProperty('--summary-color', metrics[summaryMetricKeys[key] || key].color);
     const label = document.createElement('h3'); label.textContent = t(name);
     const value = document.createElement('div'); value.className = 'summary-value';
     const number = document.createElement('strong'); number.textContent = !loading && !hasError && totals[key].seconds ? format(totals[key].kwh) : '—';
@@ -540,14 +542,15 @@ function renderSummary() {
     card.append(label, value, coverage); cards.append(card);
   }
   const note = document.createElement('p'); note.className = 'summary-note';
-  note.textContent = t('Estimated from recorded readings only; missing periods are excluded.');
+  note.textContent = `${t('Estimated from recorded readings only; missing periods are excluded.')} ${t('Battery charged: energy into the battery (solar or grid), not remaining capacity.')}`;
   section.append(cards, note);
 }
 // An older exporter can still serve day/week/month while awaiting this feature.
 // Reject inconsistent totals instead of presenting partial results as complete.
 function validateEnergySummary(summary, cutoff) {
   const keys = ['pv', 'grid', 'load', 'battery', 'solar_to_house'];
-  if (!summary || summary.version !== 1 || !Array.isArray(summary.months)) throw new Error('Invalid energy summary');
+  if (!summary || ![1, 2].includes(summary.version) || !Array.isArray(summary.months)) throw new Error('Invalid energy summary');
+  if (summary.version === 2) keys.push('battery_charged');
   const empty = summary.from === null && summary.to === null && summary.months.length === 0;
   if (!empty && (!Number.isFinite(summary.from) || !Number.isFinite(summary.to) || summary.to < summary.from || summary.to !== cutoff)) throw new Error('Invalid summary range');
   function validTotals(totals, span) {
@@ -567,6 +570,11 @@ function validateEnergySummary(summary, cutoff) {
     previousMonth = row.month;
   }
   if (end !== summary.to || keys.some(key => ['kwh', 'seconds'].some(field => Math.abs(sums[key][field] - summary.totals[key][field]) > Math.max(1, summary.totals[key][field]) * 1e-9))) throw new Error('Summary does not reconcile');
+  if (summary.version === 1) {
+    // A legacy cache never proves zero charging. Ignore any unvalidated extra field.
+    return { ...summary, totals: { ...summary.totals, battery_charged: null },
+      months: summary.months.map(row => ({ ...row, totals: { ...row.totals, battery_charged: null } })) };
+  }
   return summary;
 }
 function renderAllTime() {
@@ -588,17 +596,17 @@ function renderAllTime() {
   for (const [key, name] of Object.entries(summaryLabels)) {
     const value = hasData ? allTimeSummary.totals[key] : null;
     const card = document.createElement('article'); card.className = 'summary-card';
-    card.style.setProperty('--summary-color', metrics[key === 'solar_to_house' ? 'pv' : key].color);
+    card.style.setProperty('--summary-color', metrics[summaryMetricKeys[key] || key].color);
     const label = document.createElement('h3'); label.textContent = t(name);
     const reading = document.createElement('div'); reading.className = 'summary-value';
     const number = document.createElement('strong'); number.textContent = value?.seconds ? format(value.kwh) : '—';
     const unit = document.createElement('span'); unit.textContent = ' kWh'; reading.append(number, unit);
     const coverage = document.createElement('p'); coverage.textContent = loading ? t('Loading…') : hasError ? t('History unavailable.') : value?.seconds
-      ? coverageText(value, allTimeSummary.to - allTimeSummary.from) : t('No report');
+      ? coverageText(value, allTimeSummary.to - allTimeSummary.from) : t(hasData && !value ? 'Not available' : 'No report');
     card.append(label, reading, coverage); cards.append(card);
   }
   const note = document.createElement('p'); note.className = 'summary-note';
-  note.textContent = t('Totals since recording began, not inverter lifetime totals. Missing periods are excluded; coverage is shown for each reading.');
+  note.textContent = `${t('Totals since recording began, not inverter lifetime totals. Missing periods are excluded; coverage is shown for each reading.')} ${t('Battery charged: energy into the battery (solar or grid), not remaining capacity.')}`;
   section.append(cards, note);
   statusElement.textContent = loading ? t('Loading history…') : hasError ? error : hasData ? t('Recorded energy · kWh') : t('No recorded energy yet.');
   if (!hasData) return;
@@ -617,9 +625,9 @@ function renderAllTime() {
   function appendValues(row, totals, span) {
     for (const key of Object.keys(summaryLabels)) {
       const cell = document.createElement('td'); const value = totals[key];
-      const number = document.createElement('strong'); number.textContent = value.seconds ? format(value.kwh) : '—';
-      const coverage = document.createElement('small'); coverage.textContent = value.seconds ? t('{percent} recorded', { percent: percent(value, span) }) : t('No report');
-      cell.title = coverageText(value, span); cell.append(number, coverage); row.append(cell);
+      const number = document.createElement('strong'); number.textContent = value?.seconds ? format(value.kwh) : '—';
+      const coverage = document.createElement('small'); coverage.textContent = value?.seconds ? t('{percent} recorded', { percent: percent(value, span) }) : t(value ? 'No report' : 'Not available');
+      cell.title = value ? coverageText(value, span) : t('Not available'); cell.append(number, coverage); row.append(cell);
     }
   }
   for (const month of [...allTimeSummary.months].reverse()) {

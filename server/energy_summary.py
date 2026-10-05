@@ -9,8 +9,8 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 ATHENS = ZoneInfo('Europe/Athens')
-SUMMARY_VERSION = 1
-ENERGY_KEYS = ('pv', 'grid', 'load', 'battery', 'solar_to_house')
+SUMMARY_VERSION = 2
+ENERGY_KEYS = ('pv', 'grid', 'load', 'battery', 'battery_charged', 'solar_to_house')
 
 
 def empty_totals():
@@ -32,10 +32,16 @@ def summarize_points(points, cutoff):
             continue
         values = row.get('values', {})
         for key in ENERGY_KEYS[:-1]:
-            reading = values.get(key)
+            reading = values.get('battery' if key == 'battery_charged' else key)
             if not finite(reading):
                 continue
-            watts = max(0, -reading) if key == 'battery' else reading
+            # Split the signed minute average into separate energy directions.
+            if key == 'battery':
+                watts = max(0, -reading)
+            elif key == 'battery_charged':
+                watts = max(0, reading)
+            else:
+                watts = reading
             if watts < 0:
                 continue
             totals[key]['kwh'] += watts * seconds / 3_600_000

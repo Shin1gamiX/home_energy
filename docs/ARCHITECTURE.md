@@ -116,23 +116,33 @@ Energy summaries integrate minute-average watts over represented time, dividing 
 - Grid consumed: integrated estimated grid import.
 - House usage: integrated load power.
 - Battery supplied: integrated `max(0, -battery_power)`; charging is not subtracted from discharge energy.
+- Battery charged: integrated `max(0, battery_power)`, using the same signed readings and coverage as Battery supplied. It includes charging from any source, not just solar, and is not remaining capacity or an estimate of losses. Zero battery power is recorded coverage; missing/nonfinite power is not. Because each direction is split after minute averaging, charge/discharge reversals within one minute can undercount both directions.
 - Solar to house: matching intervals of `min(pv, max(0, load - grid - max(0, -battery_power)))`. All four readings must be available. Each interval is bounded by reported PV generation, preventing nighttime measurement residuals from being counted as solar. This remains an estimate and assumes grid charging is disabled; conversion losses, timing differences and estimated entities affect accuracy. Existing recorded data is unchanged; summaries are recalculated when viewed.
 
 ### Cumulative energy cache
 
 All time reads `energy_summary` from the existing history index, without loading
-all daily JSON files. The version-1 contract contains `from`/`to` Unix timestamps,
-`totals` for `pv`, `grid`, `load`, `battery`, `solar_to_house`, and ascending `months`
+all daily JSON files. The version-2 contract contains `from`/`to` Unix timestamps,
+`totals` for `pv`, `grid`, `load`, `battery`, `battery_charged`, `solar_to_house`, and ascending `months`
 rows with `month` (`YYYY-MM`), `from`, `to` and the same totals. Every metric stores
 unrounded `kwh` and represented `seconds`. Empty history uses null boundaries and
 no month rows. The browser validates bounds and verifies that monthly totals
 reconcile with the grand total before displaying them.
 
+The frontend also accepts version 1 during an upgrade: its five existing totals
+remain visible, while Battery charged displays an em dash and "Not available".
+Version 2 requires charging totals in every month and in the grand total, with
+the same finite-value, coverage and reconciliation checks as other metrics.
+Deploy the compatible frontend before upgrading the summary backend. Old browser
+tabs need a reload after the backend version changes.
+
 `energy_daily_summary` is a derived table in private history SQLite, not new raw
 telemetry. On the next accepted fresh report, missing or old-version cached days
 are calculated from minute averages. Subsequent reports recalculate the current
 day and last observed day (to finalize the previous day's partial last minute).
-Older cached days are not scanned again. The small daily summaries are combined
+The version-2 upgrade rebuilds old derived caches on the next fresh report to
+recover charging energy from existing signed battery readings; raw history is
+not modified. Afterwards, older cached days are not scanned again. The small daily summaries are combined
 into monthly and overall totals; changes commit with the normal history record.
 The existing raw day/metric rows and heartbeat deduplication remain unchanged.
 

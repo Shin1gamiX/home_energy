@@ -8,7 +8,7 @@ from contextlib import closing
 from datetime import datetime
 from pathlib import Path
 
-from energy_summary import ATHENS, ENERGY_KEYS, combine_days, summarize_points, update_summary
+from energy_summary import ATHENS, ENERGY_KEYS, SUMMARY_VERSION, combine_days, summarize_points, update_summary
 from history_store import record
 
 
@@ -55,6 +55,7 @@ process.stdout.write(JSON.stringify(context.energyTotals(input.rows, 0, input.cu
         total = summarize_points(rows, 150)['totals']
         self.assertEqual(total['pv'], {'kwh': .03, 'seconds': 90})
         self.assertAlmostEqual(total['battery']['kwh'], 200 / 60_000)
+        self.assertEqual(total['battery_charged'], {'kwh': .0025, 'seconds': 90})
         self.assertAlmostEqual(total['solar_to_house']['kwh'], (600 * 60 + 800 * 30) / 3_600_000)
         self.assertEqual(total['solar_to_house']['seconds'], 90)
         self.assertEqual(summarize_points(rows + [rows[0]], 150)['totals'], total)
@@ -66,9 +67,43 @@ process.stdout.write(JSON.stringify(context.energyTotals(input.rows, 0, input.cu
         self.assertEqual(result['pv'], {'kwh': 0, 'seconds': 60})
         self.assertEqual(result['grid']['seconds'], 60)
         self.assertEqual(result['battery'], {'kwh': 0, 'seconds': 60})
+        self.assertEqual(result['battery_charged'], {'kwh': 0, 'seconds': 60})
         self.assertEqual(result['solar_to_house'], {'kwh': 0, 'seconds': 60})
         self.assertEqual(result['load']['seconds'], 120)
         self.assertEqual(summarize_points([], 0)['from'], None)
+
+    def test_charging_is_separate_from_discharge_and_source(self):
+        rows = [{'t': 0, 'values': {'pv': 0, 'grid': 1000, 'battery': 600}},
+                {'t': 60, 'values': {'battery': -600}},
+                {'t': 120, 'values': {'battery': 0}},
+                {'t': 180, 'values': {'battery': None}},
+                {'t': 240, 'values': {'battery': float('inf')}},
+                {'t': 300, 'values': {}}]
+        result = summarize_points(rows, 360)['totals']
+        self.assertEqual(result['battery_charged'], {'kwh': .01, 'seconds': 180})
+        self.assertEqual(result['battery'], {'kwh': .01, 'seconds': 180})
+        self.assertEqual(summarize_points([{'t': 0, 'values': {}}], 60)['totals']['battery_charged'],
+                         {'kwh': 0, 'seconds': 0})
+
+    def test_version_one_cache_rebuilds_charging_without_changing_raw_history(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runtime = Path(directory)
+            first = stamp(2026, 9, 1, 12)
+            record({'status': 'live', 'updated_at': first, 'values': {'battery': 600}}, runtime)
+            record({'status': 'live', 'updated_at': first + 60, 'values': {'battery': -300}}, runtime)
+            with closing(sqlite3.connect(runtime / 'history.sqlite3')) as db, db:
+                raw_before = db.execute("SELECT * FROM readings WHERE day='2026-09-01'").fetchall()
+                legacy = json.loads(db.execute('SELECT totals FROM energy_daily_summary').fetchone()[0])
+                legacy.pop('battery_charged')
+                db.execute('UPDATE energy_daily_summary SET version=1, totals=?', (json.dumps(legacy),))
+            record({'status': 'live', 'updated_at': stamp(2026, 9, 2, 12), 'values': {'pv': 0}}, runtime)
+            summary = json.loads((runtime / 'history/index.json').read_text())['energy_summary']
+            self.assertEqual(summary['version'], SUMMARY_VERSION)
+            self.assertEqual(summary['totals']['battery_charged'], {'kwh': .01, 'seconds': 120})
+            self.assertEqual(summary['totals']['battery'], {'kwh': .005, 'seconds': 120})
+            with closing(sqlite3.connect(runtime / 'history.sqlite3')) as db:
+                self.assertEqual(raw_before, db.execute("SELECT * FROM readings WHERE day='2026-09-01'").fetchall())
+                self.assertEqual({row[0] for row in db.execute('SELECT version FROM energy_daily_summary')}, {SUMMARY_VERSION})
 
     def test_cache_backfills_and_finalizes_previous_month(self):
         with tempfile.TemporaryDirectory() as directory:

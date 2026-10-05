@@ -157,7 +157,7 @@ Start with this README and [ARCHITECTURE.md](docs/ARCHITECTURE.md), then inspect
 ## All-time energy
 
 History's **All time** option shows recorded Solar generated, Grid consumed,
-House usage, Battery supplied and Solar to house in kWh. It includes the recording
+House usage, Battery supplied, Battery charged and Solar to house in kWh. It includes the recording
 date span, coverage for each reading, monthly totals and a grand total. Select a
 month to open its existing graphs; Today returns to the current day.
 Recorded duration uses days plus remaining hours (for example, `5 d - 21.2 h`),
@@ -171,12 +171,24 @@ a rounding fraction. Monthly rows include completely missing months and mark the
 current month as in progress. The solar aggregate is counted once; PV1 and PV2
 are not added on top of it.
 
+**Battery charged** counts positive recorded battery power; **Battery supplied**
+counts negative power as positive discharge energy. Neither offsets the other.
+Charging can come from solar or grid; this card is not remaining battery capacity
+and does not measure losses. Both use minute averages, so reversals within a minute
+can undercount charge/discharge throughput. Daily, weekly and monthly summaries
+calculate both from existing history; all-time totals use the derived cache.
+
 On the first fresh report after installing the backend update, the exporter
 builds a derived daily cache from existing private history SQLite rows and adds
 compact monthly totals to the existing public `history/index.json`. All time does
 not fetch every daily history file. No additional service, route or dependency is
 required. Until that summary exists, the UI explains that it is unavailable;
-Day, Week and Month continue to work. See [the cache contract](docs/ARCHITECTURE.md#cumulative-energy-cache).
+Day, Week and Month continue to work. With a version-1 summary, existing totals
+still work and Battery charged is shown as unavailable rather than zero. The
+version-2 backend rebuilds old derived caches from saved readings on the next
+fresh report, without altering raw history. Deploy the compatible frontend first
+and reload older browser tabs after the backend update. See
+[the cache contract](docs/ARCHITECTURE.md#cumulative-energy-cache).
 
 ## Supply-mode history
 
