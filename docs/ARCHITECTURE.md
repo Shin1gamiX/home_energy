@@ -14,6 +14,7 @@ The original installation uses an ANENJI ANJ-HHS-11KW-48V-WIFI inverter and an A
 | `app.js` | Overview translations, fetch/presentation, freshness, mode and animation |
 | `history.html`, `history.css` | History controls and chart layout |
 | `history.js` | History fetch, aggregation, summaries, SVG charts, zoom, shared cursor, peaks, translations |
+| `history-calendar.js`, `server/test_history_calendar.cjs` | Accessible date picker and tests for recorded-date availability, calendar arithmetic, keyboard focus and selection |
 | `404.html`, `404.css`, `404.js` | Standalone translated not-found page; no telemetry or control requests |
 | `server/test_not_found_ui.cjs`, `server/test_not_found_nginx.py` | Error-page UI checks and isolated Nginx status, routing and logging-privacy checks |
 | `server/export_energy.py` | Read-only Recorder query, validation, live snapshot publication, recording loop |
@@ -26,6 +27,12 @@ The original installation uses an ANENJI ANJ-HHS-11KW-48V-WIFI inverter and an A
 | `deploy/*.example` | Sanitized manual deployment templates, not active configuration |
 
 No build pipeline is required. Generated data belongs outside the public source tree and outside Git. Legacy one-time activation scripts and outdated deployment notes are intentionally excluded.
+
+The history calendar highlights dates from the existing `history/index.json` day list.
+A highlight means at least one reading exists (including zero values), not complete
+daily coverage or a positive kWh total. Availability follows the history snapshot and
+updates on refresh; a failed index request is shown as unknown, never as no readings.
+Date selection preserves the current day/week/month view and uses Athens dates.
 
 ## Source entities
 

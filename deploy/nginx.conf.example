@@ -46,6 +46,7 @@ server {
     location = /app.js { try_files $uri =404; }
     location = /history.html { try_files $uri =404; }
     location = /history.js { try_files $uri =404; }
+    location = /history-calendar.js { try_files $uri =404; }
     location = /history.css { try_files $uri =404; }
     location ~ "^/history/(index|[0-9]{4}-[0-9]{2}-[0-9]{2})\.json$" {
         root /var/www/homeenergy/runtime;

@@ -78,8 +78,10 @@ Open `http://127.0.0.1:8766/history.html` and select **All time**. Run only one 
 python3 -B -m unittest discover -s server -p 'test_*.py' -v
 node --check app.js
 node --check history.js
+node --check history-calendar.js
 node server/test_overview.cjs
 node server/test_history_ui.cjs
+node server/test_history_calendar.cjs
 node server/test_language_picker.cjs
 node server/test_not_found_ui.cjs
 python3 -B -m unittest discover -s server -p 'test_not_found_nginx.py' -v
@@ -93,7 +95,7 @@ The intended backend target is Linux. On Windows, Python may lack IANA timezone 
 
 These are manual preparation steps, not an automated installer. Review examples for your host before applying them.
 
-1. Place `index.html`, `styles.css`, `app.js`, `history.html`, `history.css`, `history.js`, `404.html`, `404.css` and `404.js` in `/var/www/homeenergy/public/`. The optional restart dialog has separate [deployment instructions](docs/CONTROL.md).
+1. Place `index.html`, `styles.css`, `app.js`, `history.html`, `history.css`, `history.js`, `history-calendar.js`, `404.html`, `404.css` and `404.js` in `/var/www/homeenergy/public/`. The optional restart dialog has separate [deployment instructions](docs/CONTROL.md).
 2. Place `server/export_energy.py`, `server/history_store.py` and `server/energy_summary.py` in `/var/www/homeenergy/server/`.
 3. Create `/var/www/homeenergy/runtime/`, writable by a dedicated exporter account, e.g. `homeenergy`. Keep scripts and public source non-writable by that account where practical.
 4. Set the environment values below and verify every entity suffix in `FIELDS`, plus `grid_to_battery_power`, `inverter_time` and `operating_mode`.

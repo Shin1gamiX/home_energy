@@ -54,6 +54,12 @@ let range;
 let requestId = 0;
 let loading = false;
 let hasError = false;
+const historyCalendar = new window.HistoryCalendar({
+  trigger: document.querySelector('#open-calendar'),
+  dialog: document.querySelector('#history-calendar'),
+  input: dateInput, t, locale: () => window.energyI18n.locale, today,
+  onSelect: day => { dateInput.value = day; load(); },
+});
 const peaksToggle = document.querySelector('#show-peaks');
 try { peaksToggle.checked = localStorage.getItem('homeenergy-show-peaks') !== 'false'; } catch {}
 
@@ -187,7 +193,12 @@ async function json(url) {
 }
 async function load({ refresh = false } = {}) {
   const id = ++requestId;
-  if (refresh) { indexPromise = undefined; dayCache.clear(); }
+  historyCalendar.close();
+  if (refresh) {
+    indexPromise = undefined; dayCache.clear();
+    historyCalendar.setAvailability(null, 'loading');
+  }
+  let indexReady = false;
   const previousRange = range;
   range = getRange();
   dateDisplay.value = dateInput.value.split('-').reverse().join('/');
@@ -213,6 +224,8 @@ async function load({ refresh = false } = {}) {
     const { data: index, observedAt } = await indexPromise;
     if (id !== requestId) return;
     if (!Array.isArray(index.days)) throw new Error('Invalid history');
+    historyCalendar.setAvailability(index.days);
+    indexReady = true;
     if (period === 'all') {
       summaryUnavailable = !index.energy_summary;
       allTimeSummary = validateEnergySummary(index.energy_summary, index.updated_at);
@@ -223,7 +236,7 @@ async function load({ refresh = false } = {}) {
       render();
       return;
     }
-    const days = [...new Set(index.days)].filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d) && d >= current.start && d < current.end);
+    const days = [...historyCalendar.recordedDays].filter(d => d >= current.start && d < current.end);
     const files = await Promise.all(days.map(day => {
       if (!dayCache.has(day)) dayCache.set(day, json(`/history/${day}.json`).catch(error => { dayCache.delete(day); throw error; }));
       return dayCache.get(day);
@@ -240,6 +253,7 @@ async function load({ refresh = false } = {}) {
     render();
   } catch {
     if (id !== requestId) return;
+    if (!indexReady) historyCalendar.setAvailability(null, 'error');
     loading = false;
     hasError = true;
     statusElement.textContent = t('History is unavailable. Please try again shortly.');
@@ -913,7 +927,6 @@ document.querySelector('#today').addEventListener('click', () => {
 });
 dateInput.max = today(); dateInput.value = today();
 dateInput.addEventListener('change', () => { if (dateInput.validity.valid && dateInput.value) load(); });
-dateInput.addEventListener('click', () => { if (dateInput.showPicker) dateInput.showPicker(); });
 function applyDisplayedDate() {
   const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(dateDisplay.value);
   const iso = match ? `${match[3]}-${match[2]}-${match[1]}` : '';
