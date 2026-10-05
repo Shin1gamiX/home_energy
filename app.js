@@ -1,9 +1,4 @@
 // Pure presentation logic. Routing is estimated, not independently metered.
-window.energyFlowDuration = watts => {
-  // Speed (not duration) scales linearly from 1x at 300 W to 3x at 2 kW.
-  const fraction = Number.isFinite(watts) ? Math.max(0, Math.min(1, (watts - 300) / 1700)) : 0;
-  return 3 / (1 + 2 * fraction);
-};
 window.energyFlowState = (values, mode) => {
   const positive = value => Number.isFinite(value) && value >= 0.5;
   const valid = key => Number.isFinite(values[key]);
@@ -35,6 +30,385 @@ window.energySupplyLabel = values => {
   const largest = Object.keys(sources).sort((a, b) => sources[b] - sources[a])[0];
   return sources[largest] > 0 ? largest : 'Unknown supply';
 };
+
+// Self-contained SVG presentation engine: no extra public route or dependency.
+window.energyComets = (() => {
+  const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
+  const wrap = (value, length) => ((value % length) + length) % length;
+  const mix = (a, b, t) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+
+  function roundedOutline({ x, y, width, height, radius }) {
+    const r = clamp(radius, 0, Math.min(width, height) / 2);
+    const segments = [];
+    const line = (a, b) => segments.push({ length: Math.hypot(b.x - a.x, b.y - a.y), point: t => mix(a, b, t) });
+    const arc = (cx, cy, angle) => segments.push({ length: Math.PI * r / 2,
+      point: t => ({ x: cx + r * Math.cos(angle + t * Math.PI / 2), y: cy + r * Math.sin(angle + t * Math.PI / 2) }) });
+    line({ x: x + r, y }, { x: x + width - r, y });
+    arc(x + width - r, y + r, -Math.PI / 2);
+    line({ x: x + width, y: y + r }, { x: x + width, y: y + height - r });
+    arc(x + width - r, y + height - r, 0);
+    line({ x: x + width - r, y: y + height }, { x: x + r, y: y + height });
+    arc(x + r, y + height - r, Math.PI / 2);
+    line({ x, y: y + height - r }, { x, y: y + r });
+    arc(x + r, y + r, Math.PI);
+    const length = segments.reduce((sum, segment) => sum + segment.length, 0);
+    function point(distance) {
+      let rest = wrap(distance, length);
+      for (const segment of segments) {
+        if (rest <= segment.length) return segment.point(segment.length ? rest / segment.length : 0);
+        rest -= segment.length;
+      }
+      return segments[0].point(0);
+    }
+    function port(side, fraction = .5) {
+      const horizontal = width - 2 * r, vertical = height - 2 * r, corner = Math.PI * r / 2;
+      const px = clamp(width * fraction - r, 0, horizontal);
+      const py = clamp(height * fraction - r, 0, vertical);
+      const distance = { top: px, right: horizontal + corner + py,
+        bottom: horizontal + 2 * corner + vertical + horizontal - px,
+        left: 2 * horizontal + 3 * corner + vertical + vertical - py }[side];
+      if (!Number.isFinite(distance)) throw new Error('Unknown connection side');
+      return { ...point(distance), distance };
+    }
+    return { length, point, port };
+  }
+
+  function borderBranches(outline, port, isSource) {
+    const half = outline.length / 2;
+    const start = isSource ? port.distance + half : port.distance;
+    return [1, -1].map(direction => ({ length: half,
+      point: distance => outline.point(start + direction * clamp(distance, 0, half)) }));
+  }
+
+  // Arc-length sampling keeps the head speed even through curves and rounded corners.
+  function sampleCurve(pointAt, count = 160) {
+    const points = Array.from({ length: count + 1 }, (_, i) => pointAt(i / count));
+    const distances = [0];
+    for (let i = 1; i < points.length; i++) distances.push(distances[i - 1] + Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y));
+    const length = distances.at(-1);
+    function point(distance) {
+      const target = clamp(distance, 0, length);
+      let lo = 1, hi = distances.length - 1;
+      while (lo < hi) { const mid = (lo + hi) >> 1; if (distances[mid] < target) lo = mid + 1; else hi = mid; }
+      const span = distances[lo] - distances[lo - 1];
+      return mix(points[lo - 1], points[lo], span ? (target - distances[lo - 1]) / span : 0);
+    }
+    return { length, point };
+  }
+
+  function cubic(a, b, c, d) {
+    return sampleCurve(t => {
+      const u = 1 - t;
+      return { x: u ** 3 * a.x + 3 * u ** 2 * t * b.x + 3 * u * t ** 2 * c.x + t ** 3 * d.x,
+        y: u ** 3 * a.y + 3 * u ** 2 * t * b.y + 3 * u * t ** 2 * c.y + t ** 3 * d.y };
+    });
+  }
+
+  function pathData(curve, from = 0, to = curve.length, count = 80) {
+    return Array.from({ length: count + 1 }, (_, index) => {
+      const p = curve.point(from + (to - from) * index / count);
+      return `${index ? 'L' : 'M'}${p.x.toFixed(2)} ${p.y.toFixed(2)}`;
+    }).join(' ');
+  }
+
+  function timings(linkLength) {
+    // Power changes launch frequency, not an individual comet's speed.
+    // Cross long connections quickly while keeping short transfers visible.
+    const gather = .8;
+    const travel = clamp(linkLength / 450, .4, 1.2);
+    const spread = gather;
+    const fade = .35, rest = .45;
+    return { gather, travel, spread, fade, rest, total: gather + travel + spread + fade + rest };
+  }
+
+  function cadence(watts, timing) {
+    const beams = !Number.isFinite(watts) || watts <= 0 ? 0 : watts < 300 ? 1 : watts <= 1000 ? 2 : 3;
+    return { beams, tier: ['off', 'slow', 'medium', 'fast'][beams], interval: beams ? timing.total / beams : 0 };
+  }
+
+  function beamStateAt(time, timing, index, beams) {
+    if (!Number.isInteger(beams) || beams < 1 || beams > 3 || index < 0 || index >= beams) {
+      return { phase: 'waiting', progress: 0 };
+    }
+    // Each reusable slot starts one interval later and repeats only after its
+    // complete cycle. This bounds concurrency without accumulating particles.
+    const elapsed = time - index * timing.total / beams;
+    return elapsed < 0 ? { phase: 'waiting', progress: 0 }
+      : { ...phaseAt(elapsed, timing), cycle: Math.floor(elapsed / timing.total) };
+  }
+
+  // One uninterrupted border pass per card. Overlapping requests join that pass;
+  // they are not queued or replayed after it, which avoids a permanently busy rim.
+  class BorderPassCoalescer {
+    constructor() { this.reset(); }
+    reset() { this.owners = new Map(); this.seen = new Set(); }
+    select(requests) {
+      const current = new Map(requests.map(request => [request.id, request]));
+      for (const [box, id] of this.owners) if (!current.has(id)) this.owners.delete(box);
+      for (const request of requests) {
+        if (!this.seen.has(request.id) && !this.owners.has(request.box)) this.owners.set(request.box, request.id);
+      }
+      this.seen = new Set(current.keys());
+      return new Map([...this.owners].map(([box,id]) => [box,current.get(id)]));
+    }
+  }
+
+  function phaseAt(time, timing) {
+    let local = wrap(time, timing.total);
+    for (const phase of ['gather', 'travel', 'spread', 'fade', 'rest']) {
+      if (local < timing[phase]) return { phase, progress: local / timing[phase] };
+      local -= timing[phase];
+    }
+    return { phase: 'rest', progress: 0 };
+  }
+
+  function create(scene) {
+    const element = (tag, attributes = {}) => {
+      const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
+      for (const [key, value] of Object.entries(attributes)) node.setAttribute(key, value);
+      return node;
+    };
+    const media = matchMedia('(prefers-reduced-motion: reduce)');
+    const svg = element('svg', { class: 'energy-connections comet-layer', 'aria-hidden': 'true' });
+    const definitions = element('defs');
+    const glow = element('filter', { id: 'comet-soft-glow', x: '-50%', y: '-50%', width: '200%', height: '200%' });
+    glow.append(element('feGaussianBlur', { stdDeviation: '1.6' }));
+    definitions.append(glow); svg.append(definitions); scene.append(svg);
+    const routes = {
+      gridHouse: { from: 'grid', to: 'load', color: '#8861ba', exit: 'bottom', entry: 'top' },
+      batteryHouse: { from: 'battery', to: 'load', color: '#169779', exit: 'left', entry: 'right' },
+      solarBattery: { from: 'solar', to: 'battery', color: '#bc8116', exit: 'bottom', entry: 'top' },
+      solarHouse: { from: 'solar', to: 'load', color: '#bc8116', exit: 'left', entry: 'right' },
+    };
+    const cards = Object.fromEntries(['grid', 'solar', 'battery', 'load'].map(name => [name, scene.querySelector(`.${name}-label`)]));
+    const borderEffects = new Map(), borderPasses = new BorderPassCoalescer();
+    let active = [], wattsByRoute = {}, enabled = false, disposed = false;
+    let seconds = 0, previous = null, frame = null, layoutFrame = null, layoutSignature = '';
+
+    class Comet {
+      constructor(parent, color, small = false) {
+        this.small = small;
+        this.intensity = small ? .45 : 1;
+        this.group = element('g', { class: `comet-particle ${small ? 'comet-border' : 'comet-transfer'}` });
+        this.halo = element('path', { class:'comet-trail', stroke:color, 'stroke-width':small ? 4 : 9, opacity:small ? '.12' : '.3', filter:'url(#comet-soft-glow)' });
+        this.parts = Array.from({length:18}, (_, i) => element('path', { class:'comet-trail', stroke:color,
+          'stroke-width':(.35 + (small ? 1.3 : 2.8) * (i + 1) / 18).toFixed(2), opacity:(.08 + .88 * (i + 1) / 18).toFixed(2) }));
+        this.head = element('circle', { r:small ? 1.3 : 3, fill:small ? color : '#f5fffb', stroke:color, 'stroke-width':small ? '.8' : '1.5' });
+        this.color = color;
+        this.group.append(this.halo, ...this.parts, this.head); parent.append(this.group);
+      }
+      hide() { this.group.style.display = 'none'; }
+      setColor(color) {
+        if (this.color === color) return;
+        this.color = color;
+        [this.halo,...this.parts,this.head].forEach(node=>node.setAttribute('stroke',color));
+        if (this.small) this.head.setAttribute('fill',color);
+      }
+      draw(curve, progress, tail = 46, opacity = 1) {
+        this.group.style.display = ''; this.group.style.opacity = opacity * this.intensity;
+        const end = Math.min(curve.length, Math.max(0, progress) * curve.length);
+        const start = Math.max(0, end - Math.min(tail, curve.length * .75));
+        this.halo.setAttribute('d', pathData(curve, start, end, 20));
+        this.parts.forEach((part, i) => part.setAttribute('d', pathData(curve, start + (end-start) * i/18, start + (end-start) * (i+1)/18, 3)));
+        const p = curve.point(end); this.head.setAttribute('cx', p.x); this.head.setAttribute('cy', p.y);
+      }
+    }
+
+
+    function card(name, bounds) {
+      const node = cards[name], box = node.getBoundingClientRect();
+      const inset = 2.3;
+      return { x:box.left-bounds.left-inset, y:box.top-bounds.top-inset,
+        width:box.width+2*inset, height:box.height+2*inset,
+        radius:parseFloat(getComputedStyle(node).borderTopLeftRadius)+inset };
+    }
+
+    function buildRoute(key, watts, index, bounds) {
+      const route = routes[key], fromBox = card(route.from, bounds), toBox = card(route.to, bounds);
+      const from = roundedOutline(fromBox), to = roundedOutline(toBox);
+      const a = from.port(route.exit, key === 'solarHouse' ? .8 : .5);
+      const b = to.port(route.entry, key === 'solarHouse' ? .25 : .5);
+      let link;
+      if (route.exit === 'bottom') {
+        const gap = Math.max(0, b.y-a.y);
+        link = cubic(a, {x:a.x,y:a.y+gap*.45}, {x:b.x,y:b.y-gap*.45}, b);
+      } else if (key === 'solarHouse') {
+        // Follow the gap between the two rows, instead of cutting through the roof.
+        const aisle = Math.max(a.y+20, Math.min(toBox.y-16, fromBox.y+fromBox.height+22));
+        link = cubic(a, {x:a.x-60,y:aisle}, {x:b.x+45,y:aisle}, b);
+      } else {
+        const width = a.x-b.x;
+        const low = Math.min(bounds.height-43, Math.max(a.y,b.y)+35);
+        link = cubic(a, {x:a.x-width*.3,y:low}, {x:b.x+width*.3,y:low}, b);
+      }
+      const group = element('g', { 'data-comet-route':key, 'data-watts':watts });
+      group.style.setProperty('--comet-color', route.color);
+      const track = element('path', { class:'comet-track', stroke:route.color, d:pathData(link) });
+      group.append(track);
+      for (const p of [a,b]) group.append(element('circle', { class:'comet-port', cx:p.x, cy:p.y, r:'2' }));
+      const source = borderBranches(from,a,true), target = borderBranches(to,b,false);
+      const timing = timings(link.length), schedule = cadence(watts, timing);
+      const beams = Array.from({length:schedule.beams}, (_, index) => {
+        const node = element('g', { 'data-beam':index });
+        group.append(node);
+        return { node, comet:new Comet(node,route.color) };
+      });
+      svg.append(group);
+      group.dataset.cycle = timing.total.toFixed(3);
+      group.dataset.tier = schedule.tier;
+      group.dataset.beamLimit = schedule.beams;
+      group.dataset.launchInterval = schedule.interval.toFixed(3);
+      group.dataset.linkLength = link.length.toFixed(2);
+      group.dataset.gatherSeconds = timing.gather;
+      group.dataset.travelSeconds = timing.travel.toFixed(3);
+      group.dataset.spreadSeconds = timing.spread;
+      return { key, from:route.from, to:route.to, color:route.color, group, link, source, target, beams, timing, schedule, delay:index*.7 };
+    }
+
+
+    function clearParticles() {
+      for (const route of active) {
+        for (const beam of route.beams) { beam.comet.hide(); beam.node.dataset.phase = 'stopped'; }
+        route.group.dataset.activeBeams = '0';
+      }
+      for (const effect of borderEffects.values()) {
+        effect.movers.forEach(mover => mover.hide());
+        effect.node.dataset.active = 'false';
+      }
+      borderPasses.reset();
+    }
+
+    function draw() {
+      if (!enabled || media.matches) { clearParticles(); return; }
+      const requests = [];
+      for (const route of active) {
+        const phases = [];
+        route.beams.forEach(({ comet, node }, index) => {
+          comet.hide();
+          const state = beamStateAt(seconds - route.delay, route.timing, index, route.schedule.beams);
+          node.dataset.phase = state.phase;
+          phases.push(state.phase);
+          const event = `${route.key}:${index}:${state.cycle}`;
+          if (state.phase === 'gather') requests.push({
+            id: `${event}:source`, box: route.from, color: route.color,
+            paths: route.source, phase: 'gather', progress: state.progress, opacity: Math.min(1, state.progress * 8),
+          });
+          if (state.phase === 'travel') comet.draw(route.link, state.progress, 60);
+          if (state.phase === 'spread' || state.phase === 'fade') requests.push({
+            id: `${event}:target`, box: route.to, color: route.color, paths: route.target, phase: state.phase,
+            progress: state.phase === 'fade' ? 1 : state.progress, opacity: state.phase === 'fade' ? 1 - state.progress : 1,
+          });
+        });
+        route.group.dataset.phase = phases.join(',');
+        route.group.dataset.activeBeams = phases.filter(phase => ['gather', 'travel', 'spread', 'fade'].includes(phase)).length;
+      }
+      const selected = borderPasses.select(requests);
+      for (const [box, effect] of borderEffects) {
+        effect.movers.forEach(mover => mover.hide());
+        const request = selected.get(box);
+        effect.node.dataset.active = String(Boolean(request));
+        effect.node.dataset.phase = request?.phase || 'idle';
+        if (!request) continue;
+        effect.movers.forEach((mover, index) => {
+          mover.setColor(request.color);
+          mover.draw(request.paths[index], request.progress, 30, request.opacity);
+        });
+      }
+    }
+
+    function cancelFrame() {
+      if (frame !== null) cancelAnimationFrame(frame);
+      frame = null; previous = null;
+    }
+    function requestFrame() {
+      const running = enabled && !media.matches && !document.hidden && active.length > 0 && !disposed;
+      svg.dataset.motion = !enabled ? 'stopped' : media.matches ? 'reduced' : document.hidden ? 'hidden' : running ? 'running' : 'idle';
+      if (running && frame === null) frame = requestAnimationFrame(tick);
+    }
+    function tick(timestamp) {
+      frame = null;
+      if (previous !== null) seconds += Math.min(.1, Math.max(0, (timestamp - previous) / 1000));
+      previous = timestamp;
+      draw(); requestFrame();
+    }
+    function updateMotion() {
+      cancelFrame();
+      clearParticles();
+      // Resume from a clean gather, never halfway through a stale transfer.
+      seconds = 0;
+      svg.style.display = enabled ? '' : 'none';
+      draw(); requestFrame();
+    }
+
+    function layout() {
+      layoutFrame = null;
+      if (disposed) return;
+      const bounds = scene.getBoundingClientRect();
+      if (!bounds.width || !bounds.height) return;
+      const keys = Object.keys(routes).filter(key => wattsByRoute[key] >= .5);
+      const signature = JSON.stringify([bounds.width, bounds.height,
+        Object.keys(cards).map(name => card(name, bounds)),
+        keys.map(key => [key, cadence(wattsByRoute[key], timings(0)).beams])]);
+      // Polling/translation updates must not restart a cycle unless geometry or
+      // routing actually changed. Watt changes within a tier only update metadata.
+      if (signature === layoutSignature) {
+        active.forEach(route => { route.group.dataset.watts = wattsByRoute[route.key]; });
+        return;
+      }
+      layoutSignature = signature;
+      cancelFrame(); clearParticles();
+      active.forEach(route => route.group.remove());
+      borderEffects.forEach(effect => effect.node.remove()); borderEffects.clear();
+      svg.setAttribute('viewBox', `0 0 ${bounds.width} ${bounds.height}`);
+      active = keys.map((key, index) => buildRoute(key, wattsByRoute[key], index, bounds));
+      for (const box of new Set(active.flatMap(route => [route.from, route.to]))) {
+        const node = element('g', { 'data-border-box': box, 'data-active': 'false' });
+        svg.append(node);
+        borderEffects.set(box, { node, movers: [new Comet(node, '#169779', true), new Comet(node, '#169779', true)] });
+      }
+      seconds = 0;
+      draw(); requestFrame();
+    }
+    function scheduleLayout() {
+      if (!disposed && layoutFrame === null) layoutFrame = requestAnimationFrame(layout);
+    }
+    function visibilityChanged() {
+      cancelFrame();
+      requestFrame();
+    }
+    const observer = new ResizeObserver(scheduleLayout);
+    observer.observe(scene);
+    Object.values(cards).forEach(node => observer.observe(node));
+    media.addEventListener('change', updateMotion);
+    document.addEventListener('visibilitychange', visibilityChanged);
+    updateMotion();
+
+    return {
+      setState(state) {
+        wattsByRoute = Object.fromEntries(Object.keys(routes).map(key => [
+          key, state.routes[key] && Number.isFinite(state.routeWatts[key]) ? Math.max(0, state.routeWatts[key]) : 0,
+        ]));
+        scheduleLayout();
+      },
+      setEnabled(value) {
+        const next = Boolean(value);
+        if (next === enabled || disposed) return;
+        enabled = next;
+        updateMotion();
+      },
+      destroy() {
+        disposed = true;
+        cancelFrame();
+        if (layoutFrame !== null) cancelAnimationFrame(layoutFrame);
+        observer.disconnect();
+        media.removeEventListener('change', updateMotion);
+        document.removeEventListener('visibilitychange', visibilityChanged);
+        svg.remove();
+      },
+    };
+  }
+  return { roundedOutline, borderBranches, cubic, pathData, timings, cadence, beamStateAt, phaseAt, BorderPassCoalescer, create };
+})();
 
 // Shared localization is also used by the history page.
 window.energyI18n = (() => {
@@ -446,50 +820,7 @@ for (const [name, d] of Object.entries(icons)) {
     icon.append(svgElement('path', { d })); holder.replaceChildren(icon);
   });
 }
-const flowSvg = svgElement('svg', { class: 'energy-connections', 'aria-hidden': 'true' });
-const flowDefinitions = {
-  gridHouse: ['grid', 'load', '#8861ba'],
-  solarHouse: ['solar', 'load', '#c48a15'],
-  batteryHouse: ['battery', 'load', '#169779'],
-  solarBattery: ['solar', 'battery', '#c48a15'],
-};
-const flowGroups = {};
-for (const [key, [, , color]] of Object.entries(flowDefinitions)) {
-  const group = svgElement('g', { 'data-route': key, stroke: color, fill: 'none' });
-  group.append(svgElement('path', { class: 'connection-line' }), svgElement('path', { class: 'connection-dots' }), svgElement('path', { class: 'connection-arrow', d: 'M-8 -4 0 0-8 4' }));
-  group.style.display = 'none'; flowGroups[key] = group; flowSvg.append(group);
-}
-scene.append(flowSvg);
-let layoutFrame = null;
-function scheduleFlowLayout() {
-  if (layoutFrame !== null) return;
-  layoutFrame = requestAnimationFrame(() => {
-    layoutFrame = null;
-    const bounds = scene.getBoundingClientRect();
-    flowSvg.setAttribute('viewBox', `0 0 ${bounds.width} ${bounds.height}`);
-    function rect(name) {
-      const box = document.querySelector(`.${name}-label`).getBoundingClientRect();
-      return { x: box.left - bounds.left + box.width / 2, y: box.top - bounds.top + box.height / 2, w: box.width, h: box.height };
-    }
-    for (const [key, [source, target]] of Object.entries(flowDefinitions)) {
-      const a = rect(source), b = rect(target);
-      const dx = b.x - a.x, dy = b.y - a.y;
-      const length = Math.hypot(dx, dy);
-      if (!length) continue;
-      // Intersect the center-to-center ray with each card's rectangle, plus a small gap.
-      const edge = box => Math.min(dx ? box.w / 2 / Math.abs(dx) : Infinity, dy ? box.h / 2 / Math.abs(dy) : Infinity) + 5 / length;
-      const start = edge(a), end = 1 - edge(b);
-      const x1 = a.x + dx * start, y1 = a.y + dy * start;
-      const x2 = a.x + dx * end, y2 = a.y + dy * end;
-      const d = `M${x1} ${y1}L${x2} ${y2}`;
-      flowGroups[key].querySelectorAll('.connection-line,.connection-dots').forEach(path => path.setAttribute('d', d));
-      flowGroups[key].querySelector('.connection-arrow').setAttribute('transform', `translate(${x2} ${y2}) rotate(${Math.atan2(dy, dx) * 180 / Math.PI})`);
-    }
-  });
-}
-const flowResize = new ResizeObserver(scheduleFlowLayout);
-flowResize.observe(scene);
-document.querySelectorAll('.scene-label').forEach(box => flowResize.observe(box));
+const flowAnimation = window.energyComets.create(scene);
 let paused = false;
 const pauseButton = document.querySelector('#pause');
 pauseButton.hidden = !demo;
@@ -548,20 +879,18 @@ function render(sample) {
   document.querySelectorAll('#charge-bar, .scene-charge-bar').forEach(element => { element.style.width = `${Math.max(0, Math.min(100, sample.soc ?? 0))}%`; });
   document.querySelector('#grid-state').textContent = t(Number.isFinite(values.grid) ? 'Estimated' : 'Estimate unavailable');
   document.querySelectorAll('.metric:not(.battery) .meter').forEach(element => { element.hidden = true; });
-  for (const [key, active] of Object.entries(state.routes)) {
-    flowGroups[key].style.display = active ? '' : 'none';
-    flowGroups[key].style.setProperty('--flow-duration', `${window.energyFlowDuration(state.routeWatts[key])}s`);
-  }
-  scheduleFlowLayout();
+  flowAnimation.setState(state);
   if (demo) {
     document.querySelector('#operating-mode').textContent = t(window.energyModeLabel(mode));
     document.body.dataset.connection = 'live';
+    flowAnimation.setEnabled(!document.body.classList.contains('paused'));
   }
   if (demo) document.querySelector('#freshness').textContent = `Sample updated ${new Date().toLocaleTimeString()}`;
 }
 pauseButton.addEventListener('click', () => {
   paused = !paused;
   document.body.classList.toggle('paused', paused);
+  flowAnimation.setEnabled(!paused);
   pauseButton.textContent = paused ? 'Resume demo' : 'Pause demo';
   document.querySelector('#scene-status').textContent = paused ? 'Sample flow paused' : 'Sample energy flow';
   if (paused) document.querySelector('#freshness').textContent = 'Sample updates paused';
@@ -598,6 +927,7 @@ function updateStatus() {
   connectionAlert.hidden = !communicationLost;
   document.body.dataset.connection = status;
   document.body.classList.toggle('paused', status !== 'live');
+  flowAnimation.setEnabled(status === 'live');
   document.querySelector('.demo').lastChild.textContent = ` ${t(labels[status])}`;
   document.querySelector('#scene-status').textContent = t(labels[status]);
   document.querySelector('.demo').style.display = status === 'live' || communicationLost ? 'none' : '';

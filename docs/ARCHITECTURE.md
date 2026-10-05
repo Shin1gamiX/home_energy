@@ -80,6 +80,31 @@ The overview polls every five seconds while visible. This does not increase the 
 
 The heartbeat is a device-level freshness check, not proof that every individual entity updated at the same instant. A publish filesystem failure can stop the exporter; systemd restarts it, so inspect logs and disk permissions for repeated failures.
 
+## Overview flow animation
+
+The dependency-free `energyComets` engine in `app.js` draws decorative SVG paths
+between measured card borders. It uses the existing estimated route watts; it
+does not change data collection, source attribution or inverter settings.
+Source-border trails gather for 0.8 seconds, a bright comet crosses the connection
+in 0.4–1.2 seconds (length / 450, clamped), then receiver-border trails spread for
+0.8 seconds, fade for 0.35 seconds and rest for 0.45 seconds. There are no arrows.
+
+Positive flow below 300 W permits one cycle; 300–1000 W permits two; above 1000 W
+permits three. Launch spacing is the full cycle duration divided by this count,
+not a change to travel speed. The existing 0.5 W visibility threshold still applies.
+Each card has at most one uninterrupted pair of border trails: overlapping
+requests join the current pass and are never queued or replayed. Border trails
+are deliberately fainter than travelling comets so readings remain the focus.
+
+Repeated polls within the same tier preserve animation progress. Route, tier or
+card-geometry changes rebuild the effect. A single requestAnimationFrame loop
+runs only with live, visible, active flows. Stale/offline/partial reports hide
+the effect; hidden tabs suspend the loop; reduced motion leaves static tracks.
+ResizeObserver keeps paths attached after responsive layout or language changes.
+`server/test_comets.cjs` covers geometry, timing, coalescing and renderer lifecycle
+without a browser or network. Deployment requires only the existing `app.js`,
+`styles.css` and cache-versioned `index.html` routes; no Nginx/service change.
+
 ## History storage and contracts
 
 Only fresh `live`/`partial` reports with a newer heartbeat than the last recorded report are accepted. Each metric stores a sum and count in a UTC minute bucket. `Europe/Athens` determines its calendar day, including daylight-saving transitions.

@@ -80,6 +80,7 @@ node --check app.js
 node --check history.js
 node --check history-calendar.js
 node server/test_overview.cjs
+node server/test_comets.cjs
 node server/test_history_ui.cjs
 node server/test_history_calendar.cjs
 node server/test_language_picker.cjs

@@ -53,6 +53,40 @@ above about blue grid, always-visible summary cards and a fixed two-row header.
 - Node regressions cover routing, power-dependent flow speed, inverter/source distinction, energy residual bounds, cached snapshot boundaries, rounded axes, timeline grouping and fit bounds. All 15 existing Python backend tests pass.
 - Production deployment is frontend-only: no collector, Home Assistant or inverter configuration changes. Public files must be hash-checked against the release and the public pages checked again after upload.
 
+## Comet animation release QA (06/10/2026)
+
+This frontend-only release replaces the old dots/arrows and power-dependent
+travel speed. The approved effect uses faint, shared card-border passes and
+bright travelling comets; power controls one/two/three staggered cycles instead.
+See [the timing and lifecycle contract](ARCHITECTURE.md#overview-flow-animation).
+
+- Node checks passed for geometry, tier boundaries, complete cycles, shared-border
+  arbitration, same-tier polling, route/geometry rebuilding, bounded SVG/RAF
+  state, non-live shutdown, hidden tabs, reduced motion and disposal.
+- Existing overview, history, calendar, language-menu and 404 UI regressions passed.
+- In-app Chromium: 72 local layout checks across 320, 390, 430, 540, 768 and 1280
+  CSS-pixel widths, English/Russian/Greek and all four built-in power scenarios
+  found no overlapping cards, card-content overflow or horizontal page overflow.
+- A loopback-only synthetic API exercised the actual production fetch/render path:
+  low/medium/fast boundaries, idle, partial, stale, failed requests and recovery.
+  No real collector/control requests were used for these simulations.
+- Emulated reduced motion showed static tracks and no particles. Renderer tests
+  also verified that it leaves no pending animation frame.
+- Both production HTTPS hostnames served matching release hashes and retained
+  security/cache headers, history availability and fresh telemetry. The private
+  collector-status route still returned HTTP 404.
+- The live overview showed the new battery-to-house effect without arrows or
+  browser errors; phone-size rendering had no horizontal overflow. Live history
+  loaded its summaries and five chart groups without browser errors.
+- Deployment changed only `app.js`, `styles.css` and `index.html`. Hash checks
+  confirmed history, backend, Nginx and control files unchanged. Nginx, exporter
+  and control-service PIDs/restart counts were unchanged; no device restart.
+
+Animation visuals were checked in Chromium, not on physical iOS/Android devices.
+Solar/charging paths were verified with synthetic data; the live system was
+supplying the house from the battery during deployment. A server-side rollback
+backup of all three replaced files was retained outside the public directory.
+
 ## Limitations
 
 Routing indicates estimates, not independently measured branch power. Solar to
@@ -60,5 +94,5 @@ battery assumes grid charging is disabled. Waiting-to-charge is a presentation
 rule using the owner's 40% return threshold, not a confirmed BMS status.
 Synthetic solar/discharge scenarios test rendering, not physical inverter
 behavior. Browser testing used Chromium through the in-app browser, not physical
-iOS/Android devices. Reduced-motion handling is provided by the existing global
-CSS animation override; it was not tested on a physical reduced-motion device.
+iOS/Android devices. Reduced motion uses both CSS and the comet engine's media
+query listener; it was not tested on a physical reduced-motion device.
