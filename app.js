@@ -226,10 +226,16 @@ window.energyComets = (() => {
     function buildRoute(key, watts, index, bounds) {
       const route = routes[key], fromBox = card(route.from, bounds), toBox = card(route.to, bounds);
       const from = roundedOutline(fromBox), to = roundedOutline(toBox);
-      const a = from.port(route.exit, key === 'solarHouse' ? .8 : .5);
-      const b = to.port(route.entry, key === 'solarHouse' ? .25 : .5);
+      const narrowBattery = key === 'batteryHouse' && window.innerWidth <= 700;
+      // On phones use the shared vertical overlap: a short, level connection
+      // instead of sagging below two almost-touching cards.
+      const sharedY = (Math.max(fromBox.y, toBox.y) + Math.min(fromBox.y + fromBox.height, toBox.y + toBox.height)) / 2;
+      const a = from.port(route.exit, narrowBattery ? (sharedY - fromBox.y) / fromBox.height : key === 'solarHouse' ? .8 : .5);
+      const b = to.port(route.entry, narrowBattery ? (sharedY - toBox.y) / toBox.height : key === 'solarHouse' ? .25 : .5);
       let link;
-      if (route.exit === 'bottom') {
+      if (narrowBattery) {
+        link = cubic(a, mix(a, b, 1 / 3), mix(a, b, 2 / 3), b);
+      } else if (route.exit === 'bottom') {
         const gap = Math.max(0, b.y-a.y);
         link = cubic(a, {x:a.x,y:a.y+gap*.45}, {x:b.x,y:b.y-gap*.45}, b);
       } else if (key === 'solarHouse') {

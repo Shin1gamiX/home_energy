@@ -101,6 +101,9 @@ card-geometry changes rebuild the effect. A single requestAnimationFrame loop
 runs only with live, visible, active flows. Stale/offline/partial reports hide
 the effect; hidden tabs suspend the loop; reduced motion leaves static tracks.
 ResizeObserver keeps paths attached after responsive layout or language changes.
+At viewport widths up to 700px, Battery-to-House ports share a level line within
+the cards' overlapping vertical span, avoiding the sagging curve in a narrow gap.
+The desktop route is unchanged.
 `server/test_comets.cjs` covers geometry, timing, coalescing and renderer lifecycle
 without a browser or network. Deployment requires only the existing `app.js`,
 `styles.css` and cache-versioned `index.html` routes; no Nginx/service change.
