@@ -48,6 +48,8 @@ let summaryUnavailable = false;
 const summaryLabels = { pv: 'Solar generated', grid: 'Grid consumed', load: 'House usage', battery: 'Battery supplied', battery_charged: 'Battery charged', solar_to_house: 'Solar to house' };
 const summaryMetricKeys = { solar_to_house: 'pv', battery_charged: 'soc' };
 const dayCache = new Map();
+let aggregationCache = { rows: null, from: null, to: null, steps: new Map() };
+let summaryCache = null;
 let rawRows = [];
 let modeRows = [];
 let modeRecordedFrom = null;
@@ -309,6 +311,29 @@ function chartScale(minimum, maximum) {
   const ticks = Array.from({ length: last - first + 1 }, (_, i) => Number(((first + i) * step).toPrecision(12)));
   return { low: ticks[0], high: ticks[ticks.length - 1], ticks };
 }
+function aggregatedRows(step) {
+  if (aggregationCache.rows !== rawRows || aggregationCache.from !== range.from || aggregationCache.to !== range.to) {
+    aggregationCache = { rows: rawRows, from: range.from, to: range.to, steps: new Map() };
+  }
+  if (!aggregationCache.steps.has(step)) aggregationCache.steps.set(step, aggregate(rawRows, step));
+  return aggregationCache.steps.get(step);
+}
+function summaryTotals() {
+  if (!summaryCache || summaryCache.rows !== rawRows || summaryCache.from !== range.from
+      || summaryCache.to !== range.to || summaryCache.cutoff !== snapshotTime) {
+    summaryCache = { rows: rawRows, from: range.from, to: range.to, cutoff: snapshotTime,
+      totals: energyTotals(rawRows, range.from, range.to, snapshotTime) };
+  }
+  return summaryCache.totals;
+}
+// Dense series already have a path through every sample. Keep a dot for sparse
+// views and isolated readings, which an SVG move command alone cannot show.
+function needsSampleMarker(rows, index, key, step) {
+  if (rows.length < 10) return true;
+  const linked = neighbour => neighbour && Number.isFinite(neighbour.values[key])
+    && Math.abs(neighbour.t - rows[index].t) <= step;
+  return !linked(rows[index - 1]) && !linked(rows[index + 1]);
+}
 function render() {
   const allTime = period === 'all';
   document.body.classList.toggle('all-time-view', allTime);
@@ -329,7 +354,7 @@ function render() {
   // Align the visible range to complete averaging intervals, including after zoom.
   const view = { from: Math.max(range.from, Math.floor(requestedView.from / step) * step), to: Math.min(range.to, Math.ceil(requestedView.to / step) * step) };
   const span = view.to - view.from;
-  points = aggregate(rawRows, step).filter(p => p.t >= view.from && p.t < view.to);
+  points = aggregatedRows(step).filter(p => p.t >= view.from && p.t < view.to);
   if (loading) statusElement.textContent = t('Loading history…');
   else if (hasError) statusElement.textContent = t('History is unavailable. Please try again shortly.');
   else statusElement.textContent = points.length ? step === 3600 ? t('Hourly averages') : step === 60 ? t('1-minute averages') : t('{n}-minute averages', { n: step / 60 }) : t('No readings for this period.');
@@ -343,6 +368,7 @@ function render() {
   }
   if (showMode) renderModeTimeline(container, view);
   const inspectors = [];
+  const byTime = new Map(points.map(p => [p.t, p]));
   function inspectTogether(timestamp) {
     inspectedTime = Math.max(view.from, Math.min(view.to - step, Math.floor(timestamp / step) * step));
     for (const update of inspectors) update(inspectedTime);
@@ -406,10 +432,12 @@ function render() {
     for (const key of keys) {
       const series = svgElement('g', { 'data-series': key });
       let path = '', previous = null;
-      for (const p of points) {
+      for (const [index, p] of points.entries()) {
         if (!Number.isFinite(p.values[key])) { previous = null; continue; }
         path += `${previous !== null && p.t - previous <= step ? 'L' : 'M'}${x(p.t)},${y(p.values[key])} `;
-        series.append(svgElement('circle', { cx: x(p.t), cy: y(p.values[key]), r: points.length < 10 ? 2.5 : 0.8, fill: metrics[key].color }));
+        if (needsSampleMarker(points, index, key, step)) {
+          series.append(svgElement('circle', { cx: x(p.t), cy: y(p.values[key]), r: 2.5, fill: metrics[key].color }));
+        }
         previous = p.t;
       }
       series.append(svgElement('path', { d: path, fill: 'none', stroke: metrics[key].color, 'stroke-width': 2, 'stroke-linejoin': 'round' }));
@@ -422,7 +450,11 @@ function render() {
     tip.className = 'chart-tip';
     tip.setAttribute('aria-live', 'polite');
     tip.textContent = t(loading ? 'Loading…' : hasError ? 'History unavailable.' : points.length ? 'Hover or touch the chart to inspect an interval.' : 'No data collected in this period.');
-    const byTime = new Map(points.map(p => [p.t, p]));
+    const inspectionMarkers = new Map(keys.map(key => {
+      const marker = svgElement('circle', { r: 3, fill: metrics[key].color, class: 'inspection-dot', visibility: 'hidden', 'pointer-events': 'none' });
+      svg.querySelector(`[data-series="${key}"]`).append(marker);
+      return [key, marker];
+    }));
     let active = points.length ? points[points.length - 1].t : view.from;
     function updateInspection(t) {
       active = Math.max(view.from, Math.min(view.to - step, Math.floor(t / step) * step));
@@ -432,8 +464,12 @@ function render() {
       time.textContent = `${dateFormat.format(active * 1000)} · ${timeFormat.format(active * 1000)} – ${timeFormat.format((active + step) * 1000)}`;
       tip.append(time);
       for (const key of keys) {
+        const value = byTime.get(active)?.values[key];
+        const marker = inspectionMarkers.get(key);
+        marker.setAttribute('visibility', Number.isFinite(value) ? 'visible' : 'hidden');
+        if (Number.isFinite(value)) { marker.setAttribute('cx', x(active)); marker.setAttribute('cy', y(value)); }
         const item = document.createElement('span'); item.className = 'tip-value'; item.style.setProperty('--series', metrics[key].color);
-        item.textContent = `${metrics[key].label}: ${display(byTime.get(active)?.values[key], key)}`;
+        item.textContent = `${metrics[key].label}: ${display(value, key)}`;
         tip.append(item);
       }
     }
@@ -543,7 +579,7 @@ function renderSummary() {
   const cards = document.createElement('div'); cards.className = 'summary-cards';
   cards.tabIndex = 0;
   cards.setAttribute('aria-label', t('Energy summaries. Scroll to see more.'));
-  const totals = energyTotals(rawRows, range.from, range.to, snapshotTime);
+  const totals = summaryTotals();
   const format = value => new Intl.NumberFormat(window.energyI18n.locale, { maximumFractionDigits: 2 }).format(value);
   for (const [key, name] of Object.entries(summaryLabels)) {
     const card = document.createElement('article'); card.className = 'summary-card'; card.style.setProperty('--summary-color', metrics[summaryMetricKeys[key] || key].color);

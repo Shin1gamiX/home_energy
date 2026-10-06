@@ -86,6 +86,7 @@ node server/test_comets.cjs
 node server/test_theme.cjs
 node server/test_history_theme.cjs
 node server/test_history_ui.cjs
+node server/test_history_performance.cjs
 node server/test_history_calendar.cjs
 node server/test_language_picker.cjs
 node server/test_not_found_ui.cjs
@@ -113,6 +114,13 @@ When upgrading an existing strict-allowlist Nginx deployment, enable the exact
 `/theme.js` and `/theme.css` routes from the example before activating the new
 HTML. Keep the existing security headers and private API restrictions unchanged.
 The theme files are shared by all three pages, including nested 404 URLs.
+
+### History rendering performance
+
+History draws the same line through every averaged reading, with dots only for
+sparse views, isolated samples, inspection and peaks. It reuses computed numeric
+averages and energy totals when changing appearance or filters. Raw readings,
+gaps, mode timestamps, calculations and zoom precision are unchanged.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
