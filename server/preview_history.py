@@ -2,11 +2,12 @@
 import json
 import hashlib
 import math
+import re
 from functools import lru_cache
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from datetime import datetime, timedelta
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 from energy_summary import ATHENS, combine_days, summarize_points
 
@@ -69,13 +70,26 @@ def preview_body(day, cutoff):
     return body, '"' + hashlib.sha256(body).hexdigest() + '"'
 
 
+CACHEABLE_ASSETS = {'styles.css', 'app.js', 'theme.js', 'theme.css', 'history.js',
+                    'history-cache.js', 'history-calendar.js', 'history.css', '404.css', '404.js'}
+
+
 class Preview(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
 
     def end_headers(self):
-        self.send_header('Cache-Control', 'no-store')
+        parsed = urlsplit(self.path)
+        version = parse_qs(parsed.query).get('v', [''])[0]
+        versioned_asset = parsed.path[1:] in CACHEABLE_ASSETS and re.fullmatch(r'[A-Za-z0-9_-]+', version)
+        self.send_header('Cache-Control', 'public, max-age=31536000, immutable'
+                         if versioned_asset and getattr(self, 'response_status', 0) in (200, 304)
+                         else 'no-store, max-age=0')
         super().end_headers()
+
+    def send_response(self, code, message=None):
+        self.response_status = code
+        super().send_response(code, message)
 
     def do_GET(self):
         now = datetime.now(ATHENS)

@@ -140,9 +140,15 @@ Within one page, navigation reuses its loaded snapshot as before. Refresh still
 requires five minutes and is never automatic. All time still uses the small index
 summary without downloading daily files.
 
-Enable the exact `/history-cache.js` route before publishing the updated History
-HTML. The local preview simulates conditional daily responses, but is not proof
-of Nginx/CDN behaviour. No service worker or dependency is added.
+For a future production rollout, enable the exact `/history-cache.js` route before
+publishing the updated History HTML. The Nginx example's `map` belongs in `http {}`
+and sets a one-year immutable cache only for successful versioned public JS/CSS.
+**Every changed asset must receive a new `?v=` value in all referencing HTML.**
+HTML, JSON, errors and control routes remain `no-store`; security headers stay at
+server scope. Merge this into the existing configuration, validate with `nginx -t`
+and check response headers on both hostnames; do not overwrite private controls.
+The local history helper simulates asset caching and conditional daily responses,
+but is not proof of Nginx/CDN behaviour. No service worker or dependency is added.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |

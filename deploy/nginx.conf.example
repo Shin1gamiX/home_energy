@@ -1,3 +1,11 @@
+# This file is included inside http {}. Cache only successful, explicitly
+# versioned public assets. HTML, JSON, errors and every control route stay no-store.
+# Keep Cache-Control at server scope so location blocks retain ALL security headers.
+map "$status:$uri:$arg_v" $homeenergy_cache_control {
+    default "no-store, max-age=0";
+    "~^(200|304):/(styles\.css|app\.js|theme\.js|theme\.css|history\.js|history-cache\.js|history-calendar\.js|history\.css|404\.css|404\.js):[A-Za-z0-9_-]+$" "public, max-age=31536000, immutable";
+}
+
 server {
     listen 80;
     listen [::]:80;
@@ -20,7 +28,7 @@ server {
     add_header Referrer-Policy no-referrer always;
     add_header X-Frame-Options DENY always;
     add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'" always;
-    add_header Cache-Control "no-store, max-age=0" always;
+    add_header Cache-Control $homeenergy_cache_control always;
 
     # BEGIN Home Energy not found
     error_page 404 /404.html;

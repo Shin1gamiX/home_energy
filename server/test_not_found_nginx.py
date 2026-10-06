@@ -28,6 +28,12 @@ def not_found_block():
     return source[source.index(start):source.index(end) + len(end)]
 
 
+def cache_map():
+    source = (ROOT / 'deploy/nginx.conf.example').read_text(encoding='utf-8')
+    start = source.index('map ')
+    return source[start:source.index('\n}', start) + 2]
+
+
 @unittest.skipUnless(NGINX, "An existing Nginx installation is required")
 class NotFoundNginxTests(unittest.TestCase):
     @classmethod
@@ -37,7 +43,7 @@ class NotFoundNginxTests(unittest.TestCase):
         cls.directory = pathlib.Path(cls.temp.name)
         public = cls.directory / "public"
         public.mkdir()
-        for name in ("404.html", "404.css", "404.js", "styles.css"):
+        for name in ("404.html", "404.css", "404.js", "styles.css", "history-cache.js"):
             shutil.copyfile(ROOT / name, public / name)
         cls.page = (public / "404.html").read_bytes()
         with socket.socket() as probe:
@@ -51,18 +57,20 @@ class NotFoundNginxTests(unittest.TestCase):
             f'error_log "{cls.directory / "error.log"}" notice;\n'
             'events { worker_connections 32; }\nhttp {\n'
             'types { text/html html; text/css css; application/javascript js; }\n'
+            + cache_map() + '\n'
             f'access_log "{cls.access_log}";\n'
             'server {\n'
             f'listen 127.0.0.1:{cls.port};\nroot "{public}";\n'
             'server_tokens off;\n'
             'add_header X-Content-Type-Options nosniff always;\n'
-            'add_header Cache-Control "no-store, max-age=0" always;\n'
+            'add_header Cache-Control $homeenergy_cache_control always;\n'
             'add_header Content-Security-Policy "default-src \'self\'; '
             'script-src \'self\'; object-src \'none\'; base-uri \'none\'" always;\n'
             + not_found_block() + '\n'
             'location = / { return 200 "overview fixture"; }\n'
             'location = /history.html { return 200 "history fixture"; }\n'
             'location = /styles.css { try_files $uri =404; }\n'
+            'location = /history-cache.js { try_files $uri =404; }\n'
             'location = /api/collector/status { access_log off; return 404; }\n'
             '# A sentinel, never a real proxy or device action.\n'
             'location = /api/collector/restart { return 418 "control sentinel"; }\n'
@@ -97,10 +105,10 @@ class NotFoundNginxTests(unittest.TestCase):
         cls.process.stderr.close()
 
     @classmethod
-    def request(cls, path, method="GET"):
+    def request(cls, path, method="GET", headers=None):
         connection = http.client.HTTPConnection("127.0.0.1", cls.port, timeout=3)
         try:
-            connection.request(method, path)
+            connection.request(method, path, headers=headers or {})
             response = connection.getresponse()
             return response.status, dict(response.getheaders()), response.read()
         finally:
@@ -151,6 +159,28 @@ class NotFoundNginxTests(unittest.TestCase):
         self.assertEqual(self.request("/")[0], 200)
         self.assertEqual(self.request("/history.html")[0], 200)
         self.assertEqual(self.request("/api/collector/restart", "POST")[0], 418)
+
+    def test_only_versioned_assets_are_cached_with_security_headers(self):
+        for path in ('/styles.css?v=release-1', '/404.js?v=release-2', '/history-cache.js?v=release-3'):
+            status, headers, _ = self.request(path)
+            self.assertEqual(status, 200)
+            self.assertIn('immutable', headers['Cache-Control'])
+            self.assertEqual(headers['X-Content-Type-Options'], 'nosniff')
+            self.assertIn("script-src 'self'", headers['Content-Security-Policy'])
+        for path in ('/styles.css', '/history.html?v=release-1', '/missing?v=release-1',
+                     '/api/collector/status?v=release-1', '/api/collector/restart?v=release-1'):
+            _, headers, _ = self.request(path)
+            self.assertIn('no-store', headers['Cache-Control'])
+
+    def test_conditional_assets_keep_cache_policy_and_security_headers(self):
+        for path in ('/styles.css?v=release-1', '/styles.css'):
+            _, original, _ = self.request(path)
+            status, headers, body = self.request(path, headers={'If-None-Match': original['ETag']})
+            self.assertEqual(status, 304)
+            self.assertEqual(body, b'')
+            self.assertEqual(headers['Cache-Control'], original['Cache-Control'])
+            self.assertEqual(headers['X-Content-Type-Options'], 'nosniff')
+            self.assertIn("script-src 'self'", headers['Content-Security-Policy'])
 
     def test_error_redirect_does_not_reintroduce_status_access_logging(self):
         self.request("/api/collector/status?unique-private-status-marker=not-logged")
