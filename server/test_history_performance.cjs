@@ -42,3 +42,12 @@ assert.equal(context.aggregatedRows(60).length, 1);
 assert.equal(context.aggregatedRows(60)[0].values.pv, 500);
 assert.equal(context.summaryTotals().pv.seconds, 0, 'Range and cutoff remain independent');
 console.log('History rendering: dense/sparse/isolated markers, weighted aggregation reuse and summary invalidation passed.');
+
+const fallback = { window: {}, json: url => url };
+vm.createContext(fallback);
+vm.runInContext(functionSource('createHistoryDataCache'), fallback);
+assert.equal(fallback.createHistoryDataCache().get('2026-10-05'), '/history/2026-10-05.json');
+assert.doesNotThrow(() => fallback.createHistoryDataCache().invalidate());
+fallback.window.HistoryDataCache = class {};
+assert.ok(fallback.createHistoryDataCache() instanceof fallback.window.HistoryDataCache);
+console.log('History remains available when older HTML has not loaded the optional cache helper.');

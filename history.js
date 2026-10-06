@@ -47,7 +47,7 @@ let allTimeSummary = null;
 let summaryUnavailable = false;
 const summaryLabels = { pv: 'Solar generated', grid: 'Grid consumed', load: 'House usage', battery: 'Battery supplied', battery_charged: 'Battery charged', solar_to_house: 'Solar to house' };
 const summaryMetricKeys = { solar_to_house: 'pv', battery_charged: 'soc' };
-const dayCache = new Map();
+const historyData = createHistoryDataCache();
 let aggregationCache = { rows: null, from: null, to: null, steps: new Map() };
 let summaryCache = null;
 let rawRows = [];
@@ -208,11 +208,18 @@ async function json(url) {
   if (!response.ok) throw new Error('History unavailable');
   return response.json();
 }
+function createHistoryDataCache() {
+  if (window.HistoryDataCache) return new window.HistoryDataCache();
+  // Older open HTML may request the updated script during deployment without
+  // the new helper. Persistence is optional; ordinary network loading still works.
+  return { get: day => json(`/history/${day}.json`), invalidate() {} };
+}
 async function load({ refresh = false } = {}) {
   const id = ++requestId;
   historyCalendar.close();
   if (refresh) {
-    indexPromise = undefined; dayCache.clear();
+    indexPromise = undefined;
+    historyData.invalidate();
     historyCalendar.setAvailability(null, 'loading');
   }
   let indexReady = false;
@@ -254,10 +261,7 @@ async function load({ refresh = false } = {}) {
       return;
     }
     const days = [...historyCalendar.recordedDays].filter(d => d >= current.start && d < current.end);
-    const files = await Promise.all(days.map(day => {
-      if (!dayCache.has(day)) dayCache.set(day, json(`/history/${day}.json`).catch(error => { dayCache.delete(day); throw error; }));
-      return dayCache.get(day);
-    }));
+    const files = await Promise.all(days.map(day => historyData.get(day)));
     if (id !== requestId) return;
     if (files.some(file => !Array.isArray(file.points))) throw new Error('Invalid history');
     rawRows = files.flatMap(file => file.points);

@@ -80,12 +80,14 @@ python3 -B -m unittest discover -s server -p 'test_*.py' -v
 node --check app.js
 node --check history.js
 node --check history-calendar.js
+node --check history-cache.js
 node --check theme.js
 node server/test_overview.cjs
 node server/test_comets.cjs
 node server/test_theme.cjs
 node server/test_history_theme.cjs
 node server/test_history_ui.cjs
+node server/test_history_cache.cjs
 node server/test_history_performance.cjs
 node server/test_history_calendar.cjs
 node server/test_language_picker.cjs
@@ -101,7 +103,7 @@ The intended backend target is Linux. On Windows, Python may lack IANA timezone 
 
 These are manual preparation steps, not an automated installer. Review examples for your host before applying them.
 
-1. Place `index.html`, `styles.css`, `app.js`, `history.html`, `history.css`, `history.js`, `history-calendar.js`, `404.html`, `404.css`, `404.js`, `theme.js` and `theme.css` in `/var/www/homeenergy/public/`. The optional restart dialog has separate [deployment instructions](docs/CONTROL.md).
+1. Place `index.html`, `styles.css`, `app.js`, `history.html`, `history.css`, `history.js`, `history-cache.js`, `history-calendar.js`, `404.html`, `404.css`, `404.js`, `theme.js` and `theme.css` in `/var/www/homeenergy/public/`. The optional restart dialog has separate [deployment instructions](docs/CONTROL.md).
 2. Place `server/export_energy.py`, `server/history_store.py` and `server/energy_summary.py` in `/var/www/homeenergy/server/`.
 3. Create `/var/www/homeenergy/runtime/`, writable by a dedicated exporter account, e.g. `homeenergy`. Keep scripts and public source non-writable by that account where practical.
 4. Set the environment values below and verify every entity suffix in `FIELDS`, plus `grid_to_battery_power`, `inverter_time` and `operating_mode`.
@@ -115,12 +117,32 @@ When upgrading an existing strict-allowlist Nginx deployment, enable the exact
 HTML. Keep the existing security headers and private API restrictions unchanged.
 The theme files are shared by all three pages, including nested 404 URLs.
 
-### History rendering performance
+### History performance and browser caching
 
 History draws the same line through every averaged reading, with dots only for
 sparse views, isolated samples, inspection and peaks. It reuses computed numeric
 averages and energy totals when changing appearance or filters. Raw readings,
 gaps, mode timestamps, calculations and zoom precision are unchanged.
+
+The browser keeps up to 32 daily payloads with a 32 MiB JSON-size budget in
+IndexedDB (actual storage has additional overhead). Entries expire after 60 days
+without use and are evicted least-recently-used first when inserting new data.
+This contains **public history only**, not passwords, tokens, live telemetry or
+restart status. Clear this site's browser storage to remove it. Each origin
+(hostname/port) has its own cache; browsers may evict it or refuse storage.
+History still works normally when persistence is unavailable.
+
+On each new page visit and explicit Refresh, the index is fetched fresh and days
+are validated using `If-None-Match` / `ETag`. Unchanged days receive HTTP 304 with
+no body; changed days are replaced, including corrected older files. A failed
+validation displays the existing unavailable state, not unchecked cached readings.
+Within one page, navigation reuses its loaded snapshot as before. Refresh still
+requires five minutes and is never automatic. All time still uses the small index
+summary without downloading daily files.
+
+Enable the exact `/history-cache.js` route before publishing the updated History
+HTML. The local preview simulates conditional daily responses, but is not proof
+of Nginx/CDN behaviour. No service worker or dependency is added.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |

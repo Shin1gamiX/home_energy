@@ -1,5 +1,6 @@
 """Loopback-only UI preview with synthetic history, never production readings."""
 import json
+import hashlib
 import math
 from functools import lru_cache
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -62,6 +63,12 @@ def preview_summary(day, cutoff):
     return {'day': day, **summarize_points(preview_day(day, cutoff)['points'], cutoff)}
 
 
+@lru_cache(maxsize=32)
+def preview_body(day, cutoff):
+    body = json.dumps(preview_day(day, cutoff), allow_nan=False, separators=(',', ':')).encode()
+    return body, '"' + hashlib.sha256(body).hexdigest() + '"'
+
+
 class Preview(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
@@ -84,7 +91,21 @@ class Preview(SimpleHTTPRequestHandler):
             payload = {'days': days, 'updated_at': cutoff, 'mode_recorded_from': start,
                        'energy_summary': combine_days(summaries, cutoff)}
         elif route in ['/history/' + day + '.json' for day in days]:
-            payload = preview_day(route.split('/')[-1][:-5], cutoff)
+            day = route.split('/')[-1][:-5]
+            end = int((datetime.strptime(day, '%Y-%m-%d').replace(tzinfo=ATHENS) + timedelta(days=1)).timestamp())
+            body, etag = preview_body(day, min(cutoff, end))
+            if self.headers.get('If-None-Match') == etag:
+                self.send_response(304)
+                self.send_header('ETag', etag)
+                self.end_headers()
+                return
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(body)))
+            self.send_header('ETag', etag)
+            self.end_headers()
+            self.wfile.write(body)
+            return
         else:
             return super().do_GET()
         body = json.dumps(payload, allow_nan=False, separators=(',', ':')).encode()
