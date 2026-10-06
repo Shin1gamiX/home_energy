@@ -12,6 +12,8 @@ The original installation uses an ANENJI ANJ-HHS-11KW-48V-WIFI inverter and an A
 | --- | --- |
 | `index.html`, `styles.css` | Overview structure, SVG scene, responsive layout |
 | `app.js` | Overview translations, fetch/presentation, freshness, mode and animation |
+| `theme.js`, `theme.css` | Shared pre-paint appearance preference, accessible toggle and light/dark surface tokens |
+| `server/test_theme.cjs`, `server/test_history_theme.cjs` | Theme preference, contrast, accessible labels and chart state-preservation checks |
 | `history.html`, `history.css` | History controls and chart layout |
 | `history.js` | History fetch, aggregation, summaries, SVG charts, zoom, shared cursor, peaks, translations |
 | `history-calendar.js`, `server/test_history_calendar.cjs` | Accessible date picker and tests for recorded-date availability, calendar arithmetic, keyboard focus and selection |
@@ -33,6 +35,27 @@ A highlight means at least one reading exists (including zero values), not compl
 daily coverage or a positive kWh total. Availability follows the history snapshot and
 updates on refresh; a failed index request is shown as unknown, never as no readings.
 Date selection preserves the current day/week/month view and uses Athens dates.
+
+## Appearance
+
+The external `theme.js` runs in the document head before stylesheets. It reads
+only the allowlisted `homeenergy-theme` preference (`light` or `dark`) and otherwise
+follows `prefers-color-scheme`. The native header button saves an explicit choice
+per browser origin; storage failure still permits a current-page toggle. Same-origin
+tabs synchronize through storage events. The two production hostnames have separate
+preferences. With JavaScript disabled, pages retain their light styling and hide the
+nonfunctional toggle.
+
+`theme.css` owns shared surfaces, text and focus tokens; History adds scoped dark
+styles in `history.css` and a brighter SVG-series palette in `history.js`. A
+`themechange` event redraws cached charts without fetching or changing dates,
+filters, zoom or inspection. Comets recolour without restarting their cycle.
+The 404 page uses the same theme assets with root-absolute URLs and still makes no
+telemetry/control requests. No credentials are stored by the theme code.
+
+Deployment needs exact Nginx routes for `/theme.js` and `/theme.css` in addition to
+the existing page assets. The sanitized example includes them; changing that example
+does not activate routes on an existing server.
 
 ## Source entities
 
@@ -105,8 +128,8 @@ At viewport widths up to 700px, Battery-to-House ports share a level line within
 the cards' overlapping vertical span, avoiding the sagging curve in a narrow gap.
 The desktop route is unchanged.
 `server/test_comets.cjs` covers geometry, timing, coalescing and renderer lifecycle
-without a browser or network. Deployment requires only the existing `app.js`,
-`styles.css` and cache-versioned `index.html` routes; no Nginx/service change.
+without a browser or network. The route correction uses existing page assets;
+shared theme deployment requirements are described above.
 
 ## History storage and contracts
 

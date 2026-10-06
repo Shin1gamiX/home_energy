@@ -10,6 +10,7 @@ This repository contains application code and generic deployment examples, **not
 - Shows inverter mode and a translated communication-loss warning when reports stop arriving.
 - Records fresh readings into minute aggregates, with daily, weekly and monthly history, plus all-time kWh totals and a monthly breakdown.
 - Supports metric filters, averaging intervals, drag-to-zoom, synchronized inspection and optional minimum/maximum indicators.
+- Offers a shared light/dark toggle on Overview, History and the 404 page. It follows the device preference until a choice is saved in this browser.
 - Publishes a deliberately public, no-login view. It does not change inverter settings.
 - Offers an optional **Restart dongle** password dialog: two wrong passwords lock out the client network for five minutes; a five-minute restart cooldown is global. It remains unavailable until privately configured. See [Collector restart setup and security](docs/CONTROL.md).
 - Records credential-free restart security events in the private system journal, accessible to server administrators over SSH; see [log access and event meanings](docs/CONTROL.md#private-security-event-log).
@@ -79,8 +80,11 @@ python3 -B -m unittest discover -s server -p 'test_*.py' -v
 node --check app.js
 node --check history.js
 node --check history-calendar.js
+node --check theme.js
 node server/test_overview.cjs
 node server/test_comets.cjs
+node server/test_theme.cjs
+node server/test_history_theme.cjs
 node server/test_history_ui.cjs
 node server/test_history_calendar.cjs
 node server/test_language_picker.cjs
@@ -96,7 +100,7 @@ The intended backend target is Linux. On Windows, Python may lack IANA timezone 
 
 These are manual preparation steps, not an automated installer. Review examples for your host before applying them.
 
-1. Place `index.html`, `styles.css`, `app.js`, `history.html`, `history.css`, `history.js`, `history-calendar.js`, `404.html`, `404.css` and `404.js` in `/var/www/homeenergy/public/`. The optional restart dialog has separate [deployment instructions](docs/CONTROL.md).
+1. Place `index.html`, `styles.css`, `app.js`, `history.html`, `history.css`, `history.js`, `history-calendar.js`, `404.html`, `404.css`, `404.js`, `theme.js` and `theme.css` in `/var/www/homeenergy/public/`. The optional restart dialog has separate [deployment instructions](docs/CONTROL.md).
 2. Place `server/export_energy.py`, `server/history_store.py` and `server/energy_summary.py` in `/var/www/homeenergy/server/`.
 3. Create `/var/www/homeenergy/runtime/`, writable by a dedicated exporter account, e.g. `homeenergy`. Keep scripts and public source non-writable by that account where practical.
 4. Set the environment values below and verify every entity suffix in `FIELDS`, plus `grid_to_battery_power`, `inverter_time` and `operating_mode`.
@@ -104,6 +108,11 @@ These are manual preparation steps, not an automated installer. Review examples 
 6. Adapt [the systemd example](deploy/homeenergy.service.example), install it as `homeenergy.service`, reload systemd and start it. Inspect service logs and generated JSON before enabling public access.
 7. Adapt [the Nginx example](deploy/nginx.conf.example) for your hostname and existing certificate. Validate with `nginx -t` before reloading. If using a CDN/proxy, ensure HTTPS to the origin and bypass caching for live/history JSON.
 8. Verify HTTPS, overview/history, each language, freshness warnings and mobile layouts. Confirm database, scripts and private configuration cannot be requested through Nginx. Enable the exporter at boot once validated.
+
+When upgrading an existing strict-allowlist Nginx deployment, enable the exact
+`/theme.js` and `/theme.css` routes from the example before activating the new
+HTML. Keep the existing security headers and private API restrictions unchanged.
+The theme files are shared by all three pages, including nested 404 URLs.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |

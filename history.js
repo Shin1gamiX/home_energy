@@ -6,22 +6,30 @@ if (location.hostname === '127.0.0.1' && location.port === '8766') {
   document.querySelector('.intro').append(notice);
 }
 const metrics = {
-  pv: { get label() { return t('Solar total'); }, color: '#c39232', unit: 'W', group: 'power' },
-  pv1_power: { get label() { return t('PV1 power'); }, color: '#b56610', unit: 'W', group: 'power' },
-  pv2_power: { get label() { return t('PV2 power'); }, color: '#365dc1', unit: 'W', group: 'power' },
-  pv1_voltage: { get label() { return t('PV1 voltage'); }, color: '#337eb9', unit: 'V', group: 'voltage' },
-  pv2_voltage: { get label() { return t('PV2 voltage'); }, color: '#c27019', unit: 'V', group: 'voltage' },
-  pv1_current: { get label() { return t('PV1 current'); }, color: '#b56610', unit: 'A', group: 'current' },
-  pv2_current: { get label() { return t('PV2 current'); }, color: '#365dc1', unit: 'A', group: 'current' },
-  grid: { get label() { return t('Grid (est.)'); }, color: '#8861ba', unit: 'W', group: 'power' },
-  load: { get label() { return t('House'); }, color: '#168b8a', unit: 'W', group: 'power' },
-  battery: { get label() { return t('Battery power'); }, color: '#d65c66', unit: 'W', group: 'power' },
-  soc: { get label() { return t('Battery %'); }, color: '#80a57c', unit: '%', group: 'soc' },
-  pv_voltage: { get label() { return t('PV voltage (legacy)'); }, color: '#337eb9', unit: 'V', group: 'voltage', legacy: true },
-  grid_voltage: { get label() { return t('Grid voltage'); }, color: '#aa4e91', unit: 'V', group: 'voltage' },
-  pv_current: { get label() { return t('Solar current'); }, color: '#c39232', unit: 'A', group: 'current', legacy: true },
-  battery_current: { get label() { return t('Battery current (avg.)'); }, color: '#d65c66', unit: 'A', group: 'current' },
-  load_current: { get label() { return t('House current'); }, color: '#168b8a', unit: 'A', group: 'current' },
+  pv: { get label() { return t('Solar total'); }, get color() { return historyColor('#c39232'); }, unit: 'W', group: 'power' },
+  pv1_power: { get label() { return t('PV1 power'); }, get color() { return historyColor('#b56610'); }, unit: 'W', group: 'power' },
+  pv2_power: { get label() { return t('PV2 power'); }, get color() { return historyColor('#365dc1'); }, unit: 'W', group: 'power' },
+  pv1_voltage: { get label() { return t('PV1 voltage'); }, get color() { return historyColor('#337eb9'); }, unit: 'V', group: 'voltage' },
+  pv2_voltage: { get label() { return t('PV2 voltage'); }, get color() { return historyColor('#c27019'); }, unit: 'V', group: 'voltage' },
+  pv1_current: { get label() { return t('PV1 current'); }, get color() { return historyColor('#b56610'); }, unit: 'A', group: 'current' },
+  pv2_current: { get label() { return t('PV2 current'); }, get color() { return historyColor('#365dc1'); }, unit: 'A', group: 'current' },
+  grid: { get label() { return t('Grid (est.)'); }, get color() { return historyColor('#8861ba'); }, unit: 'W', group: 'power' },
+  load: { get label() { return t('House'); }, get color() { return historyColor('#168b8a'); }, unit: 'W', group: 'power' },
+  battery: { get label() { return t('Battery power'); }, get color() { return historyColor('#d65c66'); }, unit: 'W', group: 'power' },
+  soc: { get label() { return t('Battery %'); }, get color() { return historyColor('#80a57c'); }, unit: '%', group: 'soc' },
+  pv_voltage: { get label() { return t('PV voltage (legacy)'); }, get color() { return historyColor('#337eb9'); }, unit: 'V', group: 'voltage', legacy: true },
+  grid_voltage: { get label() { return t('Grid voltage'); }, get color() { return historyColor('#aa4e91'); }, unit: 'V', group: 'voltage' },
+  pv_current: { get label() { return t('Solar current'); }, get color() { return historyColor('#c39232'); }, unit: 'A', group: 'current', legacy: true },
+  battery_current: { get label() { return t('Battery current (avg.)'); }, get color() { return historyColor('#d65c66'); }, unit: 'A', group: 'current' },
+  load_current: { get label() { return t('House current'); }, get color() { return historyColor('#168b8a'); }, unit: 'A', group: 'current' },
+};
+const historyDarkPalette = {
+  '#c39232': '#e9b65d', '#b56610': '#f4a65a', '#365dc1': '#91adff',
+  '#337eb9': '#79baff', '#c27019': '#f3ad65', '#8861ba': '#b893ed',
+  '#168b8a': '#5fd4bb', '#d65c66': '#ff939d', '#80a57c': '#a3ce95',
+  '#aa4e91': '#e49ccb', '#596cb0': '#a5b6ed', '#869b98': '#a9beb4',
+  '#adb8b4': '#8fa69d', '#c3ccc8': '#718b80', '#60776c': '#9cb4a8',
+  '#284e43': '#80d4b3',
 };
 // Generic voltage/current remain selectable for older recorded history.
 const selected = new Set(Object.keys(metrics).filter(key => !['pv_voltage', 'pv_current'].includes(key)));
@@ -76,6 +84,12 @@ function findPeaks(rows, key) {
   return min ? { min, max } : null;
 }
 
+function historyColor(lightColor) {
+  if (document.documentElement.dataset.theme !== 'dark') return lightColor;
+  // SVG attributes and inline series colours cannot inherit the surface theme.
+  return historyDarkPalette[lightColor] || lightColor;
+}
+
 function renderPeaks(card, area, svg, keys, x, y, width, inspect) {
   if (!peaksToggle.checked || loading || hasError) return;
   let highlightTimer;
@@ -121,7 +135,7 @@ function renderPeaks(card, area, svg, keys, x, y, width, inspect) {
       const marker = svgElement('g', { 'data-peak-time': point.t, class: 'peak-marker' });
       marker.append(svgElement('title', {}, `${metrics[key].label}: ${label} · ${timestamp}`));
       marker.append(svgElement('circle', { cx: position.x, cy: position.y, r: 10, fill: 'transparent' }));
-      marker.append(svgElement('circle', { cx: position.x, cy: position.y, r: 4, fill: metrics[key].color, stroke: 'white', 'stroke-width': 2 }));
+      marker.append(svgElement('circle', { cx: position.x, cy: position.y, r: 4, class: 'peak-dot', fill: metrics[key].color, stroke: 'white', 'stroke-width': 2 }));
       marker.addEventListener('click', () => selectPeak(point, key));
       svg.append(marker);
       if (keys.length === 1) {
@@ -383,7 +397,7 @@ function render() {
     }
     const unit = group === 'soc' ? '%' : group === 'voltage' ? 'V' : group === 'current' ? 'A' : Math.max(high, Math.abs(low)) >= 1000 ? 'kW' : 'W';
     svg.append(svgElement('text', { x: 0, y: 10, class: 'axis-label' }, unit));
-    if (low < 0) svg.append(svgElement('line', { x1: left, x2: right, y1: y(0), y2: y(0), stroke: '#a8b9af', 'stroke-dasharray': '4 4' }));
+    if (low < 0) svg.append(svgElement('line', { x1: left, x2: right, y1: y(0), y2: y(0), class: 'chart-zero', stroke: '#a8b9af', 'stroke-dasharray': '4 4' }));
     for (let i = 0; i <= 4; i++) {
       const t = view.from + span * i / 4;
       const label = !zoom && period === 'day' && i === 4 ? '24:00' : new Intl.DateTimeFormat('en-GB', span <= 86400 ? { timeZone: timezone, hour: '2-digit', minute: '2-digit' } : { timeZone: timezone, day: '2-digit', month: '2-digit' }).format(t * 1000);
@@ -693,6 +707,7 @@ function renderModeTimeline(container, view) {
   const bounds = historyCutoffs(view, snapshotObservedAt, Date.now() / 1000);
   const cutoff = bounds.observed;
   const states = { grid: ['Grid', '#8861ba'], mixed: ['Mixed', '#596cb0'], solar: ['Solar', '#c39232'], battery: ['Battery', '#d65c66'], standby: ['Standby', '#80a57c'], unknown: ['Unknown supply', '#869b98'], missing: ['No data', '#adb8b4'], unrecorded: ['Mode not recorded', '#c3ccc8'], rapid: ['Rapid changes', '#60776c'] };
+  for (const state of Object.values(states)) state[1] = historyColor(state[1]);
   const segments = [];
   let cursor = view.from;
   function gap(end) {
@@ -851,10 +866,15 @@ function renderModeTimeline(container, view) {
 function updateFilters() {
   document.querySelector('#selection-count').textContent = t('{n} selected', { n: selected.size + Number(showMode) });
   const modeButton = document.querySelector('#mode-filter');
-  if (modeButton) { modeButton.setAttribute('aria-pressed', String(showMode)); modeButton.textContent = `◷ ${t('House supply')}`; }
+  if (modeButton) {
+    modeButton.setAttribute('aria-pressed', String(showMode));
+    modeButton.style.setProperty('--series', historyColor('#284e43'));
+    modeButton.textContent = `◷ ${t('House supply')}`;
+  }
   document.querySelectorAll('[data-metric]').forEach(button => {
     const enabled = selected.has(button.dataset.metric);
     button.setAttribute('aria-pressed', String(enabled));
+    button.style.setProperty('--series', metrics[button.dataset.metric].color);
     button.querySelector('span').textContent = metrics[button.dataset.metric].label;
   });
   document.querySelectorAll('.filter-category').forEach(category => {
@@ -958,6 +978,8 @@ peaksToggle.addEventListener('change', () => {
   render();
 });
 window.addEventListener('languagechange', () => { updateFilters(); updateRefreshButton(); });
+// Repaint the cached snapshot: changing appearance must not reset zoom or fetch data.
+window.addEventListener('themechange', updateFilters);
 refreshButton.addEventListener('click', () => {
   if (loading || Date.now() < nextRefreshAt) return;
   dateInput.max = today();

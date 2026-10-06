@@ -137,8 +137,10 @@ const document = {
   hidden:false, createElementNS:() => new Node(),
   addEventListener(name, fn) {events[name] = fn;}, removeEventListener(name) {delete events[name];},
 };
-const host = {window:{}, document, matchMedia:() => media,
-  getComputedStyle:() => ({borderTopLeftRadius:'18px'}),
+const windowEvents = {};
+let themeColor = '#169779';
+const host = {window:{innerWidth:1280, addEventListener(name, fn) {windowEvents[name] = fn;}, removeEventListener(name) {delete windowEvents[name];}}, document, matchMedia:() => media,
+  getComputedStyle:() => ({borderTopLeftRadius:'18px', getPropertyValue:() => themeColor}),
   requestAnimationFrame(fn) { const id = ++sequence; frames.set(id, fn); return id; },
   cancelAnimationFrame(id) { frames.delete(id); },
   ResizeObserver: class {constructor(fn) {resize = fn;} observe() {} disconnect() {disconnected = true;}},
@@ -189,6 +191,10 @@ assert.equal(layer.dataset.motion, 'running');
 const beforeResize = routes()[0];
 cards.solar.rect.height += 10; resize(); frame();
 assert.notEqual(routes()[0], beforeResize);
+const beforeTheme = routes()[0];
+themeColor = '#5fd4bb'; windowEvents.themechange();
+assert.equal(routes()[0], beforeTheme, 'theme change preserves active geometry and cadence');
+assert.equal(routes()[0].children[0].attributes.stroke, themeColor);
 host.window.innerWidth = 490;
 engine.setState({routes:{batteryHouse:true}, routeWatts:{batteryHouse:550}}); frame();
 const link = routes()[0].children[0].attributes.d;
@@ -205,4 +211,5 @@ assert.equal(scene.children.length, 0);
 assert.equal(disconnected, true);
 assert.equal(events.visibilitychange, undefined);
 assert.equal(media.change, null);
+assert.equal(windowEvents.themechange, undefined);
 console.log('PASS: renderer lifecycle, same-tier polling, tier/geometry rebuilds, bounded SVG/RAF, non-live shutdown, hidden tabs, reduced motion, idle and cleanup.');

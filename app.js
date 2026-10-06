@@ -224,7 +224,9 @@ window.energyComets = (() => {
     }
 
     function buildRoute(key, watts, index, bounds) {
-      const route = routes[key], fromBox = card(route.from, bounds), toBox = card(route.to, bounds);
+      const definition = routes[key];
+      const route = { ...definition, color: routeColor(key) };
+      const fromBox = card(route.from, bounds), toBox = card(route.to, bounds);
       const from = roundedOutline(fromBox), to = roundedOutline(toBox);
       const narrowBattery = key === 'batteryHouse' && window.innerWidth <= 700;
       // On phones use the shared vertical overlap: a short, level connection
@@ -268,9 +270,23 @@ window.energyComets = (() => {
       group.dataset.gatherSeconds = timing.gather;
       group.dataset.travelSeconds = timing.travel.toFixed(3);
       group.dataset.spreadSeconds = timing.spread;
-      return { key, from:route.from, to:route.to, color:route.color, group, link, source, target, beams, timing, schedule, delay:index*.7 };
+      return { key, from:route.from, to:route.to, color:route.color, group, track, link, source, target, beams, timing, schedule, delay:index*.7 };
     }
 
+    function routeColor(key) {
+      const token = key === 'gridHouse' ? '--theme-grid' : key === 'batteryHouse' ? '--theme-house' : '--theme-solar';
+      return getComputedStyle(scene).getPropertyValue?.(token).trim() || routes[key].color;
+    }
+    function themeChanged() {
+      for (const route of active) {
+        route.color = routeColor(route.key);
+        route.group.style.setProperty('--comet-color', route.color);
+        route.track.setAttribute('stroke', route.color);
+        route.beams.forEach(beam => beam.comet.setColor(route.color));
+      }
+      // Recolour the current frame; a theme switch must not restart the cycle.
+      draw();
+    }
 
     function clearParticles() {
       for (const route of active) {
@@ -387,6 +403,7 @@ window.energyComets = (() => {
     Object.values(cards).forEach(node => observer.observe(node));
     media.addEventListener('change', updateMotion);
     document.addEventListener('visibilitychange', visibilityChanged);
+    window.addEventListener('themechange', themeChanged);
     updateMotion();
 
     return {
@@ -409,6 +426,7 @@ window.energyComets = (() => {
         observer.disconnect();
         media.removeEventListener('change', updateMotion);
         document.removeEventListener('visibilitychange', visibilityChanged);
+        window.removeEventListener('themechange', themeChanged);
         svg.remove();
       },
     };

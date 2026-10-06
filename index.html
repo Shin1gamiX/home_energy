@@ -3,12 +3,14 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#eff7f6">
-  <title>Home · Energy</title><link rel="stylesheet" href="styles.css?v=20261006-comets">
+  <script src="/theme.js?v=20261006-theme"></script>
+  <title>Home · Energy</title><link rel="stylesheet" href="styles.css?v=20261006-theme">
   <link rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2218%22%20fill%3D%22%23284e43%22%2F%3E%3Cpath%20fill%3D%22%23f0f6e9%22%20fill-rule%3D%22evenodd%22%20d%3D%22M10%2029%2030%2011Q32%209%2034%2011L43%2019V15H49V25L55%2030Q57%2032%2054%2032H49V52H15V32H10Q7%2032%2010%2029ZM35%2021%2023%2036Q22%2038%2024%2038H31L28%2048%2042%2032H33Z%22%2F%3E%3C%2Fsvg%3E">
+  <link rel="stylesheet" href="/theme.css?v=20261006-theme">
 </head>
 <body class="overview">
 <main class="dashboard">
-  <header><a class="brand" href="./" aria-label="Home energy overview"><span class="brand-mark" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="18" fill="#284e43"/><path fill="#f0f6e9" fill-rule="evenodd" d="M10 29 30 11Q32 9 34 11L43 19V15H49V25L55 30Q57 32 54 32H49V52H15V32H10Q7 32 10 29ZM35 21 23 36Q22 38 24 38H31L28 48 42 32H33Z"/></svg></span><span>shin1gamix<span class="brand-sub">HOME ENERGY</span></span></a><div class="header-status"><span class="mode-badge" title="Inverter operating mode" role="status">Inverter · <span id="operating-mode">—</span></span><span class="demo"><i></i> Connecting</span></div><nav class="page-nav" aria-label="Main navigation"><a href="/" aria-current="page" data-i18n="Overview">Overview</a><a href="history.html" data-i18n="History">History</a></nav></header>
+  <header><a class="brand" href="./" aria-label="Home energy overview"><span class="brand-mark" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="18" fill="#284e43"/><path fill="#f0f6e9" fill-rule="evenodd" d="M10 29 30 11Q32 9 34 11L43 19V15H49V25L55 30Q57 32 54 32H49V52H15V32H10Q7 32 10 29ZM35 21 23 36Q22 38 24 38H31L28 48 42 32H33Z"/></svg></span><span>shin1gamix<span class="brand-sub">HOME ENERGY</span></span></a><div class="header-status"><span class="mode-badge" title="Inverter operating mode" role="status">Inverter · <span id="operating-mode">—</span></span><span class="demo"><i></i> Connecting</span></div><nav class="page-nav" aria-label="Main navigation"><a href="/" aria-current="page" data-i18n="Overview">Overview</a><a href="history.html" data-i18n="History">History</a></nav><button class="theme-toggle" data-theme-toggle type="button" aria-label="Switch to dark mode" hidden><svg class="theme-moon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20.5 13.2A8.6 8.6 0 0 1 10.8 3.5a8.7 8.7 0 1 0 9.7 9.7Z"/></svg><svg class="theme-sun" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg></button></header>
   <section class="intro"><div><h1>House power information.</h1><p id="supply-status"></p></div><div class="intro-status"><span id="live-status"></span><span class="date" id="date"></span></div></section>
   <section class="energy-scene" aria-label="Illustrated home energy flow">
     <div class="scene-heading"><span><i class="status-dot"></i><span id="scene-status">Waiting for readings</span></span><span>POWER OVERVIEW</span></div>
@@ -64,6 +66,6 @@
     <div class="collector-actions"><button type="button" id="collector-cancel" data-control-text="cancel">Cancel</button><button type="submit" id="collector-submit" data-control-text="confirm">Confirm restart</button></div>
   </form>
 </dialog>
-<script src="app.js?v=20261006-mobile-link"></script>
+<script src="app.js?v=20261006-theme"></script>
 <script src="collector-control.js?v=20261004-private-status"></script>
 </body></html>

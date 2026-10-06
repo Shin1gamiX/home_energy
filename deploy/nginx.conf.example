@@ -44,6 +44,8 @@ server {
     location = /index.html { try_files $uri =404; }
     location = /styles.css { try_files $uri =404; }
     location = /app.js { try_files $uri =404; }
+    location = /theme.js { try_files $uri =404; }
+    location = /theme.css { try_files $uri =404; }
     location = /history.html { try_files $uri =404; }
     location = /history.js { try_files $uri =404; }
     location = /history-calendar.js { try_files $uri =404; }
