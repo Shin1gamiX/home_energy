@@ -10,6 +10,7 @@ This repository contains application code and generic deployment examples, **not
 - Shows inverter mode and a translated communication-loss warning when reports stop arriving.
 - Records fresh readings into minute aggregates, with daily, weekly and monthly history, plus all-time kWh totals and a monthly breakdown.
 - Supports metric filters, averaging intervals, drag-to-zoom, synchronized inspection and optional minimum/maximum indicators.
+- Clicking an Overview source box opens its last 12 elapsed hours of power (Solar total, Grid, House or signed Battery power), with minute averages, gaps, zoom and keyboard/touch inspection. It loads only on demand through the shared history cache; this is recorded history, not a live power stream. `power-history.js` and `power-history.css` implement this view. Deploy their exact asset routes before the updated Overview HTML; no backend or device changes are needed.
 - Offers a shared light/dark toggle on Overview, History and the 404 page. It follows the device preference until a choice is saved in this browser.
 - Publishes a deliberately public, no-login view. It does not change inverter settings.
 - Offers an optional **Restart dongle** password dialog: two wrong passwords lock out the client network for five minutes; a five-minute restart cooldown is global. It remains unavailable until privately configured. See [Collector restart setup and security](docs/CONTROL.md).

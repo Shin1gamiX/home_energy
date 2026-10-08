@@ -71,7 +71,8 @@ def preview_body(day, cutoff):
 
 
 CACHEABLE_ASSETS = {'styles.css', 'app.js', 'theme.js', 'theme.css', 'history.js',
-                    'history-cache.js', 'history-calendar.js', 'history.css', '404.css', '404.js'}
+                    'history-cache.js', 'history-calendar.js', 'history.css', '404.css', '404.js',
+                    'power-history.js', 'power-history.css'}
 
 
 class Preview(SimpleHTTPRequestHandler):
