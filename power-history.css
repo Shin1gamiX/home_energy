@@ -16,7 +16,8 @@ body.power-history-open { overflow: hidden; }
 .power-history-heading h2 { margin: 0; font-size: 27px; letter-spacing: -.7px; font-weight: 600; }
 .power-history-heading h2::before { content: ''; display: inline-block; width: 9px; height: 9px; margin-right: 10px; border-radius: 50%; background: var(--power-color); vertical-align: middle; }
 #power-history-dialog .power-history-eyebrow { color: var(--theme-muted); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; margin: 0 0 8px; }
-#power-history-dialog .power-history-close { width: 40px; height: 40px; padding: 0; flex-shrink: 0; font-size: 24px; color: var(--theme-muted); border-color: var(--theme-border); }
+#power-history-dialog .power-history-close { display: grid; place-items: center; width: 40px; height: 40px; padding: 0; flex-shrink: 0; color: var(--theme-muted); border-color: var(--theme-border); }
+#power-history-dialog .power-history-close svg { display: block; pointer-events: none; }
 #power-history-range { font-size: 12px; line-height: 1.6; color: var(--theme-muted); margin: 14px 0 0; }
 .power-history-direction { font-size: 12px; line-height: 1.6; color: var(--theme-muted); margin: 6px 0 0; }
 .power-history-tools { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin: 22px 0 16px; }

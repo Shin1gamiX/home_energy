@@ -71,7 +71,7 @@
   dialog.setAttribute('aria-labelledby', 'power-history-title');
   dialog.setAttribute('aria-describedby', 'power-history-range');
   // Static structure only; all readings and translated text use textContent.
-  dialog.innerHTML = `<div class="power-history-heading"><div><p class="power-history-eyebrow"></p><h2 id="power-history-title"></h2></div><button class="power-history-close" type="button" autofocus>×</button></div>
+  dialog.innerHTML = `<div class="power-history-heading"><div><p class="power-history-eyebrow"></p><h2 id="power-history-title"></h2></div><button class="power-history-close" type="button" autofocus><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
     <p id="power-history-range"></p><p class="power-history-direction"></p>
     <div class="power-history-tools"><span class="power-history-status" role="status"></span><div><button class="power-history-zoom" type="button"></button><button class="power-history-reset" type="button"></button><button class="power-history-retry" type="button" hidden></button></div></div>
     <div class="power-history-chart" role="group" tabindex="0"></div>
