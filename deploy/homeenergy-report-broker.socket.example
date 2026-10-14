@@ -1,0 +1,18 @@
+# PREPARATION ONLY. Install only after the phase-B checklist is approved.
+[Unit]
+Description=Home Energy report-only broker socket
+
+[Socket]
+ListenStream=/run/homeenergy-report-broker.sock
+SocketUser=root
+SocketGroup=homeenergy-report-runner
+SocketMode=0660
+Accept=yes
+MaxConnections=4
+Backlog=4
+TriggerLimitIntervalSec=60
+TriggerLimitBurst=24
+RemoveOnStop=yes
+
+[Install]
+WantedBy=sockets.target

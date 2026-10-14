@@ -1,0 +1,16 @@
+# Install by an administrator only, after reviewing docs/INSIGHTS.md.
+# This is a server-side access boundary, not a prompt instruction.
+# Prerequisite: effective GLOBAL PermitUserEnvironment must be no.
+# That directive is not valid inside Match on commonly deployed OpenSSH versions.
+Match User homeenergy-reporter
+    AuthenticationMethods publickey
+    PasswordAuthentication no
+    KbdInteractiveAuthentication no
+    AuthorizedKeysFile /etc/ssh/authorized_keys/homeenergy-reporter
+    ForceCommand /usr/bin/timeout --signal=TERM --kill-after=5s 45s /usr/bin/python3 -I /opt/homeenergy-reports/insights_publish.py
+    DisableForwarding yes
+    PermitTTY no
+    PermitTunnel no
+    PermitUserRC no
+    MaxSessions 1
+Match all
