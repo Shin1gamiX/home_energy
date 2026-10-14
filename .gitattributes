@@ -1,0 +1,18 @@
+# Reporting source and fixtures are verified by exact SHA-256 byte hashes.
+# Preserve their existing LF endings, including on Windows checkouts.
+/server/insights_*.py text eol=lf
+/server/test_insights_*.py text eol=lf
+/server/test_insights_ui.cjs text eol=lf
+/insights.js text eol=lf
+/insights.css text eol=lf
+/docs/REPORTING_SKILL.md text eol=lf
+/docs/INSIGHTS.md text eol=lf
+/deploy/*-report-*.py text eol=lf
+/deploy/activate-insights.py text eol=lf
+/deploy/prepare-production-key.ps1 text eol=lf
+/deploy/prepare-staging-key.ps1 text eol=lf
+/deploy/homeenergy-report* text eol=lf
+/deploy/report-broker-config.json.example text eol=lf
+/deploy/reports-*.conf.example text eol=lf
+/deploy/windows-report-*-candidate/** text eol=lf
+/deploy/windows-report-*-root-canary.txt text eol=lf
