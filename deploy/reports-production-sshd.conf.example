@@ -1,0 +1,26 @@
+# PREPARATION TEMPLATE ONLY. Do not install or enable without administrator approval.
+# Gate /opt/homeenergy-reports/production-gate.json remains root-owned and false.
+# Effective GLOBAL PermitUserEnvironment must be no; AcceptEnv must be audited.
+# Dedicated nonroot account: no sudo, no supplementary groups, /usr/bin/dash shell.
+# Root-owned home /var/lib/homeenergy-reporter-home; no .ssh, rc or writable hooks.
+# Dedicated key only: root-owned AuthorizedKeysFile with restrict key option.
+# Audit the complete effective Match policy, authorized-key options and POSIX ACLs.
+Match User homeenergy-reporter
+    AuthenticationMethods publickey
+    PubkeyAuthentication yes
+    PasswordAuthentication no
+    KbdInteractiveAuthentication no
+    AuthorizedKeysFile /etc/ssh/authorized_keys/homeenergy-reporter
+    AuthorizedKeysCommand none
+    TrustedUserCAKeys none
+    PubkeyAcceptedAlgorithms ssh-ed25519
+    ForceCommand /usr/bin/timeout --signal=TERM --kill-after=5s 45s /usr/bin/python3 -I -B /opt/homeenergy-reports/insights_production_publish.py
+    DisableForwarding yes
+    AllowAgentForwarding no
+    AllowTcpForwarding no
+    X11Forwarding no
+    PermitTTY no
+    PermitTunnel no
+    PermitUserRC no
+    MaxSessions 1
+Match all
