@@ -1,0 +1,23 @@
+# Review/provision separately. NOT installed by the local tests.
+# Global PermitUserEnvironment must be no; audit effective AcceptEnv separately.
+# Nonroot account: no sudo, no supplementary groups, root-owned home, dash shell.
+# Authorized key: dedicated staging key, root-owned file, restrict option.
+Match User homeenergy-reporter-staging
+    AuthenticationMethods publickey
+    PubkeyAuthentication yes
+    PasswordAuthentication no
+    KbdInteractiveAuthentication no
+    AuthorizedKeysFile /etc/ssh/authorized_keys/homeenergy-reporter-staging
+    AuthorizedKeysCommand none
+    TrustedUserCAKeys none
+    PubkeyAcceptedAlgorithms ssh-ed25519
+    ForceCommand /usr/bin/timeout --signal=TERM --kill-after=5s 45s /usr/bin/python3 -I /opt/homeenergy-reports-staging/insights_staging_publish.py
+    DisableForwarding yes
+    AllowAgentForwarding no
+    AllowTcpForwarding no
+    X11Forwarding no
+    PermitTTY no
+    PermitTunnel no
+    PermitUserRC no
+    MaxSessions 1
+Match all
