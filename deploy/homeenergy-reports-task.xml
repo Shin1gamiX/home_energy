@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Reviewed schedule for the existing, expiring production authorization.
+     Register disabled, verify the stored task, then enable separately.
+     Floating local start times intentionally follow the PC's Athens timezone. -->
+<Task version="1.3" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>Home Energy public reviews at 00:00 and 12:00 Athens time, starting 15/10/2026. Restricted report-only runner; GPT-6.1 Sol / Medium. Existing authorization expires 13/11/2026 09:53:30 Athens. No retries or missed-run catch-up. Keep the PC timezone set to Athens. Owner must be logged in.</Description>
+    <URI>\Home Energy Reporter</URI>
+  </RegistrationInfo>
+  <Triggers>
+    <CalendarTrigger id="midnight">
+      <StartBoundary>2026-10-15T00:00:00</StartBoundary>
+      <EndBoundary>2026-11-13T07:53:30Z</EndBoundary>
+      <Enabled>true</Enabled>
+      <ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay>
+    </CalendarTrigger>
+    <CalendarTrigger id="noon">
+      <StartBoundary>2026-10-15T12:00:00</StartBoundary>
+      <EndBoundary>2026-11-13T07:53:30Z</EndBoundary>
+      <Enabled>true</Enabled>
+      <ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay>
+    </CalendarTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <UserId>S-1-5-21-2042942067-679905730-4140847586-1001</UserId>
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>true</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>true</StopIfGoingOnBatteries>
+    <AllowHardTerminate>true</AllowHardTerminate>
+    <StartWhenAvailable>false</StartWhenAvailable>
+    <RunOnlyIfNetworkAvailable>true</RunOnlyIfNetworkAvailable>
+    <IdleSettings>
+      <StopOnIdleEnd>false</StopOnIdleEnd>
+      <RestartOnIdle>false</RestartOnIdle>
+    </IdleSettings>
+    <AllowStartOnDemand>false</AllowStartOnDemand>
+    <Enabled>false</Enabled>
+    <Hidden>false</Hidden>
+    <RunOnlyIfIdle>false</RunOnlyIfIdle>
+    <WakeToRun>false</WakeToRun>
+    <ExecutionTimeLimit>PT10M</ExecutionTimeLimit>
+    <Priority>7</Priority>
+    <UseUnifiedSchedulingEngine>true</UseUnifiedSchedulingEngine>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>C:\Users\anest\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\pythonw.exe</Command>
+      <Arguments>-I -B "C:\Users\anest\Documents\New project\home-energy-repo\server\insights_recurring_run.py" --run-due</Arguments>
+      <WorkingDirectory>C:\Users\anest\Documents\New project\home-energy-repo</WorkingDirectory>
+    </Exec>
+  </Actions>
+</Task>

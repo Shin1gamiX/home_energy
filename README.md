@@ -4,6 +4,8 @@ A mobile-first home energy dashboard for a solar inverter and battery monitored 
 
 This repository contains application code and generic deployment examples, **not a backup of Home Assistant or a running installation**. It contains no production readings, credentials, certificates or device serial numbers. Existing public project branding is retained.
 
+The optional reporting launchers and guarded deployment helpers are installation-specific: they include fixed paths, a public SSH host-key pin and reviewed source hashes. They are not portable installers. Private reporting credentials, authorizations and run evidence are kept outside Git.
+
 ## What it does
 
 - Displays solar, estimated grid import, house consumption, battery charge percentage and signed battery power, with available voltage/current readings.
@@ -15,6 +17,7 @@ This repository contains application code and generic deployment examples, **not
 - Publishes a deliberately public, no-login view. It does not change inverter settings.
 - Offers an optional **Restart dongle** password dialog: two wrong passwords lock out the client network for five minutes; a five-minute restart cooldown is global. It remains unavailable until privately configured. See [Collector restart setup and security](docs/CONTROL.md).
 - Records credential-free restart security events in the private system journal, accessible to server administrators over SSH; see [log access and event meanings](docs/CONTROL.md#private-security-event-log).
+- Includes **Energy insights**: public, newest-first reviews of the last 24 hours against the preceding week, with severity labels and expandable evidence. Complete reports support English, Greek and Russian, with all three required at publication. The report-only publisher is active, and the restricted Windows runner is scheduled for **00:00 and 12:00 Athens time**, beginning **15/10/2026**. Its current authorization expires **13/11/2026 at 09:53:30 Athens time**, or after 120 reserved attempts, whichever comes first; renewal is a separate administrator-reviewed operation. A separate append-only publisher fixes the structured facts; the AI supplies only narrative. See [reporting design and safeguards](docs/INSIGHTS.md) and the [current runner, schedule and authorization runbook](deploy/README-recurring-reports.md).
 
 ## How it works
 
@@ -74,6 +77,9 @@ python3 -B server/preview_history.py
 
 Open `http://127.0.0.1:8766/history.html` and select **All time**. Run only one of these preview servers at a time. The history helper supplies three calendar months of simulated readings, including gaps, and uses the same cumulative-energy calculations as the exporter. It is not a production server or complete hardware simulator; none of its readings are real.
 
+The same helper provides synthetic Energy insights on Overview. These are design
+fixtures, not real observations or a running AI service.
+
 ## Checks
 
 ```sh
@@ -83,6 +89,8 @@ node --check history.js
 node --check history-calendar.js
 node --check history-cache.js
 node --check theme.js
+node --check insights.js
+node server/test_insights_ui.cjs
 node server/test_overview.cjs
 node server/test_comets.cjs
 node server/test_theme.cjs
