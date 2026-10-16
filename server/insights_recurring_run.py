@@ -24,8 +24,9 @@ ENTRY = SOURCE / 'insights_recurring_run.py'
 TRIAL_PIN = '211ba1404f040516f874d5deb157a8c846d52356443be2aaa21d54a863eca54a'
 STORE_PIN = '46b76e87f70ffc8cae44a8422b3753a89049891dc65ab0b2810b371d0b1096e8'
 REVISION_PIN = 'f6e85fe31c7a431d2f8888c551064943a6d965685b4e11232d889d18f816770b'
-STARTUP_PIN = 'd3e88224158935c38c4b23c3c1e7d8fe5ffe2d3a44ac850918fbe9bfe6220068'
+STARTUP_PIN = '9a732453e3206fe41a2f613bc36a700d51784b8c37911c46659a2791ab37ea08'
 RECOVERY_PIN = '4215432e8811150c850110bd1306271686f2f036a7d8c072f56a4082899f2b06'
+EXCEPTION_PIN = '359df2423bbf038e1432e515268d9151c55bbdb767e651a62062628cc3f8e58b'
 PHASE = 'bootstrap'
 TOKEN_ENV = 'HOME_ENERGY_RECURRING_TOKEN'
 RUN_ENV = 'HOME_ENERGY_RECURRING_RUN'
@@ -104,12 +105,15 @@ def bootstrap():
     context.recovery = load_support('insights_recurring_recovery', RECOVERY_PIN)
     context.bundle = context.original_storage.digest({'revision': '20261016-init-order',
         'base_bundle_sha256': context.bundle, 'recovery_sha256': RECOVERY_PIN})
+    context.exception = load_support('insights_recurring_exception', EXCEPTION_PIN)
+    context.bundle = context.original_storage.digest({'revision': '20261016-one-time-interval',
+        'base_bundle_sha256': context.bundle, 'exception_sha256': EXCEPTION_PIN})
     return context
 
 
 def load_support(name, pin):
     require(name in ('insights_recurring_revision', 'insights_recurring_startup',
-                    'insights_recurring_recovery'), 'recurring_source_path')
+                    'insights_recurring_recovery', 'insights_recurring_exception'), 'recurring_source_path')
     path = SOURCE / (name + '.py')
     module = types.ModuleType('_verified_' + name)
     module.__file__ = str(path)
@@ -181,14 +185,14 @@ def worker(context, token, run_id):
             store.close()
 
 
-def supervise(context):
+def supervise(context, *, interval_exception=False):
     """One due invocation, never a scheduling loop or a catch-up queue."""
     store = context.storage.Store(context.bundle)
     tree = process = reader = token = None
     outcome = 'uncertain'
     output = queue.Queue(maxsize=1)
     try:
-        reservation = store.reserve()
+        reservation = store.reserve_exception() if interval_exception else store.reserve()
         if reservation['status'] == 'not_due':
             return reservation | {'model_started': False, 'report_calls_enabled': False}
         token = reservation['token']
@@ -298,7 +302,8 @@ def main():
     global PHASE
     parser = argparse.ArgumentParser(description=__doc__)
     group = parser.add_mutually_exclusive_group(required=True)
-    modes = ('check', 'preflight', 'storage-check', 'os-check', 'logging-check', 'run-due', 'worker', 'mcp-report')
+    modes = ('check', 'preflight', 'storage-check', 'os-check', 'logging-check',
+             'run-due', 'run-exception', 'worker', 'mcp-report')
     for mode in modes:
         group.add_argument('--' + mode, action='store_true',
                            help=argparse.SUPPRESS if mode in ('worker', 'mcp-report') else mode)
@@ -309,7 +314,7 @@ def main():
     PHASE = 'authorization'
     token = os.environ.get(TOKEN_ENV)
     handoff = args.worker or (args.mcp_report and token != CLOSED_TOKEN)
-    context.repair_status = context.recovery.bind(context, startup,
+    context.repair_status = context.exception.bind(context, startup,
         active_run=os.environ.get(RUN_ENV) if handoff else None,
         token=token if handoff else None,
         role=('worker' if args.worker else 'mcp') if handoff else None)
@@ -322,10 +327,10 @@ def main():
         require(context.repair_active, 'recurring_repair_not_activated')
         PHASE = 'execute'
         result = worker(context, os.environ.pop(TOKEN_ENV, None), os.environ.pop(RUN_ENV, None))
-    elif args.run_due:
+    elif args.run_due or args.run_exception:
         require(context.repair_active, 'recurring_repair_not_activated')
         PHASE = 'execute'
-        result = supervise(context)
+        result = supervise(context, interval_exception=args.run_exception)
     else:
         mode = next(mode for mode in modes if getattr(args, mode.replace('-', '_')))
         result = no_model_check(context, mode)

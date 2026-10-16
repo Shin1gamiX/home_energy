@@ -18,11 +18,13 @@ APPROVAL = 'runtime-repair-20261016-approval.json'
 ACTIVATION = 'runtime-repair-20261016-activation.json'
 RECOVERY_REVIEW = 'runtime-recovery-20261016-review.json'
 RECOVERY_ACTIVATION = 'runtime-recovery-20261016-activation.json'
+INTERVAL_EXCEPTION = 'interval-exception-20261016-authorization.json'
 READABLE_RECORDS = (APPROVAL, ACTIVATION, RECOVERY_REVIEW, RECOVERY_ACTIVATION,
+    INTERVAL_EXCEPTION,
     'startup-20261016T090010504462Z-81acdccdc612b3d6.json',
     'startup-20261016T090010907253Z-8d8d7c5ec366b288.json')
 MODES = frozenset(('check', 'preflight', 'os-check', 'storage-check', 'logging-check',
-                   'run-due', 'worker', 'unknown'))
+                   'run-due', 'run-exception', 'worker', 'unknown'))
 PHASES = frozenset(('bootstrap', 'authorization', 'runtime', 'os', 'execute', 'complete'))
 CODES = frozenset((
     'reviewed_input_changed', 'runtime_file_missing', 'runtime_file_changed',
@@ -51,6 +53,10 @@ CODES = frozenset((
     'recurring_recovery_evidence_changed', 'recurring_recovery_review_changed',
     'recurring_recovery_activation_changed', 'recurring_recovery_handoff_changed',
     'recurring_recovery_prior_repair_changed', 'recurring_recovery_review_required',
+    'recurring_exception_authorization_changed', 'recurring_exception_authorization_required',
+    'recurring_exception_consumed', 'recurring_exception_expired',
+    'recurring_exception_history_changed', 'recurring_exception_handoff_changed',
+    'recurring_exception_prior_records_changed',
 ))
 
 # Only fixed filenames and a bounded, separately encoded JSON payload cross
@@ -100,6 +106,7 @@ try {
     } elseif ($request.operation -eq 'read') {
         if ($name -cnotin @('runtime-repair-20261016-approval.json', 'runtime-repair-20261016-activation.json',
             'runtime-recovery-20261016-review.json', 'runtime-recovery-20261016-activation.json',
+            'interval-exception-20261016-authorization.json',
             'startup-20261016T090010504462Z-81acdccdc612b3d6.json',
             'startup-20261016T090010907253Z-8d8d7c5ec366b288.json')) { throw 'name' }
         $path = [IO.Path]::Combine($root, $name)

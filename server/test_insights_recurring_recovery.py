@@ -63,6 +63,8 @@ class RecoveryFixture(RepairFixture):
         ctx = context()
         ctx.bundle, ctx.original_storage = FIXED_BUNDLE, storage
         ctx.revision, ctx.recovery = revision, recovery
+        # These tests exercise the preserved recovery policy independently.
+        ctx.exception = recovery
         return ctx
 
     def bind(self, run_id=None, token=None, role=None):

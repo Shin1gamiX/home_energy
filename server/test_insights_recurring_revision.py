@@ -349,6 +349,7 @@ class RunnerRepairTests(unittest.TestCase):
         for name, pin in (('insights_recurring_revision', runner.REVISION_PIN),
                           ('insights_recurring_startup', runner.STARTUP_PIN),
                           ('insights_recurring_recovery', runner.RECOVERY_PIN),
+                          ('insights_recurring_exception', runner.EXCEPTION_PIN),
                           ('insights_recurring_store', runner.STORE_PIN),
                           ('insights_production_trial_run', runner.TRIAL_PIN)):
             with self.subTest(name=name):
@@ -361,10 +362,10 @@ class RunnerRepairTests(unittest.TestCase):
             session.send({'method': 'turn/start', 'id': 1, 'params': {}})
 
     def test_live_entrypoints_are_held_without_activation(self):
-        for mode in ('run-due', 'worker', 'mcp-report'):
+        for mode in ('run-due', 'run-exception', 'worker', 'mcp-report'):
             ctx = context()
             ctx.repair_active = False
-            ctx.recovery.bind = Mock(return_value={'repair_active': False})
+            ctx.exception.bind = Mock(return_value={'repair_active': False})
             with self.subTest(mode=mode), patch.object(runner, 'bootstrap', return_value=ctx), \
                     patch.object(runner, 'load_support', return_value=Mock()), \
                     patch.object(runner, 'supervise') as supervisor, patch.object(runner, 'worker') as worker, \

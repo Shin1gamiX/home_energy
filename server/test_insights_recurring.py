@@ -533,6 +533,7 @@ def context():
         adapter=reports.adapter, sessions=reports, config=candidate_config(),
         guidance='Synthetic reporting guidance', bundle=BUNDLE, imports=Mock(),
         revision=SimpleNamespace(check_version=Mock()), recovery=SimpleNamespace(bind=Mock()),
+        exception=SimpleNamespace(bind=Mock()),
         repair_status={'repair_active': False})
 
 
