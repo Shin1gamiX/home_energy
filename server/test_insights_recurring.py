@@ -531,7 +531,9 @@ class TransportTests(Fixture):
 def context():
     return SimpleNamespace(storage=storage, trial=trial, candidate=candidate, runtime=runtime,
         adapter=reports.adapter, sessions=reports, config=candidate_config(),
-        guidance='Synthetic reporting guidance', bundle=BUNDLE, imports=Mock())
+        guidance='Synthetic reporting guidance', bundle=BUNDLE, imports=Mock(),
+        revision=SimpleNamespace(check_version=Mock()), recovery=SimpleNamespace(bind=Mock()),
+        repair_status={'repair_active': False})
 
 
 class ThreadBindingTests(unittest.TestCase):
@@ -681,7 +683,7 @@ class RunnerTests(unittest.TestCase):
         session.turn_sent = False
         session.request.return_value = {'config': runner.run_config(ctx)}
         with patch.object(ctx.storage, 'Store', return_value=store), \
-                patch.object(runner, 'session_class', return_value=Mock(return_value=session)):
+                patch.object(runner, 'no_model_session_class', return_value=Mock(return_value=session)):
             result = runner.no_model_check(ctx, 'preflight')
         self.assertTrue(result['runtime_checked'])
         self.assertFalse(result['model_started'])
@@ -689,16 +691,16 @@ class RunnerTests(unittest.TestCase):
         session.gates.assert_called_once()
         session.close.assert_called_once()
 
-    def test_no_model_check_refuses_authorized_state_before_runtime(self):
+    def test_live_storage_probe_is_refused_before_runtime(self):
         ctx = context()
         store = Mock()
         store.available.return_value = {'authorization_present': True, 'run_evidence_present': False}
         with patch.object(ctx.storage, 'Store', return_value=store), \
                 patch.object(runner, 'session_class') as session:
-            with self.assertRaisesRegex(ValueError, 'disabled_candidate'):
-                runner.no_model_check(ctx, 'preflight')
+            with self.assertRaisesRegex(ValueError, 'live_probe_refused'):
+                runner.no_model_check(ctx, 'storage-check')
         session.assert_not_called()
-        store.close.assert_called_once()
+        store.close.assert_not_called()
 
     def test_no_grant_or_not_due_never_spawns(self):
         ctx = context()

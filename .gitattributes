@@ -12,6 +12,7 @@
 /deploy/prepare-production-key.ps1 text eol=lf
 /deploy/prepare-staging-key.ps1 text eol=lf
 /deploy/homeenergy-report* text eol=lf
+/deploy/README-recurring-reports.md text eol=lf
 /deploy/report-broker-config.json.example text eol=lf
 /deploy/reports-*.conf.example text eol=lf
 /deploy/windows-report-*-candidate/** text eol=lf
