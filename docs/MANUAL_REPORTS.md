@@ -2,17 +2,23 @@
 
 ## Current state
 
-Scheduled reporting is disabled. The manual client, analyzer, UI compatibility
-update and activation helper are prepared locally. The server must be activated
-before the new commands can be used. No public report was requested by this
-conversion. Existing reports and all automation evidence are retained.
+Manual reporting was activated on 17/10/2026 from
+`/home/shini/homeenergy-manual-release.H4661YKP`. Its private rollback backup is
+`/home/shini/homeenergy-manual-backup.vga4j2b8`. Read-only manual review and the
+existing reports on both public hostnames were verified after activation. No
+public report or extra model run was requested by this conversion.
 
-Release staged on 17/10/2026 at
-`/home/shini/homeenergy-manual-release.n4gWcpxL`; sudo activation is pending.
-The Windows task remains disabled and its definition is unchanged. Checks found
-all 605 existing private PC evidence/workspace files unchanged. Windows checks:
-71 tests passed, 3 platform-specific skips; Linux: all 14 synthetic manual tests
-passed. UI contract tests and existing-card expansion/translation checks passed.
+The previous failed release, `/home/shini/homeenergy-manual-release.n4gWcpxL`,
+and its backup, `/home/shini/homeenergy-manual-backup.nprhnave`, remain intact.
+The corrected helper verifies local HTTPS with the real host/certificate;
+public Cloudflare access is checked separately.
+
+The disabled Windows task and the obsolete recurring runner were subsequently
+removed with separate owner approval; see the exact cleanup record below.
+All existing reports, private evidence and staging access are retained.
+The manual-reporting Python checks passed 77 tests with 3 platform-specific
+skips; all 13 JavaScript test suites passed. Existing-card expansion and
+translation had also been checked after activation.
 The optional skill YAML validator is unavailable (PyYAML is not installed);
 frontmatter and installed/source equality were checked without installing it.
 
@@ -113,11 +119,41 @@ If activation fails, the helper restores the old SSH/frontend bytes; new unused
 modules and all backup evidence are retained rather than deleted. A manual
 rollback can use `--rollback BACKUP_DIRECTORY`.
 
-Nothing is deleted by this conversion. The old task, Reporter workspace,
-production/staging credentials, grants, exception records, run outputs, old
-modules, old runbooks and deployment backups remain. Review a separate exact-path
-cleanup list only after the manual workflow is working. Do not remove the whole
-ProgramData directory: it contains the still-used reporting credential.
+The activation helper does not delete anything. The later, separately approved
+cleanup is recorded below. Do not remove the whole ProgramData directory: it
+contains the still-used reporting credential.
+
+## Approved cleanup, 17/10/2026
+
+The manual conversion was committed first as `b07e8f0`. The disabled root Windows
+task `\Home Energy Reporter` was then removed only after verifying its exported
+definition, including the disabled setting. Its recoverable XML backup is:
+
+`C:\Users\anest\Documents\ChatGPT\Home Energy\reporting-cleanup-backup-20261017-mvc66thg\Home Energy Reporter.xml`
+
+The following twelve repository files were removed in the separate cleanup
+change; their original source remains available in `b07e8f0`:
+
+```text
+server/insights_recurring_run.py
+server/insights_recurring_startup.py
+server/insights_recurring_store.py
+server/insights_recurring_exception.py
+server/insights_recurring_recovery.py
+server/insights_recurring_revision.py
+server/test_insights_recurring.py
+server/test_insights_recurring_exception.py
+server/test_insights_recurring_recovery.py
+server/test_insights_recurring_revision.py
+server/test_insights_schedule.py
+deploy/homeenergy-reports-task.xml
+```
+
+The Reporter workspace, production/staging credentials, grants, exception
+records, run outputs, other modules, historical runbooks, all server releases
+and backups remain. No report, snapshot, server configuration or staging access
+was removed or modified by this cleanup. No service or device was restarted.
+The task backup is for recovery, not permission to resume scheduled reporting.
 
 ## Local checks
 
@@ -129,3 +165,13 @@ node server/test_insights_ui.cjs
 ```
 
 Tests use temporary synthetic state, not production reports or existing evidence.
+
+After cleanup, the full retained Python suite ran 1,244 tests: 1,204 passed,
+39 were skipped for unavailable platform capabilities, and one historical
+automated-launcher test failed:
+`test_insights_production_launcher.SourceTests.test_file_pins_match`.
+It expects the former automated `REPORTING_SKILL.md`
+hash, not the new manual skill. That mismatch already exists in conversion
+commit `b07e8f0`; removing the recurring runner files did not introduce it.
+The retained old launcher/pins and this test were not changed or reauthorized.
+The active manual-reporting checks and all JavaScript suites passed.

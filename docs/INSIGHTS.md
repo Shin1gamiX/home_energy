@@ -2,13 +2,18 @@
 
 ## Manual-only conversion, 17/10/2026
 
-The Windows reporting task is disabled. The owner now requests reviews in chat
+The Windows reporting task has been removed after a verified definition backup.
+The owner now requests reviews in chat
 when needed, selecting hours to review and days to compare. Chat-only review is
 read-only; publication remains a separate, explicitly requested action.
 See [manual reporting](MANUAL_REPORTS.md) for the current workflow and activation
 status. Existing reports, snapshots, grants and run evidence are retained.
 The old runner is not a fallback and its authorization need not be renewed for
-manual reviews. No cleanup has been performed.
+manual reviews. After committing the manual conversion, a separate cleanup
+removed only the six recurring runner modules, five runner-specific test files
+and task XML template. The exact list and task backup path are recorded in
+[manual reporting](MANUAL_REPORTS.md#approved-cleanup-17102026). Reports, existing
+evidence, credentials and staging access are preserved.
 
 The remaining sections document the earlier automated installation, not current
 authorization to schedule or publish autonomously.

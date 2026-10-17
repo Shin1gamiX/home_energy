@@ -1,8 +1,11 @@
 # Recurring report runner: authorization and verification record
 
-**Superseded operational status, 17/10/2026:** scheduled reporting is disabled at
-the owner's request. Preserve this runbook and the original authorization/run
-evidence; do not renew, activate or use this runner for manual reviews.
+**Superseded operational status, 17/10/2026:** scheduled reporting was disabled at
+the owner's request. After manual reporting was activated and committed, the
+disabled task was backed up and removed, along with the twelve approved runner,
+test and task-template files. Preserve this historical runbook and the original
+authorization/run evidence; do not renew, activate or use this runner for manual
+reviews. Its original source remains in commit `b07e8f0`.
 The replacement workflow is [manual reporting](../docs/MANUAL_REPORTS.md).
 Everything below is a historical record, including references to enabled tasks.
 
