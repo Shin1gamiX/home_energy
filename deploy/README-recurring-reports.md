@@ -1,5 +1,11 @@
 # Recurring report runner: authorization and verification record
 
+**Superseded operational status, 17/10/2026:** scheduled reporting is disabled at
+the owner's request. Preserve this runbook and the original authorization/run
+evidence; do not renew, activate or use this runner for manual reviews.
+The replacement workflow is [manual reporting](../docs/MANUAL_REPORTS.md).
+Everything below is a historical record, including references to enabled tasks.
+
 **Current status, 16/10/2026 after the noon failure:** the helper initialization
 fix and evidence-preserving recovery are **active**, following separate owner
 approval. No-model startup and sandbox checks passed after activation. The

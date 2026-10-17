@@ -27,6 +27,22 @@ function report(id = 'a', published = 1791889200) {
 
 async function main() {
   assert.equal(validReport(report()), true);
+  for (const days of [7, 14, 30, 90]) {
+    const manual = report();
+    manual.analysis.baseline.days = days;
+    manual.analysis.baseline.windows = 3;
+    manual.analysis.metrics[0].baseline_days = 3;
+    manual.analysis.window.start = manual.analysis.window.end - 50 * 3600;
+    manual.analysis.baseline.end = manual.analysis.window.start;
+    manual.analysis.baseline.start = manual.analysis.baseline.end - days * 86400;
+    assert.equal(validReport(manual), true, 'Variable manual windows coexist with old reports');
+    for (const language of ['en', 'el', 'ru']) assert.ok(localizeReport(manual, language));
+    manual.analysis.baseline.windows = 0;
+    manual.analysis.metrics[0].baseline_days = 0;
+    assert.equal(validReport(manual), true, 'Insufficient baseline remains displayable');
+    manual.analysis.metrics[0].baseline_days = 1;
+    assert.equal(validReport(manual), false, 'Cannot claim more qualifying windows than exist');
+  }
   assert.deepEqual(validateFeed({ schema_version: 2, reports: [] }), []);
   const older = report('a', 1791802800), newer = report('b');
   older.analysis.severity = 'warning'; newer.analysis.severity = 'routine';
@@ -39,6 +55,8 @@ async function main() {
     r => r.analysis.metrics[0].value = Infinity,
     r => r.analysis.metrics[0].coverage_pct = 101,
     r => r.analysis.metrics[0].baseline_days = 8,
+    r => r.analysis.baseline.days = 91,
+    r => r.analysis.baseline.windows = -1,
     r => r.analysis.coverage_pct = -1,
     r => r.analysis.baseline.end = r.analysis.window.end,
     r => r.analysis.findings[0].end = 1,

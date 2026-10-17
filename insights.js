@@ -22,12 +22,14 @@
     if (!object(report) || typeof report.id !== 'string' || !/^[a-f0-9]{64}$/.test(report.id) || !stamp(report.published_at)) return false;
     const a = report.analysis, n = report.narrative;
     if (!object(a) || a.schema_version !== 2 || !stamp(a.generated_at) || !interval(a.window) ||
-        !interval(a.baseline) || a.baseline.days !== 7 || a.baseline.end > a.window.start ||
+        !interval(a.baseline) || !Number.isInteger(a.baseline.days) || a.baseline.days < 1 || a.baseline.days > 90 || a.baseline.end > a.window.start ||
         !(a.data_through === null || stamp(a.data_through)) || !percentage(a.coverage_pct) ||
         !SEVERITIES.includes(a.severity)) return false;
+    const windows = a.baseline.windows ?? a.baseline.days;
+    if (!Number.isInteger(windows) || windows < 0 || windows > 90) return false;
     if (!items(a.metrics, 32, m => object(m) && text(m.key, 80) && localizedText(m.label, 160) && text(m.unit, 24) &&
         optionalNumber(m.value) && optionalNumber(m.baseline) && optionalNumber(m.change_pct) &&
-        percentage(m.coverage_pct) && Number.isInteger(m.baseline_days) && m.baseline_days >= 0 && m.baseline_days <= 7)) return false;
+        percentage(m.coverage_pct) && Number.isInteger(m.baseline_days) && m.baseline_days >= 0 && m.baseline_days <= windows)) return false;
     if (!items(a.findings, 32, f => object(f) && text(f.id, 160) && text(f.category, 80) &&
         SEVERITIES.includes(f.severity) && localizedText(f.title, 160) && localizedText(f.observation, 2000) &&
         stamp(f.start) && stamp(f.end) && f.end >= f.start && (f.metric === null || text(f.metric, 80)))) return false;
@@ -94,7 +96,7 @@
   const translations = {
     el: {
       'THE BIGGER PICTURE': 'Η ΣΥΝΟΛΙΚΗ ΕΙΚΟΝΑ', 'Energy insights': 'Ενεργειακές αναφορές',
-      '24-hour reviews, compared with the preceding week.': 'Ανασκόπηση 24 ωρών, σε σύγκριση με την προηγούμενη εβδομάδα.',
+      'On-demand reviews of recorded energy and recent patterns.': 'Ανασκοπήσεις κατόπιν αιτήματος της καταγεγραμμένης ενέργειας και πρόσφατων μοτίβων.',
       'Explore history ↗': 'Εξερεύνηση ιστορικού ↗', 'Loading reports…': 'Φόρτωση αναφορών…',
       'No reports published yet. Completed reviews will appear here.': 'Δεν έχουν δημοσιευτεί αναφορές ακόμη. Οι ολοκληρωμένες ανασκοπήσεις θα εμφανίζονται εδώ.',
       'Reports could not be refreshed. Any reports below are from the previous successful load.': 'Η ανανέωση απέτυχε. Οι αναφορές παρακάτω προέρχονται από την προηγούμενη επιτυχημένη φόρτωση.',
@@ -106,6 +108,8 @@
       'Latest': 'Τελευταία', 'Published': 'Δημοσιεύτηκε', 'Reviewed': 'Περίοδος', 'recorded': 'καταγεγραμμένο',
       'Athens time': 'Ώρα Αθήνας', 'Comparison period': 'Περίοδος σύγκρισης', 'Recorded figures': 'Καταγεγραμμένα στοιχεία',
       'Baseline': 'Βάση σύγκρισης', 'days compared': 'ημέρες σύγκρισης', 'No baseline': 'Χωρίς βάση σύγκρισης',
+      'windows compared': 'περίοδοι σύγκρισης',
+      'On-demand AI review · observations are not a diagnosis.': 'Ανασκόπηση AI κατόπιν αιτήματος · οι παρατηρήσεις δεν αποτελούν διάγνωση.',
       'Findings': 'Ευρήματα', 'Observed': 'Παρατηρήθηκε', 'AI interpretation': 'Ερμηνεία AI', 'Limitations': 'Περιορισμοί',
       'Latest included reading': 'Τελευταία συμπεριλαμβανόμενη μέτρηση', 'No readings included': 'Δεν περιλαμβάνονται μετρήσεις',
       'Show older reports': 'Παλαιότερες αναφορές', 'Show latest only': 'Μόνο οι νεότερες', 'Try again': 'Δοκιμή ξανά',
@@ -113,7 +117,7 @@
     },
     ru: {
       'THE BIGGER PICTURE': 'ОБЩАЯ КАРТИНА', 'Energy insights': 'Энергетические отчёты',
-      '24-hour reviews, compared with the preceding week.': 'Обзоры за 24 часа в сравнении с предшествующей неделей.',
+      'On-demand reviews of recorded energy and recent patterns.': 'Обзоры записанной энергии и недавних закономерностей по запросу.',
       'Explore history ↗': 'Открыть историю ↗', 'Loading reports…': 'Загрузка отчётов…',
       'No reports published yet. Completed reviews will appear here.': 'Отчётов пока нет. Завершённые обзоры появятся здесь.',
       'Reports could not be refreshed. Any reports below are from the previous successful load.': 'Обновить отчёты не удалось. Ниже показаны ранее загруженные отчёты.',
@@ -125,6 +129,8 @@
       'Latest': 'Последний', 'Published': 'Опубликовано', 'Reviewed': 'Период', 'recorded': 'записано',
       'Athens time': 'Афинское время', 'Comparison period': 'Период сравнения', 'Recorded figures': 'Записанные показатели',
       'Baseline': 'База сравнения', 'days compared': 'дней сравнения', 'No baseline': 'Нет базы сравнения',
+      'windows compared': 'периодов сравнения',
+      'On-demand AI review · observations are not a diagnosis.': 'Обзор ИИ по запросу · наблюдения не являются диагнозом.',
       'Findings': 'Наблюдения', 'Observed': 'Наблюдается', 'AI interpretation': 'Интерпретация ИИ', 'Limitations': 'Ограничения',
       'Latest included reading': 'Последнее учтённое показание', 'No readings included': 'Показания отсутствуют',
       'Show older reports': 'Предыдущие отчёты', 'Show latest only': 'Только последние', 'Try again': 'Повторить',
@@ -182,7 +188,7 @@
         const change = m.change_pct === null ? '' : ` · ${m.change_pct > 0 ? '+' : ''}${format(m.change_pct)}%`;
         card.append(label, element('strong', '', `${format(m.value)}${m.value === null ? '' : ' ' + m.unit}`),
           element('small', '', m.baseline === null ? t('No baseline') : `${t('Baseline')}: ${format(m.baseline)} ${m.unit}${change}`),
-          element('small', '', `${format(m.coverage_pct)}% ${t('recorded')} · ${m.baseline_days}/7 ${t('days compared')}`));
+          element('small', '', `${format(m.coverage_pct)}% ${t('recorded')} · ${m.baseline_days}/${a.baseline.windows ?? a.baseline.days} ${t(a.baseline.windows === undefined ? 'days compared' : 'windows compared')}`));
         metrics.append(card);
       }
       body.append(metrics);
@@ -209,14 +215,14 @@
       for (const limitation of a.limitations) limits.append(element('li', '', limitation));
       body.append(limits);
     }
-    body.append(element('p', 'insights-provenance', `${t('Automated review · observations are not a diagnosis.')} ${a.data_through === null ? t('No readings included') : t('Latest included reading') + ': ' + dateTime(a.data_through)}.`));
+    body.append(element('p', 'insights-provenance', `${t(a.baseline.windows === undefined ? 'Automated review · observations are not a diagnosis.' : 'On-demand AI review · observations are not a diagnosis.')} ${a.data_through === null ? t('No readings included') : t('Latest included reading') + ': ' + dateTime(a.data_through)}.`));
     details.append(summary, body);
     return details;
   }
 
   function render() {
     for (const [id, label] of Object.entries({ 'insights-eyebrow': 'THE BIGGER PICTURE', 'insights-title': 'Energy insights',
-      'insights-description': '24-hour reviews, compared with the preceding week.', 'insights-history-link': 'Explore history ↗' })) {
+      'insights-description': 'On-demand reviews of recorded energy and recent patterns.', 'insights-history-link': 'Explore history ↗' })) {
       document.getElementById(id).textContent = t(label);
     }
     const focusedReport = list.contains(document.activeElement) ? document.activeElement.closest('details')?.dataset.reportId : null;

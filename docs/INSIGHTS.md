@@ -1,5 +1,18 @@
 # Energy insights: reporting without equipment control
 
+## Manual-only conversion, 17/10/2026
+
+The Windows reporting task is disabled. The owner now requests reviews in chat
+when needed, selecting hours to review and days to compare. Chat-only review is
+read-only; publication remains a separate, explicitly requested action.
+See [manual reporting](MANUAL_REPORTS.md) for the current workflow and activation
+status. Existing reports, snapshots, grants and run evidence are retained.
+The old runner is not a fallback and its authorization need not be renewed for
+manual reviews. No cleanup has been performed.
+
+The remaining sections document the earlier automated installation, not current
+authorization to schedule or publish autonomously.
+
 ## Status and ownership
 
 **Current status, 14/10/2026:** the translated public UI, restricted reporting
