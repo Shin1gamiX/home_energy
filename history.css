@@ -286,3 +286,6 @@ html[data-theme="dark"] .history-page .calendar-legend { border-color: var(--the
 html[data-theme="dark"] .history-page .calendar-legend.is-ready::before { background: var(--theme-accent); box-shadow: 0 0 0 4px var(--theme-elevated); }
 html[data-theme="dark"] .history-page .calendar-today { color: var(--theme-text); background: var(--theme-elevated); border-color: var(--theme-border); }
 html[data-theme="dark"] .history-page :is(.chart-area, .averaging-control select, .monthly-scroll, .date-picker, .calendar-day, .mode-segment):focus-visible { outline-color: var(--theme-focus); }
+.series-key { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.series-key span { display: inline-flex; align-items: center; gap: 6px; }
+.series-key span::before { content: ''; width: 16px; height: 3px; background: var(--series-color); border-radius: 2px; }

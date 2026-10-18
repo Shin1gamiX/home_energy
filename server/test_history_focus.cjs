@@ -1,0 +1,27 @@
+'use strict';
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+const source = fs.readFileSync(path.join(__dirname, '../history.js'), 'utf8');
+const declaration = source.match(/^const selected = .*;$/m)[0];
+const context = {};
+vm.runInNewContext(declaration + '\nresult = [...selected];', context);
+assert.deepEqual(Array.from(context.result), ['load', 'pv', 'grid', 'battery', 'soc']);
+assert.match(source, /let showMode = true;/, 'Supply mode is the sixth starting statistic');
+assert.match(source, /Object.keys\(metrics\).filter\(k => !metrics\[k\].legacy\).forEach/, 'Select all still exposes the other non-legacy measurements');
+const start = source.indexOf('function seriesLegend(');
+const end = source.indexOf('\n}', start) + 2;
+const nodes = [];
+const document = {createElement(tag) {
+  const node = {tag, children: [], style: {setProperty(name, value) {this[name] = value;}}, append(child) {this.children.push(child);}};
+  nodes.push(node); return node;
+}};
+const metrics = {load: {label: 'Σπίτι', color: '#168b8a'}, pv: {label: 'Солнце', color: '#c39232'}};
+const legendContext = {document, metrics};
+vm.runInNewContext(source.slice(start, end) + '\nresult = seriesLegend(["load", "pv"]);', legendContext);
+assert.equal(legendContext.result.className, 'series-key');
+assert.deepEqual(legendContext.result.children.map(node => node.textContent), ['Σπίτι', 'Солнце']);
+assert.deepEqual(legendContext.result.children.map(node => node.style['--series-color']), ['#168b8a', '#c39232']);
+assert.ok(nodes.every(node => !Object.hasOwn(node, 'innerHTML')), 'Legend text never becomes HTML');
+console.log('Focused History: six starting statistics, other measurements retained and safe localized colour keys passed.');

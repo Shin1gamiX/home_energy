@@ -69,6 +69,16 @@ class PreviewHTTPTests(unittest.TestCase):
             _, headers, _ = self.request(path)
             self.assertIn('no-store', headers['Cache-Control'])
 
+    def test_comparison_is_opt_in_and_local_only(self):
+        status, headers, body = self.request('/history.html?compare=1')
+        self.assertEqual(status, 200)
+        self.assertIn('no-store', headers['Cache-Control'])
+        self.assertIn(b'/preview/history-comparison.js', body)
+        self.assertIn(b'/preview/history-comparison.css', body)
+        for route in ('/history.html', '/history.html?compare=0', '/'):
+            _, _, normal = self.request(route)
+            self.assertNotIn(b'/preview/history-comparison.', normal)
+
     def test_report_fixtures_respect_evidence_and_coverage(self):
         status, headers, body = self.request('/reports/index.json')
         self.assertEqual(status, 200)

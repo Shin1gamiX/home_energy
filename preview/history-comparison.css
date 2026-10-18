@@ -1,0 +1,6 @@
+.preview-comparison { margin: 0 0 24px; padding: 18px; border: 1px dashed var(--theme-accent); border-radius: 12px; background: var(--theme-surface); }
+.preview-comparison h2 { font-size: 18px; margin: 0 0 10px; }
+.preview-comparison p { max-width: 72ch; font-size: 13px; line-height: 1.6; color: var(--theme-muted); margin: 8px 0; }
+.preview-options { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+.preview-options button { min-height: 44px; font-size: 13px; }
+.preview-options button[aria-pressed=true] { background: var(--theme-accent); color: var(--theme-on-accent); border-color: var(--theme-accent); }

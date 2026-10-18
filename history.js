@@ -32,8 +32,8 @@ const historyDarkPalette = {
   '#adb8b4': '#8fa69d', '#c3ccc8': '#718b80', '#60776c': '#9cb4a8',
   '#284e43': '#80d4b3',
 };
-// Generic voltage/current remain selectable for older recorded history.
-const selected = new Set(Object.keys(metrics).filter(key => !['pv_voltage', 'pv_current'].includes(key)));
+// Start with the everyday readings; every other metric remains selectable.
+const selected = new Set(['load', 'pv', 'grid', 'battery', 'soc']);
 const timezone = 'Europe/Athens';
 const dateInput = document.querySelector('#history-date');
 const dateDisplay = document.querySelector('#date-display');
@@ -94,6 +94,18 @@ function historyColor(lightColor) {
   if (document.documentElement.dataset.theme !== 'dark') return lightColor;
   // SVG attributes and inline series colours cannot inherit the surface theme.
   return historyDarkPalette[lightColor] || lightColor;
+}
+
+function seriesLegend(keys) {
+  const legend = document.createElement('p');
+  legend.className = 'series-key';
+  for (const key of keys) {
+    const label = document.createElement('span');
+    label.style.setProperty('--series-color', metrics[key].color);
+    label.textContent = metrics[key].label;
+    legend.append(label);
+  }
+  return legend;
 }
 
 function renderPeaks(card, area, svg, keys, x, y, width, inspect) {
@@ -454,7 +466,7 @@ function renderView() {
     return;
   }
   for (const [group, title] of Object.entries({ power: 'Power', soc: 'Battery charge', voltage: 'Voltage', current: 'Current' })) {
-    const keys = Object.keys(metrics).filter(k => selected.has(k) && metrics[k].group === group);
+    const keys = [...selected].filter(key => metrics[key].group === group);
     if (!keys.length) continue;
     const card = document.createElement('article');
     card.className = 'chart-card';
@@ -472,9 +484,7 @@ function renderView() {
     reset.disabled = !zoom;
     reset.addEventListener('click', () => { zoom = null; render(); });
     cardHeader.append(reset);
-    const description = document.createElement('p');
-    description.textContent = keys.map(k => metrics[k].label).join(' · ');
-    card.append(cardHeader, description);
+    card.append(cardHeader, seriesLegend(keys));
     if (keys.includes('battery') || keys.includes('battery_current')) {
       const direction = document.createElement('p'); direction.className = 'battery-direction';
       direction.textContent = t('Battery: + charging · − discharging'); card.append(direction);

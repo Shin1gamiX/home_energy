@@ -215,7 +215,19 @@ class Preview(SimpleHTTPRequestHandler):
         cutoff = int(now.timestamp() // 5) * 5
         days = preview_days(now)
         route = urlsplit(self.path).path
-        if route == '/reports/index.json':
+        if route == '/history.html' and parse_qs(urlsplit(self.path).query).get('compare') == ['1']:
+            # Local preview only: never included in the deployable HTML or JS.
+            body = (ROOT / 'history.html').read_text(encoding='utf-8')
+            body = body.replace('</head>', '<link rel="stylesheet" href="/preview/history-comparison.css"></head>')
+            body = body.replace('</body>', '<script src="/preview/history-comparison.js"></script></body>')
+            encoded = body.encode('utf-8')
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.send_header('Content-Length', str(len(encoded)))
+            self.end_headers()
+            self.wfile.write(encoded)
+            return
+        elif route == '/reports/index.json':
             payload = preview_reports(cutoff)
         elif route == '/history/index.json':
             summaries = []
