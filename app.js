@@ -677,11 +677,16 @@ window.energyI18n = (() => {
   trigger.setAttribute('aria-expanded', 'false');
   trigger.setAttribute('aria-controls', 'language-menu');
   const languageName = document.createElement('span');
+  languageName.className = 'language-name';
   trigger.append(icon([
     ['circle', { cx: '12', cy: '12', r: '9' }],
     ['ellipse', { cx: '12', cy: '12', rx: '4', ry: '9' }],
     ['path', { d: 'M3 12h18' }]
   ]), languageName, icon([['path', { d: 'm7 10 5 5 5-5' }]], 'language-chevron'));
+  const languageShort = document.createElement('span');
+  languageShort.className = 'language-short';
+  languageShort.setAttribute('aria-hidden', 'true');
+  trigger.append(languageShort);
   const menu = document.createElement('div');
   menu.id = 'language-menu';
   menu.className = 'language-menu';
@@ -705,11 +710,17 @@ window.energyI18n = (() => {
     return option;
   });
   control.append(trigger, menu);
-  document.querySelector('header').append(control);
+  const themeToggle = document.querySelector('header .theme-toggle');
+  if (themeToggle) {
+    const utilities = document.createElement('div'); utilities.className = 'header-utilities';
+    utilities.append(control, themeToggle);
+    document.querySelector('header').append(utilities);
+  } else document.querySelector('header').append(control);
   function apply() {
     document.documentElement.lang = language;
     document.title = t(pageTitle);
     languageName.textContent = languageNames[language];
+    languageShort.textContent = language.toUpperCase();
     languageName.setAttribute('lang', language);
     trigger.setAttribute('aria-label', `${t('Language')}: ${languageNames[language]}`);
     menu.setAttribute('aria-label', t('Language'));

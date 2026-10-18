@@ -50,6 +50,7 @@ function fixture({ saved = null, blockedRead = false, blockedWrite = false, page
       return new Element(tag);
     },
     querySelector(selector) {
+      if (selector === 'header .theme-toggle') return null;
       assert.equal(selector, 'header');
       return header;
     },

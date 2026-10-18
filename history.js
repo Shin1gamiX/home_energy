@@ -609,12 +609,11 @@ function renderSummary() {
   heading.textContent = t(period === 'day' ? 'Daily summary' : period === 'week' ? 'Weekly summary' : 'Monthly summary');
   section.append(heading);
   const cards = document.createElement('div'); cards.className = 'summary-cards';
-  cards.tabIndex = 0;
-  cards.setAttribute('aria-label', t('Energy summaries. Scroll to see more.'));
   const totals = summaryTotals();
   const format = value => new Intl.NumberFormat(window.energyI18n.locale, { maximumFractionDigits: 2 }).format(value);
   for (const [key, name] of Object.entries(summaryLabels)) {
     const card = document.createElement('article'); card.className = 'summary-card'; card.style.setProperty('--summary-color', metrics[summaryMetricKeys[key] || key].color);
+    card.dataset.energy = key;
     const label = document.createElement('h3'); label.textContent = t(name);
     const value = document.createElement('div'); value.className = 'summary-value';
     const number = document.createElement('strong'); number.textContent = !loading && !hasError && totals[key].seconds ? format(totals[key].kwh) : '—';
@@ -678,6 +677,7 @@ function renderAllTime() {
   for (const [key, name] of Object.entries(summaryLabels)) {
     const value = hasData ? allTimeSummary.totals[key] : null;
     const card = document.createElement('article'); card.className = 'summary-card';
+    card.dataset.energy = key;
     card.style.setProperty('--summary-color', metrics[summaryMetricKeys[key] || key].color);
     const label = document.createElement('h3'); label.textContent = t(name);
     const reading = document.createElement('div'); reading.className = 'summary-value';

@@ -137,7 +137,7 @@ console.log('All-time energy response validation checks passed.');
 function renderSummaryState(state) {
   const elements = [];
   function element(tag) {
-    const node = {tag, children: [], textContent: '', style: {setProperty() {}},
+    const node = {tag, children: [], dataset: {}, textContent: '', style: {setProperty() {}},
       setAttribute() {}, addEventListener() {},
       append(...children) { this.children.push(...children); },
       replaceChildren() { this.children = []; }};
