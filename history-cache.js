@@ -119,11 +119,14 @@
   }
 
   class HistoryDataCache {
-    constructor({ storage = new IndexedDayStore(), fetcher = (...args) => root.fetch(...args), now = Date.now } = {}) {
+    constructor({ storage = new IndexedDayStore(), fetcher = (...args) => root.fetch(...args), now = Date.now, concurrency = 4 } = {}) {
       this.storage = storage;
       this.fetcher = fetcher;
       this.now = now;
       this.days = new Map();
+      this.concurrency = Math.max(1, Math.min(8, Math.floor(concurrency) || 4));
+      this.queue = [];
+      this.active = 0;
     }
 
     invalidate() {
@@ -132,27 +135,74 @@
       this.days.clear();
     }
 
-    get(day) {
+    get(day, { signal } = {}) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return Promise.reject(new Error('Invalid history day'));
-      if (this.days.has(day)) {
-        const pending = this.days.get(day);
-        this.days.delete(day); this.days.set(day, pending);
-        return pending;
+      if (signal?.aborted) return Promise.reject(signal.reason);
+      let entry = this.days.get(day);
+      if (!entry) {
+        entry = { day, controller: new AbortController(), consumers: 0, keepAlive: false, settled: false, started: false };
+        entry.promise = new Promise((resolve, reject) => { entry.resolve = resolve; entry.reject = reject; });
+        this.queue.push(entry);
       }
-      const pending = this.load(day).catch(error => {
-        if (this.days.get(day) === pending) this.days.delete(day);
-        throw error;
-      });
-      this.days.set(day, pending);
+      this.days.delete(day); this.days.set(day, entry);
       while (this.days.size > MAX_DAYS) this.days.delete(this.days.keys().next().value);
-      return pending;
+      const result = this.subscribe(entry, signal);
+      this.pump();
+      return result;
     }
 
-    async load(day) {
+    subscribe(entry, signal) {
+      if (!signal) { entry.keepAlive = true; return entry.promise; }
+      entry.consumers++;
+      return new Promise((resolve, reject) => {
+        let finished = false;
+        const finish = (callback, value) => {
+          if (finished) return;
+          finished = true; signal.removeEventListener('abort', abort); entry.consumers--;
+          callback(value);
+        };
+        const abort = () => {
+          finish(reject, signal.reason);
+          // Cancelling one view must not cancel another view's shared day.
+          if (!entry.settled && !entry.consumers && !entry.keepAlive) {
+            if (this.days.get(entry.day) === entry) this.days.delete(entry.day);
+            entry.controller.abort();
+            if (!entry.started) {
+              this.queue = this.queue.filter(job => job !== entry);
+              entry.settled = true; entry.reject(entry.controller.signal.reason);
+            }
+          }
+        };
+        signal.addEventListener('abort', abort, { once: true });
+        entry.promise.then(value => finish(resolve, value), error => finish(reject, error));
+      });
+    }
+
+    pump() {
+      while (this.active < this.concurrency && this.queue.length) {
+        const entry = this.queue.shift();
+        entry.started = true; this.active++;
+        void this.run(entry);
+      }
+    }
+
+    async run(entry) {
+      const timeout = setTimeout(() => entry.controller.abort(new DOMException('History request timed out', 'TimeoutError')), 10000);
+      try { entry.resolve(await this.load(entry.day, entry.controller.signal)); }
+      catch (error) {
+        if (this.days.get(entry.day) === entry) this.days.delete(entry.day);
+        entry.reject(error);
+      } finally {
+        clearTimeout(timeout); entry.settled = true; this.active--; this.pump();
+      }
+    }
+
+    async load(day, signal) {
       const stored = await this.storage.get(day).catch(() => null);
+      signal.throwIfAborted();
       const cached = validRecord(stored, day, this.now()) ? stored : null;
       const response = await this.fetcher(`/history/${day}.json`, {
-        cache: 'no-store', signal: AbortSignal.timeout(10000),
+        cache: 'no-store', signal,
         headers: cached ? { 'If-None-Match': cached.etag } : {},
       });
       if (response.status === 304 && cached) {

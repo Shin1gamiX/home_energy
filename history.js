@@ -44,6 +44,7 @@ const refreshButton = document.querySelector('#refresh-history');
 const refreshCooldown = 5 * 60 * 1000;
 let nextRefreshAt = 0;
 let retryAt = 0;
+let rangeRequest;
 let indexPromise;
 let allTimeSummary = null;
 let summaryUnavailable = false;
@@ -247,6 +248,9 @@ async function load({ refresh = false, keepContext = false } = {}) {
     history.replaceState(null, '', url);
   }
   document.querySelectorAll('[data-period]').forEach(button => button.setAttribute('aria-pressed', String(!linkedContext && button.dataset.period === period)));
+  rangeRequest?.abort();
+  const controller = new AbortController();
+  rangeRequest = controller;
   historyCalendar.close();
   if (refresh) {
     indexPromise = undefined;
@@ -292,7 +296,7 @@ async function load({ refresh = false, keepContext = false } = {}) {
       return;
     }
     const days = [...historyCalendar.recordedDays].filter(d => d >= current.start && d < current.end);
-    const files = await Promise.all(days.map(day => historyData.get(day)));
+    const files = await Promise.all(days.map(day => historyData.get(day, { signal: controller.signal })));
     if (id !== requestId) return;
     if (files.some(file => !Array.isArray(file.points))) throw new Error('Invalid history');
     rawRows = files.flatMap(file => file.points);
@@ -305,6 +309,7 @@ async function load({ refresh = false, keepContext = false } = {}) {
     render();
   } catch {
     if (id !== requestId) return;
+    controller.abort();
     if (!indexReady) historyCalendar.setAvailability(null, 'error');
     loading = false;
     hasError = true;
