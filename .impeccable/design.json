@@ -1,0 +1,560 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-18T16:31:48+03:00",
+  "title": "Design System: Home Energy",
+  "extensions": {
+    "status": {
+      "scope": "production Overview and History; public checks completed on 18/10/2026",
+      "deployed": true,
+      "finishDisposition": "SHIP — LOCAL PREVIEW",
+      "validationBoundary": "Approved interface deployed to both HTTPS hostnames. Public checks covered Overview/History rendering, live telemetry availability, source popups, report links, themes, English/Greek/Russian labels, desktop/mobile layouts, assets and unchanged report bytes. The finish disposition records the earlier local design review. No independent electrical-measurement accuracy or device-control operation was verified; no restart or report publication was requested."
+    },
+    "colorMeta": {
+      "theme-accent": {
+        "role": "primary",
+        "displayName": "accent",
+        "cssProperty": "--theme-accent",
+        "theme": "light",
+        "tonalRamp": [
+          "oklch(15% 0.0781 174.4)",
+          "oklch(25% 0.0781 174.4)",
+          "oklch(35% 0.0781 174.4)",
+          "oklch(45% 0.0781 174.4)",
+          "oklch(55% 0.0781 174.4)",
+          "oklch(65% 0.0781 174.4)",
+          "oklch(80% 0.0781 174.4)",
+          "oklch(95% 0.0781 174.4)"
+        ]
+      },
+      "theme-accent-dark": {
+        "role": "primary",
+        "displayName": "accent dark",
+        "cssProperty": "--theme-accent",
+        "theme": "dark",
+        "tonalRamp": [
+          "oklch(15% 0.0989 170.7)",
+          "oklch(25% 0.0989 170.7)",
+          "oklch(35% 0.0989 170.7)",
+          "oklch(45% 0.0989 170.7)",
+          "oklch(55% 0.0989 170.7)",
+          "oklch(65% 0.0989 170.7)",
+          "oklch(80% 0.0989 170.7)",
+          "oklch(95% 0.0989 170.7)"
+        ]
+      },
+      "theme-on-accent": {
+        "role": "primary",
+        "displayName": "on accent",
+        "cssProperty": "--theme-on-accent",
+        "theme": "light",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.0)",
+          "oklch(25% 0.0000 0.0)",
+          "oklch(35% 0.0000 0.0)",
+          "oklch(45% 0.0000 0.0)",
+          "oklch(55% 0.0000 0.0)",
+          "oklch(65% 0.0000 0.0)",
+          "oklch(80% 0.0000 0.0)",
+          "oklch(95% 0.0000 0.0)"
+        ]
+      },
+      "theme-on-accent-dark": {
+        "role": "primary",
+        "displayName": "on accent dark",
+        "cssProperty": "--theme-on-accent",
+        "theme": "dark",
+        "tonalRamp": [
+          "oklch(15% 0.0306 166.2)",
+          "oklch(25% 0.0306 166.2)",
+          "oklch(35% 0.0306 166.2)",
+          "oklch(45% 0.0306 166.2)",
+          "oklch(55% 0.0306 166.2)",
+          "oklch(65% 0.0306 166.2)",
+          "oklch(80% 0.0306 166.2)",
+          "oklch(95% 0.0306 166.2)"
+        ]
+      },
+      "theme-page": {
+        "role": "neutral",
+        "displayName": "page",
+        "cssProperty": "--theme-page",
+        "theme": "light",
+        "tonalRamp": [
+          "oklch(15% 0.0051 145.5)",
+          "oklch(25% 0.0051 145.5)",
+          "oklch(35% 0.0051 145.5)",
+          "oklch(45% 0.0051 145.5)",
+          "oklch(55% 0.0051 145.5)",
+          "oklch(65% 0.0051 145.5)",
+          "oklch(80% 0.0051 145.5)",
+          "oklch(95% 0.0051 145.5)"
+        ]
+      },
+      "theme-page-dark": {
+        "role": "neutral",
+        "displayName": "page dark",
+        "cssProperty": "--theme-page",
+        "theme": "dark",
+        "tonalRamp": [
+          "oklch(15% 0.0199 184.5)",
+          "oklch(25% 0.0199 184.5)",
+          "oklch(35% 0.0199 184.5)",
+          "oklch(45% 0.0199 184.5)",
+          "oklch(55% 0.0199 184.5)",
+          "oklch(65% 0.0199 184.5)",
+          "oklch(80% 0.0199 184.5)",
+          "oklch(95% 0.0199 184.5)"
+        ]
+      },
+      "theme-surface": {
+        "role": "neutral",
+        "displayName": "surface",
+        "cssProperty": "--theme-surface",
+        "theme": "light",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.0)",
+          "oklch(25% 0.0000 0.0)",
+          "oklch(35% 0.0000 0.0)",
+          "oklch(45% 0.0000 0.0)",
+          "oklch(55% 0.0000 0.0)",
+          "oklch(65% 0.0000 0.0)",
+          "oklch(80% 0.0000 0.0)",
+          "oklch(95% 0.0000 0.0)"
+        ]
+      },
+      "theme-surface-dark": {
+        "role": "neutral",
+        "displayName": "surface dark",
+        "cssProperty": "--theme-surface",
+        "theme": "dark",
+        "tonalRamp": [
+          "oklch(15% 0.0246 182.6)",
+          "oklch(25% 0.0246 182.6)",
+          "oklch(35% 0.0246 182.6)",
+          "oklch(45% 0.0246 182.6)",
+          "oklch(55% 0.0246 182.6)",
+          "oklch(65% 0.0246 182.6)",
+          "oklch(80% 0.0246 182.6)",
+          "oklch(95% 0.0246 182.6)"
+        ]
+      },
+      "theme-elevated": {
+        "role": "neutral",
+        "displayName": "elevated",
+        "cssProperty": "--theme-elevated",
+        "theme": "light",
+        "tonalRamp": [
+          "oklch(15% 0.0083 157.1)",
+          "oklch(25% 0.0083 157.1)",
+          "oklch(35% 0.0083 157.1)",
+          "oklch(45% 0.0083 157.1)",
+          "oklch(55% 0.0083 157.1)",
+          "oklch(65% 0.0083 157.1)",
+          "oklch(80% 0.0083 157.1)",
+          "oklch(95% 0.0083 157.1)"
+        ]
+      },
+      "theme-elevated-dark": {
+        "role": "neutral",
+        "displayName": "elevated dark",
+        "cssProperty": "--theme-elevated",
+        "theme": "dark",
+        "tonalRamp": [
+          "oklch(15% 0.0281 180.8)",
+          "oklch(25% 0.0281 180.8)",
+          "oklch(35% 0.0281 180.8)",
+          "oklch(45% 0.0281 180.8)",
+          "oklch(55% 0.0281 180.8)",
+          "oklch(65% 0.0281 180.8)",
+          "oklch(80% 0.0281 180.8)",
+          "oklch(95% 0.0281 180.8)"
+        ]
+      },
+      "theme-text": {
+        "role": "neutral",
+        "displayName": "text",
+        "cssProperty": "--theme-text",
+        "theme": "light",
+        "tonalRamp": [
+          "oklch(15% 0.0407 182.7)",
+          "oklch(25% 0.0407 182.7)",
+          "oklch(35% 0.0407 182.7)",
+          "oklch(45% 0.0407 182.7)",
+          "oklch(55% 0.0407 182.7)",
+          "oklch(65% 0.0407 182.7)",
+          "oklch(80% 0.0407 182.7)",
+          "oklch(95% 0.0407 182.7)"
+        ]
+      },
+      "theme-text-dark": {
+        "role": "neutral",
+        "displayName": "text dark",
+        "cssProperty": "--theme-text",
+        "theme": "dark",
+        "tonalRamp": [
+          "oklch(15% 0.0103 174.3)",
+          "oklch(25% 0.0103 174.3)",
+          "oklch(35% 0.0103 174.3)",
+          "oklch(45% 0.0103 174.3)",
+          "oklch(55% 0.0103 174.3)",
+          "oklch(65% 0.0103 174.3)",
+          "oklch(80% 0.0103 174.3)",
+          "oklch(95% 0.0103 174.3)"
+        ]
+      },
+      "theme-muted": {
+        "role": "neutral",
+        "displayName": "muted",
+        "cssProperty": "--theme-muted",
+        "theme": "light",
+        "tonalRamp": [
+          "oklch(15% 0.0311 178.7)",
+          "oklch(25% 0.0311 178.7)",
+          "oklch(35% 0.0311 178.7)",
+          "oklch(45% 0.0311 178.7)",
+          "oklch(55% 0.0311 178.7)",
+          "oklch(65% 0.0311 178.7)",
+          "oklch(80% 0.0311 178.7)",
+          "oklch(95% 0.0311 178.7)"
+        ]
+      },
+      "theme-muted-dark": {
+        "role": "neutral",
+        "displayName": "muted dark",
+        "cssProperty": "--theme-muted",
+        "theme": "dark",
+        "tonalRamp": [
+          "oklch(15% 0.0239 172.7)",
+          "oklch(25% 0.0239 172.7)",
+          "oklch(35% 0.0239 172.7)",
+          "oklch(45% 0.0239 172.7)",
+          "oklch(55% 0.0239 172.7)",
+          "oklch(65% 0.0239 172.7)",
+          "oklch(80% 0.0239 172.7)",
+          "oklch(95% 0.0239 172.7)"
+        ]
+      },
+      "theme-border": {
+        "role": "neutral",
+        "displayName": "border",
+        "cssProperty": "--theme-border",
+        "theme": "light",
+        "tonalRamp": [
+          "oklch(15% 0.0143 162.4)",
+          "oklch(25% 0.0143 162.4)",
+          "oklch(35% 0.0143 162.4)",
+          "oklch(45% 0.0143 162.4)",
+          "oklch(55% 0.0143 162.4)",
+          "oklch(65% 0.0143 162.4)",
+          "oklch(80% 0.0143 162.4)",
+          "oklch(95% 0.0143 162.4)"
+        ]
+      },
+      "theme-border-dark": {
+        "role": "neutral",
+        "displayName": "border dark",
+        "cssProperty": "--theme-border",
+        "theme": "dark",
+        "tonalRamp": [
+          "oklch(15% 0.0319 174.6)",
+          "oklch(25% 0.0319 174.6)",
+          "oklch(35% 0.0319 174.6)",
+          "oklch(45% 0.0319 174.6)",
+          "oklch(55% 0.0319 174.6)",
+          "oklch(65% 0.0319 174.6)",
+          "oklch(80% 0.0319 174.6)",
+          "oklch(95% 0.0319 174.6)"
+        ]
+      },
+      "theme-hover": {
+        "role": "neutral",
+        "displayName": "hover",
+        "cssProperty": "--theme-hover",
+        "theme": "light",
+        "tonalRamp": [
+          "oklch(15% 0.0133 159.9)",
+          "oklch(25% 0.0133 159.9)",
+          "oklch(35% 0.0133 159.9)",
+          "oklch(45% 0.0133 159.9)",
+          "oklch(55% 0.0133 159.9)",
+          "oklch(65% 0.0133 159.9)",
+          "oklch(80% 0.0133 159.9)",
+          "oklch(95% 0.0133 159.9)"
+        ]
+      },
+      "theme-hover-dark": {
+        "role": "neutral",
+        "displayName": "hover dark",
+        "cssProperty": "--theme-hover",
+        "theme": "dark",
+        "tonalRamp": [
+          "oklch(15% 0.0331 171.4)",
+          "oklch(25% 0.0331 171.4)",
+          "oklch(35% 0.0331 171.4)",
+          "oklch(45% 0.0331 171.4)",
+          "oklch(55% 0.0331 171.4)",
+          "oklch(65% 0.0331 171.4)",
+          "oklch(80% 0.0331 171.4)",
+          "oklch(95% 0.0331 171.4)"
+        ]
+      },
+      "theme-focus": {
+        "role": "primary",
+        "displayName": "focus",
+        "cssProperty": "--theme-focus",
+        "theme": "light",
+        "tonalRamp": [
+          "oklch(15% 0.0856 172.0)",
+          "oklch(25% 0.0856 172.0)",
+          "oklch(35% 0.0856 172.0)",
+          "oklch(45% 0.0856 172.0)",
+          "oklch(55% 0.0856 172.0)",
+          "oklch(65% 0.0856 172.0)",
+          "oklch(80% 0.0856 172.0)",
+          "oklch(95% 0.0856 172.0)"
+        ]
+      },
+      "theme-focus-dark": {
+        "role": "primary",
+        "displayName": "focus dark",
+        "cssProperty": "--theme-focus",
+        "theme": "dark",
+        "tonalRamp": [
+          "oklch(15% 0.0804 168.8)",
+          "oklch(25% 0.0804 168.8)",
+          "oklch(35% 0.0804 168.8)",
+          "oklch(45% 0.0804 168.8)",
+          "oklch(55% 0.0804 168.8)",
+          "oklch(65% 0.0804 168.8)",
+          "oklch(80% 0.0804 168.8)",
+          "oklch(95% 0.0804 168.8)"
+        ]
+      }
+    },
+    "colorRampNote": "Tonal ramps are synthesized display-only swatch aids, not additional application tokens or approved palette requirements.",
+    "typographyMeta": {
+      "display": {
+        "displayName": "Overview title",
+        "purpose": "Main Overview heading; History and mobile have their documented size overrides."
+      },
+      "headline": {
+        "displayName": "Flow heading",
+        "purpose": "Heading inside the flow surface."
+      },
+      "title": {
+        "displayName": "Review title",
+        "purpose": "Latest review heading in the editorial insights column."
+      },
+      "body": {
+        "displayName": "Review prose",
+        "purpose": "Editorial narrative; not a global body-size override."
+      },
+      "label": {
+        "displayName": "Control label",
+        "purpose": "Compact control and metadata text."
+      },
+      "measurement": {
+        "displayName": "Source reading",
+        "purpose": "Primary source-card reading; keep units adjacent and tabular numerals."
+      }
+    },
+    "shadows": [
+      {
+        "name": "language-menu-light",
+        "value": "0 12px 32px #234d3f1a, 0 2px 6px #234d3f08",
+        "purpose": "Inherited light language menu; styles.css."
+      },
+      {
+        "name": "language-menu-dark",
+        "value": "0 12px 32px #0006",
+        "purpose": "Inherited dark language menu; theme.css."
+      },
+      {
+        "name": "calendar-light",
+        "value": "0 18px 60px #203c3526, 0 3px 12px #203c3510",
+        "purpose": "Light calendar dialog; history.css."
+      },
+      {
+        "name": "calendar-dark",
+        "value": "0 18px 60px #0006",
+        "purpose": "Dark calendar dialog; history.css."
+      }
+    ],
+    "motion": [
+      {
+        "name": "language-option",
+        "value": "background 120ms ease, color 120ms ease",
+        "purpose": "Language-menu choice state; styles.css."
+      },
+      {
+        "name": "language-trigger",
+        "value": "background 150ms ease, border-color 150ms ease, box-shadow 150ms ease",
+        "purpose": "Inherited language trigger state; interface.css removes its surface shadow."
+      },
+      {
+        "name": "language-menu-enter",
+        "value": "160ms ease-out",
+        "purpose": "Opacity 0 to 1; translateY(-4px) scale(.98) to translateY(0) scale(1)."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "prefers-reduced-motion: reduce",
+        "purpose": "CSS animations/transitions are disabled; app.js also observes the preference for flow rendering."
+      }
+    ],
+    "focus": [
+      {
+        "name": "button-link-light",
+        "value": "3px solid #518b77; offset 4px",
+        "purpose": "Inherited general button/link outline; styles.css."
+      },
+      {
+        "name": "theme-control",
+        "value": "3px solid var(--theme-focus); offset 3px",
+        "refersTo": "colors.theme-focus",
+        "purpose": "Theme toggle outline; theme.css."
+      },
+      {
+        "name": "chart-inspection",
+        "value": "2px solid #32826c; offset 4px",
+        "refersTo": "colors.theme-focus",
+        "purpose": "Focusable chart area; history.css."
+      },
+      {
+        "name": "report-disclosure",
+        "value": "3px solid var(--theme-focus); offset -3px",
+        "refersTo": "colors.theme-focus",
+        "purpose": "Native report summary; insights.css."
+      },
+      {
+        "name": "dark-focus",
+        "value": "var(--theme-focus)",
+        "refersTo": "colors.theme-focus-dark",
+        "purpose": "Dark theme substitutes its focus color; preserve component width and offset."
+      },
+      {
+        "name": "date-field",
+        "value": "native browser outline",
+        "purpose": "Date text field retains native focus; the dark theme sets its outline color."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact-desktop",
+        "value": "1200px",
+        "purpose": "Maximum width query: page gutters, Overview columns, and History title/control stacking."
+      },
+      {
+        "name": "stacked-overview",
+        "value": "1000px",
+        "purpose": "Maximum width query: Overview stacks; summary becomes three columns."
+      },
+      {
+        "name": "mobile",
+        "value": "700px",
+        "purpose": "Maximum width query: header navigation row, two-column totals, compact controls, and shorter charts."
+      },
+      {
+        "name": "inherited-mode-details",
+        "value": "600px",
+        "purpose": "Maximum width query: mode-detail fields use a single compact column."
+      },
+      {
+        "name": "compact-calendar",
+        "value": "380px",
+        "purpose": "Maximum width query: calendar padding, cell spacing, and title size reduce."
+      }
+    ],
+    "snippetContext": "Examples use inherited --theme-* CSS properties from the application. Literal legacy component values are retained where the source does not expose a custom property. No imports, remote assets, or framework runtime are required. Series color may be supplied as --series by the existing history palette.",
+    "asset": {
+      "path": "assets/solar-home.webp",
+      "provenance": "assets/solar-home.provenance.json",
+      "role": "Decorative conceptual home; not the actual installation."
+    }
+  },
+  "components": [
+    {
+      "name": "Secondary action",
+      "kind": "button",
+      "refersTo": "action-secondary",
+      "description": "Quiet outlined action, as used for older reviews and retry.",
+      "html": "<button class=\"ds-action\" type=\"button\">Show older reports</button>",
+      "css": ".ds-action { font: 14px Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; min-height: 44px; padding: 8px 12px; color: var(--theme-text); background: transparent; border: 1px solid var(--theme-border); border-radius: 8px; cursor: pointer; } .ds-action:hover { background: #e6eee8; } .ds-action:focus-visible { outline: 3px solid #518b77; outline-offset: 4px; } :host-context([data-theme=\"dark\"]) .ds-action:hover { background: var(--theme-hover); } :host-context([data-theme=\"dark\"]) .ds-action:focus-visible { outline-color: var(--theme-focus); }"
+    },
+    {
+      "name": "Date field",
+      "kind": "input",
+      "refersTo": "date-field",
+      "description": "Native date-text entry beside calendar and period navigation; no sample reading.",
+      "html": "<input class=\"ds-date\" type=\"text\" inputmode=\"numeric\" maxlength=\"10\" placeholder=\"DD/MM/YYYY\" aria-label=\"DD/MM/YYYY\">",
+      "css": ".ds-date { font: 14px Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; width: 128px; height: 44px; padding: 10px; color: var(--theme-text); caret-color: var(--theme-accent); background: transparent; border: 1px solid #d4dfd8; border-radius: 9px; } .ds-date:hover { background: transparent; } .ds-date:focus-visible { outline: auto; } :host-context([data-theme=\"dark\"]) .ds-date { border-color: var(--theme-border); } :host-context([data-theme=\"dark\"]) .ds-date:focus-visible { outline-color: var(--theme-focus); }"
+    },
+    {
+      "name": "Page navigation",
+      "kind": "nav",
+      "refersTo": "navigation-current",
+      "description": "Current page is indicated by an underline and aria-current.",
+      "html": "<nav class=\"ds-nav\" aria-label=\"Main navigation\"><a href=\"/\" aria-current=\"page\">Overview</a><a href=\"history.html\">History</a></nav>",
+      "css": ".ds-nav { display: flex; gap: 28px; font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; } .ds-nav a { position: relative; padding: 16px 0; color: #425f52; font-size: 15px; font-weight: 600; text-decoration: none; } .ds-nav a[aria-current] { color: var(--theme-text); } .ds-nav a[aria-current]::after { content: \"\"; position: absolute; inset-inline: 0; bottom: 0; height: 3px; border-radius: 2px; background: var(--theme-accent); } .ds-nav a:not([aria-current]):hover { color: var(--theme-accent); } .ds-nav a:focus-visible { outline: 3px solid #518b77; outline-offset: 4px; } :host-context([data-theme=\"dark\"]) .ds-nav a:not([aria-current]) { color: var(--theme-muted); } :host-context([data-theme=\"dark\"]) .ds-nav a:focus-visible { outline-color: var(--theme-focus); } :host-context([data-theme=\"dark\"]) .ds-nav a:not([aria-current]):hover { color: var(--theme-accent); }"
+    },
+    {
+      "name": "Series toggle",
+      "kind": "chip",
+      "refersTo": "series-toggle",
+      "description": "Selected series combines a colored inset mark with aria-pressed; existing history code supplies --series.",
+      "html": "<button class=\"ds-series\" type=\"button\" aria-pressed=\"true\">Grid (est.)</button>",
+      "css": ".ds-series { display: inline-flex; align-items: center; gap: 6px; min-height: 42px; padding: 7px; border: 0; border-radius: 8px; background: transparent; color: #425f52; font: 12px Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; cursor: pointer; } .ds-series::before { content: \"\"; width: 14px; height: 14px; border: 1px solid var(--series, var(--theme-grid)); border-radius: 4px; } .ds-series[aria-pressed=\"true\"]::before { background: var(--series, var(--theme-grid)); box-shadow: inset 0 0 0 3px var(--theme-surface); } .ds-series[aria-pressed=\"false\"] { color: var(--theme-muted); text-decoration: line-through; } .ds-series:hover { background: #e6eee8; } .ds-series:focus-visible { outline: 3px solid #518b77; outline-offset: 4px; } :host-context([data-theme=\"dark\"]) .ds-series { color: var(--theme-text); } :host-context([data-theme=\"dark\"]) .ds-series:hover { background: var(--theme-hover); } :host-context([data-theme=\"dark\"]) .ds-series:focus-visible { outline-color: var(--theme-focus); }"
+    },
+    {
+      "name": "Insights disclosure",
+      "kind": "card",
+      "refersTo": "insights-surface",
+      "description": "Opaque insights surface with an editorial native disclosure and a real History link.",
+      "html": "<section class=\"ds-insights\"><h2>Energy insights</h2><details class=\"ds-review\"><summary>Saved review</summary><p>Saved reviews, not live alerts.</p><a href=\"history.html\">Explore history ↗</a></details></section>",
+      "css": ".ds-insights { padding: 24px; border: 1px solid var(--theme-border); border-radius: 12px; background: var(--theme-surface); color: var(--theme-text); font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; } .ds-insights h2 { margin: 0; font-size: 25px; font-weight: 600; letter-spacing: -.025em; } .ds-review { margin-top: 18px; border-top: 1px solid var(--theme-border); } .ds-review summary { padding: 20px 0; font-size: 23px; font-weight: 600; line-height: 1.3; letter-spacing: -.025em; cursor: pointer; } .ds-review summary:hover { background: transparent; } .ds-review summary:focus-visible { outline: 3px solid var(--theme-focus); outline-offset: -3px; } .ds-review p { color: var(--theme-muted); font-size: 14px; line-height: 1.7; } .ds-review a { display: inline-flex; align-items: center; min-height: 44px; color: var(--theme-accent); font-size: 13px; text-underline-offset: 4px; } .ds-review a:hover { color: var(--theme-accent); } .ds-review a:focus-visible { outline: 3px solid var(--theme-focus); outline-offset: 4px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Quiet home-energy workspace",
+    "overview": "A calm operating interface makes the home's present readings and recorded history easy to inspect. Mineral off-white, deep evergreen, opaque surfaces, fine outlines, and restrained system typography give measurements priority. Source colors and the existing brand remain recognizable.\n\nThis reference captures the implemented, user-approved Overview B and History concepts. Their page compositions are specific to those tasks; future pages should reuse the visual language without automatically inheriting a house diagram, an insights column, or a chart-first layout.",
+    "keyCharacteristics": [
+      "Opaque mineral and evergreen surfaces with quiet outlines.",
+      "Measurements, units, coverage, and freshness remain visible.",
+      "Purposeful page hierarchy with equivalent access in English, Greek, and Russian."
+    ],
+    "rules": [
+      {
+        "name": "The State and Label Rule",
+        "body": "Pair source and status color with text, units, selection state, or a visible mark; color alone must not carry the meaning.",
+        "section": "colors"
+      },
+      {
+        "name": "The Measurement Rule",
+        "body": "Keep W/kW, V, A, %, and kWh attached to their actual quantities. Power formatting changes to kW at an absolute magnitude of 1000 W; voltage and current retain their own units.",
+        "section": "typography"
+      },
+      {
+        "name": "The Surface Scope Rule",
+        "body": "Preserve the approved compositions on Overview and History without turning their structure into a requirement for every future surface.",
+        "section": "layout"
+      },
+      {
+        "name": "The Data Truth Rule",
+        "body": "Missing measurements remain unavailable; do not invent values, infer unsupported battery voltage, or present simulated preview readings as live telemetry.",
+        "section": "components"
+      }
+    ],
+    "dos": [
+      "Do preserve all available electrical measurements, their units, signed battery direction, coverage, and freshness.",
+      "Do keep English, Greek, and Russian translations, light/dark themes, keyboard access, and reduced-motion behavior.",
+      "Do retain source-specific chart colors and visible selection cues.",
+      "Do retain the illustration provenance and label simulated preview data clearly."
+    ],
+    "donts": [
+      "Don't convert missing measurements into zero or add battery voltage that the public feed does not supply.",
+      "Don't hide A, W/kW, or V readings to simplify a small-screen layout.",
+      "Don't present future time as a recording gap or a saved review as a live alert.",
+      "Don't treat Overview or History composition as a universal page template."
+    ]
+  }
+}
