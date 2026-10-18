@@ -95,6 +95,8 @@
 
   const translations = {
     el: {
+      'Review summary': 'Σύνοψη αναφοράς',
+      'Recorded energy review': 'Ανασκόπηση καταγεγραμμένης ενέργειας', 'findings': 'ευρήματα',
       'THE BIGGER PICTURE': 'Η ΣΥΝΟΛΙΚΗ ΕΙΚΟΝΑ', 'Energy insights': 'Ενεργειακές αναφορές',
       'On-demand reviews of recorded energy and recent patterns.': 'Ανασκοπήσεις κατόπιν αιτήματος της καταγεγραμμένης ενέργειας και πρόσφατων μοτίβων.',
       'Explore history ↗': 'Εξερεύνηση ιστορικού ↗', 'Loading reports…': 'Φόρτωση αναφορών…',
@@ -116,6 +118,8 @@
       'Automated review · observations are not a diagnosis.': 'Αυτόματη ανασκόπηση · οι παρατηρήσεις δεν αποτελούν διάγνωση.'
     },
     ru: {
+      'Review summary': 'Сводка отчёта',
+      'Recorded energy review': 'Обзор записанной энергии', 'findings': 'наблюдений',
       'THE BIGGER PICTURE': 'ОБЩАЯ КАРТИНА', 'Energy insights': 'Энергетические отчёты',
       'On-demand reviews of recorded energy and recent patterns.': 'Обзоры записанной энергии и недавних закономерностей по запросу.',
       'Explore history ↗': 'Открыть историю ↗', 'Loading reports…': 'Загрузка отчётов…',
@@ -173,11 +177,14 @@
     meta.append(element('span', 'insights-badge', severityName(a.severity)));
     if (newest) meta.append(element('span', 'insights-newest', t('Latest')));
     meta.append(timeElement(report.published_at, t('Published') + ' '));
-    const description = element('p', 'insights-summary', report.narrative.summary);
+    const lead = a.findings.find(finding => finding.severity === a.severity) || a.findings[0];
+    const description = element('p', 'insights-summary', lead?.title || t('Recorded energy review'));
+    if (a.findings.length > 1) meta.append(element('span', 'insights-count', `${a.findings.length} ${t('findings')}`));
     const chevron = element('span', 'insights-chevron'); chevron.setAttribute('aria-hidden', 'true');
     summary.append(meta, description,
       element('p', 'insights-window', `${t('Reviewed')} ${dateTime(a.window.start)} – ${dateTime(a.window.end)} · ${t('Athens time')} · ${format(a.coverage_pct)}% ${t('recorded')}`), chevron);
     const body = element('div', 'insights-body');
+    body.append(element('h3', '', t('Review summary')), element('p', 'insights-narrative', report.narrative.summary));
     body.append(element('p', 'insights-baseline', `${t('Comparison period')}: ${dateTime(a.baseline.start)} – ${dateTime(a.baseline.end)}`));
     if (a.metrics.length) {
       body.append(element('h3', '', t('Recorded figures')));
