@@ -169,6 +169,7 @@ window.energyComets = (() => {
       return node;
     };
     const media = matchMedia('(prefers-reduced-motion: reduce)');
+    let sceneVisible = typeof IntersectionObserver === 'undefined';
     const svg = element('svg', { class: 'energy-connections comet-layer', 'aria-hidden': 'true' });
     const definitions = element('defs');
     const glow = element('filter', { id: 'comet-soft-glow', x: '-50%', y: '-50%', width: '200%', height: '200%' });
@@ -343,8 +344,8 @@ window.energyComets = (() => {
       frame = null; previous = null;
     }
     function requestFrame() {
-      const running = enabled && !media.matches && !document.hidden && active.length > 0 && !disposed;
-      svg.dataset.motion = !enabled ? 'stopped' : media.matches ? 'reduced' : document.hidden ? 'hidden' : running ? 'running' : 'idle';
+      const running = enabled && !media.matches && !document.hidden && sceneVisible && active.length > 0 && !disposed;
+      svg.dataset.motion = !enabled ? 'stopped' : media.matches ? 'reduced' : document.hidden ? 'hidden' : !sceneVisible ? 'offscreen' : running ? 'running' : 'idle';
       if (running && frame === null) frame = requestAnimationFrame(tick);
     }
     function tick(timestamp) {
@@ -399,6 +400,14 @@ window.energyComets = (() => {
       requestFrame();
     }
     const observer = new ResizeObserver(scheduleLayout);
+    const visibilityObserver = typeof IntersectionObserver === 'undefined' ? null : new IntersectionObserver(entries => {
+      if (disposed) return;
+      const entry = entries.find(item => item.target === scene);
+      if (!entry || sceneVisible === entry.isIntersecting) return;
+      sceneVisible = entry.isIntersecting;
+      visibilityChanged();
+    });
+    visibilityObserver?.observe(scene);
     observer.observe(scene);
     Object.values(cards).forEach(node => observer.observe(node));
     media.addEventListener('change', updateMotion);
@@ -424,6 +433,7 @@ window.energyComets = (() => {
         cancelFrame();
         if (layoutFrame !== null) cancelAnimationFrame(layoutFrame);
         observer.disconnect();
+        visibilityObserver?.disconnect();
         media.removeEventListener('change', updateMotion);
         document.removeEventListener('visibilitychange', visibilityChanged);
         window.removeEventListener('themechange', themeChanged);

@@ -131,7 +131,7 @@ const cards = {
 };
 scene.querySelector = selector => cards[selector.slice(1).replace('-label', '')];
 const events = {}, media = {matches:false, addEventListener(_, fn) {this.change = fn;}, removeEventListener() {this.change = null;}};
-let resize, disconnected = false, sequence = 0, timestamp = 0;
+let resize, intersection, visibilityDisconnected = false, disconnected = false, sequence = 0, timestamp = 0;
 const frames = new Map();
 const document = {
   hidden:false, createElementNS:() => new Node(),
@@ -144,6 +144,7 @@ const host = {window:{innerWidth:1280, addEventListener(name, fn) {windowEvents[
   requestAnimationFrame(fn) { const id = ++sequence; frames.set(id, fn); return id; },
   cancelAnimationFrame(id) { frames.delete(id); },
   ResizeObserver: class {constructor(fn) {resize = fn;} observe() {} disconnect() {disconnected = true;}},
+  IntersectionObserver: class {constructor(fn) {intersection = fn;} observe() {} disconnect() {visibilityDisconnected = true;}},
 };
 vm.runInNewContext(source, host);
 const engine = host.window.energyComets.create(scene);
@@ -155,6 +156,9 @@ function frame() {
 function routes() { return layer.children.filter(node => node.dataset.cometRoute); }
 function setFlow(watts) { engine.setState({routes:{solarHouse:true, solarBattery:true}, routeWatts:{solarHouse:watts, solarBattery:watts}}); }
 setFlow(550); engine.setEnabled(true); frame();
+assert.equal(layer.dataset.motion, 'offscreen');
+assert.equal(frames.size, 0, 'No continuous frame before visibility is known');
+intersection([{target: scene, isIntersecting: true}]);
 assert.equal(routes().length, 2);
 assert.ok(routes().every(route => route.dataset.beamLimit === 2));
 const originalRoute = routes()[0];
@@ -177,6 +181,11 @@ assert.equal(layer.style.display, 'none', 'non-live readings hide all tracks and
 assert.ok(routes().every(route => route.dataset.activeBeams === '0'));
 engine.setEnabled(true);
 assert.equal(layer.dataset.motion, 'running');
+intersection([{target: scene, isIntersecting: false}]);
+assert.equal(frames.size, 0, 'Scrolling offscreen cancels the animation loop');
+assert.equal(layer.dataset.motion, 'offscreen');
+intersection([{target: scene, isIntersecting: true}]);
+assert.equal(frames.size, 1, 'Returning onscreen resumes exactly one loop');
 media.matches = true; media.change();
 assert.equal(frames.size, 0);
 assert.equal(layer.style.display, '');
@@ -209,6 +218,7 @@ assert.equal(layer.dataset.motion, 'idle');
 engine.destroy();
 assert.equal(scene.children.length, 0);
 assert.equal(disconnected, true);
+assert.equal(visibilityDisconnected, true);
 assert.equal(events.visibilitychange, undefined);
 assert.equal(media.change, null);
 assert.equal(windowEvents.themechange, undefined);
