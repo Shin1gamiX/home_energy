@@ -253,7 +253,9 @@ window.energyComets = (() => {
       const group = element('g', { 'data-comet-route':key, 'data-watts':watts });
       group.style.setProperty('--comet-color', route.color);
       const track = element('path', { class:'comet-track', stroke:route.color, d:pathData(link) });
-      group.append(track);
+      // A quiet surface-coloured underlay keeps routes readable over the artwork.
+      const underlay = element('path', { class:'comet-track-underlay', fill:'none', stroke:'none', d:pathData(link) });
+      group.append(underlay, track);
       for (const p of [a,b]) group.append(element('circle', { class:'comet-port', cx:p.x, cy:p.y, r:'2' }));
       const source = borderBranches(from,a,true), target = borderBranches(to,b,false);
       const timing = timings(link.length), schedule = cadence(watts, timing);
@@ -522,6 +524,10 @@ window.energyI18n = (() => {
       'Language': 'Язык', 'Home · Energy': 'Дом · Энергия', 'Energy history · Home': 'История энергии · Дом',
       'Home energy overview': 'Обзор энергии дома', 'HOME ENERGY': 'ЭНЕРГИЯ ДОМА', 'Mode · ': 'Режим · ',
       'Inverter operating mode': 'Режим работы инвертора', 'History ↗': 'История ↗',
+      'Home, at a glance': 'Дом с первого взгляда', 'Power flow': 'Потоки энергии',
+      'Understand what powered your home.': 'Как ваш дом получал энергию.',
+      'More measurements': 'Другие показатели', 'Chart view': 'Вид графика',
+      'Mode timeline': 'История режимов', 'Later today': 'Позже сегодня',
       'House power information.': 'Энергоснабжение дома.', 'POWER OVERVIEW': 'ОБЗОР МОЩНОСТИ',
       'Solar': 'Солнце', 'Grid': 'Сеть', 'Grid (est.)': 'Сеть (расч.)', 'Battery': 'Батарея', 'House': 'Дом',
       'A connected view of your home.': 'Энергопотоки вашего дома.', 'Grid power': 'Мощность сети',
@@ -625,6 +631,10 @@ window.energyI18n = (() => {
       'Language': 'Γλώσσα', 'Home · Energy': 'Σπίτι · Ενέργεια', 'Energy history · Home': 'Ιστορικό ενέργειας · Σπίτι',
       'Home energy overview': 'Επισκόπηση ενέργειας σπιτιού', 'HOME ENERGY': 'ΕΝΕΡΓΕΙΑ ΣΠΙΤΙΟΥ', 'Mode · ': 'Λειτουργία · ',
       'Inverter operating mode': 'Λειτουργία μετατροπέα', 'History ↗': 'Ιστορικό ↗',
+      'Home, at a glance': 'Το σπίτι, με μια ματιά', 'Power flow': 'Ροή ενέργειας',
+      'Understand what powered your home.': 'Δείτε τι τροφοδότησε το σπίτι σας.',
+      'More measurements': 'Περισσότερες μετρήσεις', 'Chart view': 'Προβολή γραφήματος',
+      'Mode timeline': 'Ιστορικό λειτουργίας', 'Later today': 'Αργότερα σήμερα',
       'House power information.': 'Ενέργεια του σπιτιού.', 'POWER OVERVIEW': 'ΕΠΙΣΚΟΠΗΣΗ ΙΣΧΥΟΣ',
       'Solar': 'Ηλιακή', 'Grid': 'Δίκτυο', 'Grid (est.)': 'Δίκτυο (εκτ.)', 'Battery': 'Μπαταρία', 'House': 'Σπίτι',
       'A connected view of your home.': 'Οι ροές ενέργειας του σπιτιού σας.', 'Grid power': 'Ισχύς δικτύου',
@@ -807,6 +817,8 @@ window.energyI18n = (() => {
 })();
 
 if (document.querySelector('.energy-scene')) {
+// Operational status belongs beside freshness, not in the primary navigation.
+document.querySelector('.intro-status').append(document.querySelector('.header-status'));
 const { t } = window.energyI18n;
 // Simulation is limited to the local preview. Production reads the allowlisted endpoint.
 const demo = location.hostname === '127.0.0.1' && location.port === '8766';
@@ -895,8 +907,7 @@ function render(sample) {
   currentReadings.forEach(({ line, unit, label, key, battery }) => {
     line.title = t(label);
     unit.textContent = battery ? t('A (avg.)') : 'A';
-    line.hidden = Number.isFinite(sample[key]) && Math.abs(sample[key]) < 0.05;
-    if (battery && Number.isFinite(sample.battery) && Math.abs(sample.battery) < 0.5) line.hidden = true;
+    line.hidden = false;
   });
   // Dashboard convention: positive = charging, negative = discharging.
   const mode = demo ? sample.mode : latest?.mode;
@@ -909,7 +920,7 @@ function render(sample) {
     element.textContent = t(state.batteryLabel);
     element.title = state.batteryState === 'waiting' ? t('Waiting for 40% charge before battery use resumes.') : '';
   });
-  document.querySelectorAll('.battery-watts').forEach(element => { element.hidden = Number.isFinite(sample.battery) && Math.abs(sample.battery) < 0.5; });
+  document.querySelectorAll('.battery-watts').forEach(element => { element.hidden = false; });
   const values = sample;
   document.querySelectorAll('[data-value]').forEach(element => {
     const key = element.dataset.value;
@@ -931,8 +942,7 @@ function render(sample) {
     const format = value => Number.isFinite(value)
       ? new Intl.NumberFormat(window.energyI18n.locale, { maximumFractionDigits: 1 }).format(value) : '—';
     const current = values[prefix + 'current'];
-    details.textContent = `${format(values[prefix + 'voltage'])} V` +
-      (Number.isFinite(current) && Math.abs(current) < .05 ? '' : ` · ${format(current)} A`);
+    details.textContent = `${format(values[prefix + 'voltage'])} V · ${format(current)} A`;
     details.title = `${t(`PV${channel} voltage`)} · ${t(`PV${channel} current`)}`;
   }
   document.querySelectorAll('#charge-bar, .scene-charge-bar').forEach(element => { element.style.width = `${Math.max(0, Math.min(100, sample.soc ?? 0))}%`; });

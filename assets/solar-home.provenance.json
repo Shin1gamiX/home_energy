@@ -1,0 +1,7 @@
+{
+  "asset": "solar-home.webp",
+  "created": "2026-10-18",
+  "method": "Built-in image generation; transparent PNG encoded as WebP quality 85 with alpha preserved",
+  "reference": "User-approved Overview B (home-desktop.png), 18/10/2026",
+  "prompt": "Use case: stylized-concept. Create a standalone production illustration asset matching ONLY the small isometric solar-panel house in the supplied approved dashboard concept. Reference image is style and object reference, NOT a UI to reproduce. Render one refined architectural miniature: white contemporary two-story house with pitched dark blue photovoltaic roof, subtly warm windows, small white wall-mounted home battery, few shrubs and two little trees, pale grey tiled diamond-shaped plot. Match the reference perspective and restrained photorealistic 3D model aesthetic. Entire house and plot visible with comfortable transparent margins on every side. Square composition, native transparent alpha background, diffuse neutral daylight, subtle contact shadow only. No UI, cards, connecting lines, numbers, labels, logo, text, watermark, gradients or solid background. This is a decorative conceptual home, not a representation of the user's exact equipment."
+}

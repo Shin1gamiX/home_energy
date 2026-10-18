@@ -1,0 +1,260 @@
+/* Approved Overview B / chart-first History presentation.
+   This layer owns page composition; existing modules own data and interactions. */
+:root {
+  --theme-page: #f3f6f3;
+  --theme-surface: #ffffff;
+  --theme-elevated: #edf3ef;
+  --theme-text: #163833;
+  --theme-muted: #526b65;
+  --theme-border: #d7e2dc;
+  --theme-accent: #166453;
+  --muted: var(--theme-muted);
+}
+:root[data-theme=dark] {
+  --theme-page: #0e1c1a;
+  --theme-surface: #142623;
+  --theme-elevated: #1b302c;
+  --theme-text: #e8f1ee;
+  --theme-muted: #b0c4bd;
+  --theme-border: #344c45;
+  --theme-accent: #7dd9bb;
+}
+html { background: var(--theme-page); scrollbar-color: var(--theme-border) var(--theme-page); }
+body.overview, body.history-page { background: var(--theme-page); color: var(--theme-text); }
+::selection { background: var(--theme-accent); color: var(--theme-on-accent); }
+input { caret-color: var(--theme-accent); }
+.dashboard { max-width: 1500px; padding: 0 32px 24px; }
+.dashboard > header { min-height: 88px; padding: 16px 4px; border-bottom: 1px solid var(--theme-border); gap: 20px; }
+.brand { font-size: 20px; letter-spacing: -.025em; }
+.brand-mark { width: 44px; height: 44px; }
+.brand-sub { font-size: 10px; letter-spacing: .22em; }
+.page-nav { border: 0; border-radius: 0; padding: 0; gap: 28px; margin: 0 auto; }
+.page-nav a { position: relative; border-radius: 0; padding: 16px 0; font-size: 15px; }
+html .dashboard .page-nav a[aria-current=page] { background: none; color: var(--theme-text); }
+.page-nav a[aria-current=page]::after { content: ''; position: absolute; height: 3px; bottom: 0; inset-inline: 0; background: var(--theme-accent); border-radius: 2px; }
+.page-nav a:not([aria-current]):hover { background: none; color: var(--theme-accent); }
+html .dashboard .language-trigger, html .dashboard .theme-toggle { border-color: transparent; background: transparent; box-shadow: none; border-radius: 8px; }
+.theme-toggle { border-left-color: var(--theme-border); }
+.overview .intro, .history-page .intro { margin: 28px 4px 24px; align-items: flex-start; }
+h1 { font-size: clamp(29px, 3.2vw, 44px); font-weight: 650; letter-spacing: -.035em; line-height: 1.15; }
+.intro p { font-size: 16px; }
+.intro-status { padding-top: 5px; line-height: 1.5; }
+.intro-status .header-status { margin-top: 4px; }
+.mode-badge { padding: 0; border: 0; font-size: 12px; }
+.overview .overview-workspace { display: grid; grid-template-columns: minmax(0, 1.9fr) minmax(330px, 1fr); gap: 16px; align-items: start; }
+.overview-workspace > .connection-alert { grid-column: 1 / -1; margin-bottom: 0; }
+html .overview .energy-scene { height: 660px; background: var(--theme-surface); border: 1px solid var(--theme-border); border-radius: 12px; }
+.scene-title { position: absolute; top: 22px; left: 24px; margin: 0; font-size: 24px; font-weight: 650; letter-spacing: -.025em; }
+.overview .scene-heading { top: 29px; right: 24px; left: auto; }
+.overview .scene-heading > span:last-child { display: none; }
+.overview .house { width: 72%; max-width: 560px; height: auto; top: 126px; opacity: 1; }
+:root:not([data-theme=dark]) .overview { --flow-solar: #875809; --theme-solar: #875809; }
+.overview .comet-track-underlay { stroke: var(--theme-surface); stroke-width: 5; stroke-linecap: round; }
+:root .overview .comet-track { stroke-width: 1.6; opacity: 1; }
+:root .overview .comet-port { opacity: 1; stroke: var(--theme-surface); stroke-width: 1; }
+.overview .scene-label { width: 198px; max-width: 34%; padding: 16px; gap: 12px; border-radius: 12px; background: var(--theme-surface); border-color: var(--theme-border); align-items: flex-start; font-size: 13px; }
+.overview .scene-label .mini-icon { margin-top: 5px; }
+.overview .scene-label div > span { font-size: 29px; line-height: 1.25; color: var(--theme-text); }
+.overview .scene-label div > span:has([data-value=grid_voltage]) { font-size: 18px; margin-top: 8px; }
+.overview .scene-label small { font-size: 13px; }
+.overview .scene-label div > span.current-reading { font-size: 15px; line-height: 1.5; color: var(--theme-muted); }
+.overview .grid-label, .overview .solar-label { top: 80px; }
+.overview .grid-label, .overview .load-label { left: 24px; }
+.overview .solar-label, .overview .battery-label { right: 24px; }
+.overview .battery-label, .overview .load-label { bottom: 58px; }
+.overview .solar-label { width: 224px; }
+.overview .battery-label { width: 224px; }
+.overview .pv-channel > span.pv-channel-details { font-size: 12px; line-height: 1.4; color: var(--theme-muted); }
+.overview .pv-channel > span.pv-channel-power { font-size: 14px; }
+.overview .pv-channel > strong { font-size: 12px; }
+.overview .scene-label .battery-watts { font-size: 19px; }
+.overview .scene-label .battery-status { font-size: 12px; }
+.overview .scene-caption { text-align: left; padding: 0 24px; font-size: 12px; bottom: 22px; color: var(--theme-muted); }
+.overview .reading-details { margin-top: 16px; border-radius: 12px; background: var(--theme-surface); }
+.overview footer { font-size: 12px; margin-top: 22px; }
+/* An editorial latest review, with all older reports still reachable. */
+.overview-workspace .energy-insights { margin: 0; min-width: 0; min-height: 660px; padding: 24px; border-radius: 12px; }
+.insights-heading { display: block; }
+.insights-heading h2 { font-size: 25px; letter-spacing: -.025em; }
+#insights-eyebrow { display: none; }
+.insights-heading #insights-description { font-size: 13px; }
+.insights-heading a { display: inline-flex; align-items: center; min-height: 44px; margin-top: 4px; font-size: 13px; }
+.energy-insights .insights-report { border: 0; border-top: 1px solid var(--theme-border); border-radius: 0; margin-top: 18px; overflow: visible; }
+.energy-insights .insights-report > summary { padding: 20px 0; }
+.energy-insights .insights-report > summary:hover { background: transparent; }
+.energy-insights .insights-summary { font-size: 23px; line-height: 1.3; letter-spacing: -.025em; margin: 16px 24px 12px 0; }
+.insights-lead { font-size: 14px; line-height: 1.7; margin: 0 0 16px; color: var(--theme-muted); }
+.insights-review-action { display: block; margin-top: 18px; color: var(--theme-accent); font-size: 14px; font-weight: 600; }
+.energy-insights .insights-window { font-size: 12px; }
+.energy-insights .insights-chevron { right: 4px; top: 26px; }
+.energy-insights .insights-report[open] .insights-chevron { top: 30px; }
+.energy-insights .insights-body { padding: 0 0 18px; }
+.energy-insights .insights-metrics { grid-template-columns: 1fr; }
+.energy-insights .insights-metric { border-radius: 0; padding: 12px 0; background: transparent; border-bottom: 1px solid var(--theme-border); }
+.energy-insights .insights-metric strong { font-size: 22px; }
+.energy-insights .insights-metric :is(span, small), .energy-insights .insights-finding p, .energy-insights .insights-limitations { font-size: 13px; }
+.energy-insights .insights-actions { padding-top: 18px; margin-top: 0; border-top: 1px solid var(--theme-border); }
+.energy-insights .insights-actions button { font-size: 14px; min-height: 44px; }
+/* History: title and period controls share a band; summary is one readable strip. */
+.history-page .dashboard { display: grid; grid-template-columns: minmax(320px, 1fr) auto; column-gap: 24px; }
+.history-page .dashboard > * { grid-column: 1 / -1; min-width: 0; }
+.history-page .intro { grid-column: 1; margin: 28px 0 24px; flex-direction: column; gap: 8px; }
+.history-page .intro > p { font-size: 11px; line-height: 1.5; }
+.history-page .intro h1 { font-size: 34px; }
+html .history-page .history-navigation { grid-column: 2; position: static; padding: 0; margin: 28px 0 24px; border: 0; box-shadow: none; background: transparent; border-radius: 0; display: flex; flex-wrap: wrap; justify-content: flex-end; align-content: flex-start; gap: 12px; }
+html[data-theme] .history-page .history-navigation { background: transparent; }
+.history-page .history-navigation .periods { margin: 0; width: auto; border-radius: 8px; padding: 0; max-width: none; }
+.history-navigation .periods button { padding: 10px 16px; border-radius: 7px; min-height: 44px; white-space: nowrap; }
+.history-navigation .date-controls { margin: 0; gap: 6px; }
+.history-navigation .date-controls button { height: 44px; min-width: 40px; padding: 5px 10px; }
+.history-navigation .date-controls #date-display { width: 128px; height: 44px; padding: 10px; font-size: 14px; }
+.history-navigation #range-label { flex-basis: 100%; text-align: right; margin: 0; }
+.history-page .energy-summary { margin: 0 0 24px; border: 1px solid var(--theme-border); border-radius: 12px; background: var(--theme-surface); padding: 18px 0 12px; }
+.energy-summary > h2 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.history-page .summary-cards, .history-page.all-time-view .summary-cards { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0; overflow: visible; }
+html .history-page .summary-card { padding: 0 20px; background: transparent; border: 0; border-radius: 0; min-width: 0; }
+.history-page .summary-card + .summary-card { border-left: 1px solid var(--theme-border); }
+.summary-card h3 { color: var(--theme-text); min-height: 20px; font-size: 13px; margin-bottom: 8px; }
+.summary-card h3::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 7px; background: var(--summary-color); border-radius: 50%; }
+.history-page .summary-value { white-space: normal; color: var(--theme-text); }
+.history-page .summary-value strong { font-size: clamp(23px, 2.4vw, 32px); font-weight: 650; }
+.history-page .summary-card p { font-size: 11px; color: var(--theme-muted); }
+.history-page .summary-note { margin: 16px 20px 0; font-size: 11px; text-align: center; color: var(--theme-muted); }
+.history-workspace { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 20px; padding: 20px 24px 0; border: 1px solid var(--theme-border); border-radius: 12px; background: var(--theme-surface); }
+.history-workspace > * { grid-column: 1 / -1; min-width: 0; }
+.history-workspace .chart-settings { grid-column: 1; grid-row: 2; align-self: center; }
+.history-workspace .chart-settings[open] { grid-column: 1 / -1; grid-row: auto; }
+.history-workspace .chart-options { grid-column: 2; grid-row: 2; }
+.history-workspace .history-toolbar { grid-column: 1; }
+.history-workspace #fit-history { grid-column: 2; align-self: center; }
+.focused-view .chart-card:not(.mode-card) > .series-key { display: none; }
+.history-view-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.chart-views { display: flex; flex-wrap: wrap; border: 1px solid var(--theme-border); border-radius: 8px; padding: 2px; gap: 2px; }
+.chart-views button { min-height: 42px; border: 0; border-radius: 6px; font-size: 13px; padding: 8px 15px; }
+html .chart-views button[aria-pressed=true] { background: var(--theme-accent); color: var(--theme-on-accent); }
+.quick-series { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.quick-series button { display: inline-flex; align-items: center; gap: 6px; min-height: 42px; padding: 7px; border: 0; font-size: 12px; }
+.quick-series button::before { content: ''; width: 14px; height: 14px; border: 1px solid var(--series); border-radius: 4px; background: transparent; }
+.quick-series button[aria-pressed=true]::before { background: var(--series); box-shadow: inset 0 0 0 3px var(--theme-surface); }
+.quick-series button[aria-pressed=false] { color: var(--theme-muted); text-decoration: line-through; }
+.history-workspace .chart-settings { margin-top: 8px; border: 0; border-radius: 0; background: transparent; }
+.history-workspace .chart-settings > summary { padding: 10px 0; font-size: 12px; font-weight: 500; color: var(--theme-muted); }
+.history-workspace .chart-options { margin: 0; padding: 0; gap: 14px; justify-content: flex-start; }
+.history-workspace .chart-options :is(label, select) { font-size: 12px; }
+.history-workspace .history-toolbar { margin: 4px 0 0; min-height: 44px; }
+.history-workspace #history-status, .history-workspace #history-updated { font-size: 11px; margin: 2px 0; }
+.history-workspace #chart-jumps { display: none; }
+.history-workspace #fit-history { margin: 4px 0; font-size: 12px; min-height: 36px; }
+.history-workspace #charts { display: flex; flex-direction: column; }
+html .history-workspace .chart-card { border: 0; border-radius: 0; padding: 12px 0 20px; margin: 0; background: transparent; }
+.history-workspace .chart-header h2 { font-size: 17px; }
+.history-workspace .chart-area svg { height: 285px; }
+.chart-future { fill: var(--theme-elevated); opacity: .7; }
+.history-workspace .chart-tip { background: var(--theme-elevated); border-radius: 8px; }
+.history-workspace .peak-summary { display: flex; flex-wrap: wrap; gap: 12px 20px; }
+.history-workspace .peak-summary > p { flex-basis: 100%; margin: 0; font-size: 11px; }
+.history-workspace .peak-row { display: flex; flex: 1; min-width: 180px; margin: 0; }
+.history-workspace .peak-row strong { flex-basis: 100%; font-size: 12px; }
+.history-workspace .peak-row button { border: 0; padding: 8px 0; background: transparent; font-size: 11px; min-height: 36px; }
+.history-workspace .mode-card { border-top: 1px solid var(--theme-border); padding-top: 20px; }
+.history-workspace .mode-plot { display: block; margin-top: 16px; }
+.history-workspace .mode-labels { display: none; }
+html .history-workspace .mode-tracks { height: 36px !important; background: var(--theme-elevated); border-radius: 5px; }
+.history-workspace .mode-segment { top: 0 !important; height: 36px; border-radius: 0; overflow: hidden; font-size: 11px; font-weight: 600; color: #10211c; }
+:root:not([data-theme=dark]) .history-workspace .mode-segment:is([data-mode=grid], [data-mode=mixed]) { color: #fff; }
+.history-workspace .mode-segment:first-of-type { border-radius: 5px 0 0 5px; }
+.history-workspace .mode-future { border: 1px dashed var(--theme-muted); background: var(--theme-surface); font-size: 11px; display: grid; place-items: center; padding: 0; }
+.history-workspace .mode-axis { margin: 10px 0 12px; }
+.history-workspace .mode-totals { border: 0; margin: 10px 0; padding: 0; gap: 6px 16px; font-size: 11px; }
+.history-workspace .mode-totals > span { background: transparent; border: 0; padding: 4px 0; }
+.history-workspace .mode-totals > span::before { content: ''; display: inline-block; width: 7px; height: 7px; background: var(--mode-color); margin-right: 7px; border-radius: 50%; }
+.history-workspace .mode-detail { font-size: 12px; }
+.history-workspace .mode-card :is(.mode-note, .mode-help) { font-size: 11px; margin: 10px 0; }
+.history-workspace .mode-controls button { min-height: 36px; }
+.history-workspace[hidden] { display: none; }
+.all-time-view .history-workspace { border: 0; padding: 0; background: transparent; }
+@media (max-width: 1200px) {
+  .dashboard { padding-inline: 24px; }
+  .overview .overview-workspace { grid-template-columns: minmax(0, 1.7fr) minmax(310px, 1fr); }
+  .overview .scene-label { max-width: 40%; padding: 14px 12px; gap: 8px; }
+  .overview .scene-label .mini-icon { display: none; }
+  .overview-workspace .energy-insights { padding: 22px; }
+  .history-page .dashboard { display: block; }
+  .history-page .intro { margin-bottom: 16px; }
+  html .history-page .history-navigation { justify-content: flex-start; margin: 0 0 18px; }
+  .history-navigation #range-label { text-align: left; }
+  html .history-page .summary-card { padding-inline: 12px; }
+}
+@media (max-width: 1000px) {
+  .overview .overview-workspace { grid-template-columns: minmax(0, 1fr); }
+  .overview-workspace .energy-insights { min-height: 0; }
+  .overview .energy-scene { height: 620px; }
+  .overview .scene-label { max-width: 34%; }
+  .overview .house { top: 90px; max-width: 520px; }
+  .energy-insights .insights-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+  .history-page .summary-cards, .history-page.all-time-view .summary-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 18px; }
+  .history-page .summary-card:nth-child(4) { border-left: 0; }
+}
+@media (max-width: 700px) {
+  .dashboard, .overview .dashboard { padding: 0 16px 24px; }
+  .dashboard > header, .overview header { display: flex; flex-wrap: wrap; gap: 8px 12px; min-height: 80px; padding: 16px 0 0; }
+  .brand { font-size: 17px; margin-right: auto; }
+  .brand-mark { width: 40px; height: 40px; }
+  .brand-sub { font-size: 8px; }
+  .overview header .language-control, .history-page header .language-control { order: 1; }
+  .overview header .theme-toggle, .history-page header .theme-toggle { order: 2; }
+  .overview header .page-nav, .history-page header .page-nav { order: 3; width: 100%; justify-content: flex-start; margin: 0; gap: 28px; }
+  .language-trigger { gap: 6px; padding: 9px 6px; font-size: 12px; }
+  .language-trigger > svg:first-child { display: none; }
+  .theme-toggle { width: 40px; height: 40px; padding: 9px; }
+  .page-nav a { min-height: 44px; padding: 12px 0; font-size: 14px; }
+  .overview .intro, .history-page .intro { flex-direction: column; margin: 22px 0 20px; gap: 10px; }
+  html:not([lang=en]) .intro h1, .intro h1, .history-page .intro h1 { font-size: 29px; }
+  .intro p { font-size: 14px; }
+  .intro-status { flex-direction: row; flex-wrap: wrap; align-items: center; text-align: left; gap: 4px 12px; padding: 0; font-size: 12px; }
+  .intro-status .date { display: inline; font-size: 12px; }
+  .intro-status .header-status { margin: 0; flex-direction: row; align-items: center; gap: 10px; }
+  html .overview .energy-scene { height: 610px; border-radius: 12px; }
+  .scene-title { top: 20px; left: 16px; font-size: 21px; }
+  .overview .scene-heading { top: 25px; right: 16px; font-size: 10px; }
+  .overview .house { top: 195px; width: 90%; max-width: 390px; }
+  .overview .scene-label { width: calc(50% - 24px); max-width: none; padding: 13px 12px; font-size: 12px; }
+  .overview .grid-label, .overview .load-label { left: 16px; }
+  .overview .solar-label, .overview .battery-label { right: 16px; }
+  .overview .grid-label, .overview .solar-label { top: 64px; }
+  .overview .load-label, .overview .battery-label { bottom: 60px; }
+  .overview .scene-label div > span { font-size: 27px; }
+  .overview .pv-channel > span.pv-channel-details { font-size: 11px; }
+  .overview .scene-label small { font-size: 12px; }
+  .overview .scene-label div > span.current-reading { font-size: 14px; }
+  .overview .scene-label .battery-watts { font-size: 18px; }
+  .overview .scene-caption { font-size: 11px; padding-inline: 16px; bottom: 20px; }
+  .overview-workspace .energy-insights { padding: 20px; }
+  .energy-insights .insights-summary { font-size: 23px; }
+  .energy-insights .insights-metrics { grid-template-columns: 1fr; gap: 0; }
+  html .history-page .history-navigation { gap: 10px; }
+  .history-page .history-navigation .periods { width: 100%; }
+  .history-navigation .periods button { padding: 10px 8px; font-size: 13px; }
+  .history-navigation .date-controls { gap: 5px; flex-wrap: nowrap; width: 100%; }
+  .history-navigation .date-controls #date-display { flex: 1; width: 100px; }
+  .history-navigation .date-controls button { min-width: 34px; padding: 6px; }
+  .history-navigation #range-label { font-size: 11px; }
+  .history-page .summary-cards, .history-page.all-time-view .summary-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 18px; }
+  .history-page .summary-card:nth-child(4) { border-left: 1px solid var(--theme-border); }
+  .history-page .summary-card:nth-child(odd) { border-left: 0; }
+  .summary-card h3 { font-size: 12px; min-height: 0; }
+  .history-page .summary-value strong { font-size: 25px; }
+  .history-page .summary-note { text-align: left; margin-inline: 12px; line-height: 1.5; }
+  .history-workspace { padding: 14px 12px 0; display: block; }
+  .chart-views { width: 100%; flex-wrap: nowrap; }
+  .chart-views button { flex: 1; min-width: 0; padding: 7px 4px; font-size: 11px; overflow-wrap: anywhere; }
+  .quick-series { gap: 0 6px; }
+  .quick-series button { font-size: 11px; padding: 5px 2px; }
+  .history-workspace .chart-options { flex-wrap: wrap; gap: 6px 14px; }
+  .history-workspace .chart-area svg { height: 250px; }
+  .history-workspace .chart-card .series-key { font-size: 11px; }
+  .history-workspace .peak-row { min-width: 120px; }
+  .history-workspace .mode-controls { gap: 4px; }
+  .history-workspace .mode-controls button { font-size: 11px; }
+  .history-workspace .mode-detail-fields { grid-template-columns: 1fr; }
+}

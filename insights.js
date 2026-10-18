@@ -191,8 +191,11 @@
     const description = element('p', 'insights-summary', lead?.title || t('Recorded energy review'));
     if (a.findings.length > 1) meta.append(element('span', 'insights-count', `${a.findings.length} ${t('findings')}`));
     const chevron = element('span', 'insights-chevron'); chevron.setAttribute('aria-hidden', 'true');
-    summary.append(meta, description,
+    summary.append(meta, description);
+    if (newest && lead) summary.append(element('p', 'insights-lead', lead.observation));
+    summary.append(
       element('p', 'insights-window', `${t('Reviewed')} ${dateTime(a.window.start)} – ${dateTime(a.window.end)} · ${t('Athens time')} · ${format(a.coverage_pct)}% ${t('recorded')}`), chevron);
+    if (newest) summary.append(element('span', 'insights-review-action', t('Findings') + ' →'));
     const body = element('div', 'insights-body');
     body.append(element('h3', '', t('Review summary')), element('p', 'insights-narrative', report.narrative.summary));
     body.append(element('p', 'insights-baseline', `${t('Comparison period')}: ${dateTime(a.baseline.start)} – ${dateTime(a.baseline.end)}`));
@@ -250,10 +253,10 @@
     }
     const focusedReport = list.contains(document.activeElement) ? document.activeElement.closest('details')?.dataset.reportId : null;
     const openIds = new Set([...list.querySelectorAll('details[open]')].map(node => node.dataset.reportId));
-    list.replaceChildren(...reports.slice(0, expanded ? 100 : 3).map((report, index) => renderReport(report, index === 0, openIds)));
+    list.replaceChildren(...reports.slice(0, expanded ? 100 : 1).map((report, index) => renderReport(report, index === 0, openIds)));
     if (focusedReport) list.querySelector(`[data-report-id="${focusedReport}"] > summary`)?.focus({ preventScroll: true });
-    older.hidden = reports.length <= 3;
-    older.textContent = t(expanded ? 'Show latest only' : 'Show older reports') + (!expanded && reports.length > 3 ? ` (${reports.length - 3})` : '');
+    older.hidden = reports.length <= 1;
+    older.textContent = t(expanded ? 'Show latest only' : 'Show older reports') + (!expanded && reports.length > 1 ? ` (${reports.length - 1})` : '');
     older.setAttribute('aria-expanded', String(expanded));
     older.setAttribute('aria-controls', 'insights-reports');
     retry.hidden = !failed; retry.disabled = loading; retry.textContent = t('Try again');
