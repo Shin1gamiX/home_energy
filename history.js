@@ -57,6 +57,7 @@ let rawRows = [];
 let modeRows = [];
 let modeRecordedFrom = null;
 let showMode = true;
+let activeChartView = 'power';
 let modeSelectedTime = null;
 let snapshotTime = 0;
 let snapshotObservedAt = 0;
@@ -421,10 +422,11 @@ function renderHistoryContext() {
 function renderView() {
   const allTime = period === 'all';
   document.body.classList.toggle('all-time-view', allTime);
-  document.querySelectorAll('.chart-settings, .chart-options, #chart-jumps, #fit-history, #charts').forEach(element => { element.hidden = allTime; });
+  document.querySelectorAll('.history-view-controls, .chart-settings, .chart-options, #chart-jumps, #fit-history, #charts').forEach(element => { element.hidden = allTime; });
   document.querySelectorAll('#previous, #next, #date-display, .date-picker, .date-controls>span').forEach(element => { element.hidden = allTime; });
   document.querySelector('#monthly-breakdown').hidden = !allTime;
   if (allTime) { renderAllTime(); return; }
+  renderChartViews();
   document.querySelector('#range-label').textContent = `${dateFormat.format(range.from * 1000)} – ${dateFormat.format((range.to - 1) * 1000)} · ${t('Athens time')}`;
   peaksToggle.nextElementSibling.textContent = t('Show peaks');
   document.querySelector('#fit-history').disabled = loading || hasError || !recordedRange(rawRows, modeRows, range, snapshotTime);
@@ -450,7 +452,6 @@ function renderView() {
     if (group === 'supply' ? !showMode : ![...selected].some(key => metrics[key].group === group)) continue;
     const link = document.createElement('a'); link.href = `#chart-${group}`; link.textContent = t(title); jumps.append(link);
   }
-  if (showMode) renderModeTimeline(container, view);
   const inspectors = [];
   const byTime = new Map(points.map(p => [p.t, p]));
   function inspectTogether(timestamp, group) {
@@ -466,6 +467,7 @@ function renderView() {
     return;
   }
   for (const [group, title] of Object.entries({ power: 'Power', soc: 'Battery charge', voltage: 'Voltage', current: 'Current' })) {
+    if (activeChartView !== 'all' && activeChartView !== group) continue;
     const keys = [...selected].filter(key => metrics[key].group === group);
     if (!keys.length) continue;
     const card = document.createElement('article');
@@ -504,6 +506,11 @@ function renderView() {
     ({ low, high } = scale);
     const x = t => left + (t - view.from) / span * (right - left);
     const y = v => bottom - (v - low) / (high - low) * (bottom - top);
+    const present = historyCutoffs(view, snapshotObservedAt, Date.now() / 1000).present;
+    if (present < view.to) {
+      svg.append(svgElement('rect', { x: x(present), y: top, width: right - x(present), height: bottom - top, class: 'chart-future' }));
+      if (right - x(present) > 80) svg.append(svgElement('text', { x: (right + x(present)) / 2, y: (top + bottom) / 2, 'text-anchor': 'middle', class: 'axis-label' }, t(period === 'day' ? 'Later today' : 'Upcoming')));
+    }
     for (const value of scale.ticks) {
       svg.append(svgElement('line', { x1: left, x2: right, y1: y(value), y2: y(value), class: 'chart-grid' }));
       const unitScale = group === 'power' && Math.max(high, Math.abs(low)) >= 1000 ? 1000 : 1;
@@ -616,6 +623,7 @@ function renderView() {
     renderPeaks(card, area, svg, keys, x, y, width, timestamp => inspect(timestamp, true));
     container.append(card);
   }
+  if (showMode) renderModeTimeline(container, view);
   if (inspectedTime !== null && inspectedTime >= view.from && inspectedTime < view.to) inspectTogether(inspectedTime);
   window.scrollTo({ top: scrollPosition, behavior: 'instant' });
 }
@@ -852,7 +860,7 @@ function renderModeTimeline(container, view) {
   }
   gap(cutoff);
   const card = document.createElement('article'); card.className = 'chart-card mode-card'; card.id = 'chart-supply';
-  const heading = document.createElement('h2'); heading.textContent = t('House supply');
+  const heading = document.createElement('h2'); heading.textContent = t('Mode timeline');
   heading.tabIndex = -1;
   const note = document.createElement('p'); note.textContent = t('Estimated source supplying the house');
   const header = document.createElement('div'); header.className = 'chart-header'; header.append(heading);
@@ -881,6 +889,7 @@ function renderModeTimeline(container, view) {
   const guide = document.createElement('div'); guide.className = 'mode-guide'; guide.hidden = true;
   for (const key of keys) { const label = document.createElement('span'); label.textContent = t(states[key][0]); labels.append(label); }
   const detail = document.createElement('div'); detail.className = 'chart-tip mode-detail'; detail.setAttribute('aria-live', 'polite'); detail.textContent = t('Select an interval to see its times.');
+  detail.hidden = true;
   const secondsFormat = new Intl.DateTimeFormat('en-GB', { timeZone: timezone, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
   function duration(seconds) {
     let remaining = Math.max(0, Math.round(seconds));
@@ -893,6 +902,7 @@ function renderModeTimeline(container, view) {
     return parts.join(' ') || t('{n}s', { n: 0 });
   }
   function inspect(segment, time = segment.start) {
+    detail.hidden = false;
     const focusedNavigation = detail.contains(document.activeElement) ? document.activeElement.dataset.intervalNavigation : null;
     modeSelectedTime = time;
     guide.hidden = false; guide.style.left = `${(time - view.from) / (view.to - view.from) * 100}%`;
@@ -934,12 +944,14 @@ function renderModeTimeline(container, view) {
     const dense = group.items.length > 1;
     const state = dense ? 'rapid' : group.items[0].state;
     const block = document.createElement('button'); block.type = 'button'; block.className = 'mode-segment';
+    block.dataset.mode = state;
     block.dataset.start = group.start; block.dataset.end = group.end;
     block.style.left = `${(group.start - view.from) / span * 100}%`; block.style.width = `${(group.end - group.start) / span * 100}%`;
     block.style.top = `${keys.indexOf(state) * 36 + 8}px`; block.style.setProperty('--mode-color', states[state][1]);
     const description = dense ? `${t(states[state][0])} · ${t('{n} changes · select to zoom', { n: group.items.length - 1 })}` : t(states[state][0]);
     block.setAttribute('aria-label', `${description}: ${secondsFormat.format(group.start * 1000)} – ${secondsFormat.format(group.end * 1000)}`);
     block.title = description;
+    if (!dense && (group.end - group.start) / pixelSeconds > 72) block.textContent = t(states[state][0]);
     if (dense) {
       block.classList.add('is-dense');
       if ((group.end - group.start) / pixelSeconds > 60) block.textContent = t('{n} changes', { n: group.items.length - 1 });
@@ -966,7 +978,7 @@ function renderModeTimeline(container, view) {
     tracks.append(area);
   }
   shade(cutoff, bounds.present, 'Not refreshed yet', 'mode-pending');
-  shade(bounds.present, view.to, 'Upcoming', '');
+  shade(bounds.present, view.to, period === 'day' ? 'Later today' : 'Upcoming', '');
   tracks.append(guide);
   const pointerTime = event => { const bounds = tracks.getBoundingClientRect(); return view.from + Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width)) * span; };
   let drag = null, suppressModeClick = false;
@@ -997,6 +1009,47 @@ function renderModeTimeline(container, view) {
   card.append(totals, foot); container.append(card);
   if (modeSelectedTime !== null) { const active = segments.find(s => s.start <= modeSelectedTime && modeSelectedTime < s.end); if (active) inspect(active, modeSelectedTime); }
 }
+
+// Chart navigation only changes what is drawn; cached readings and selected
+// statistics are retained, so switching views never requests the period again.
+const chartViewDefaults = {
+  power: ['pv', 'load', 'grid', 'battery'], soc: ['soc'],
+  voltage: ['pv1_voltage', 'pv2_voltage', 'grid_voltage'],
+  current: ['pv1_current', 'pv2_current', 'battery_current', 'load_current'],
+};
+function chooseChartView(view) {
+  if (view !== 'supply' && view !== 'all' && !Object.hasOwn(chartViewDefaults, view)) return;
+  activeChartView = view;
+  if (view === 'supply') showMode = true;
+  else if (chartViewDefaults[view] && ![...selected].some(key => metrics[key].group === view)) {
+    chartViewDefaults[view].forEach(key => selected.add(key));
+  }
+  updateFilters();
+}
+function renderChartViews() {
+  document.querySelector('.history-workspace').classList.toggle('focused-view', activeChartView !== 'all');
+  document.querySelectorAll('[data-chart-view]').forEach(button => {
+    button.setAttribute('aria-pressed', String(button.dataset.chartView === activeChartView));
+  });
+  const host = document.querySelector('#quick-series');
+  const focusedKey = host.contains(document.activeElement) ? document.activeElement.dataset.quickMetric : null;
+  host.replaceChildren();
+  const keys = activeChartView === 'all' ? [] : Object.keys(metrics).filter(key =>
+    metrics[key].group === activeChartView && !metrics[key].legacy &&
+    (activeChartView !== 'power' || selected.has(key) || chartViewDefaults.power.includes(key)));
+  for (const key of keys) {
+    const button = document.createElement('button'); button.type = 'button';
+    button.dataset.quickMetric = key; button.textContent = metrics[key].label;
+    button.style.setProperty('--series', metrics[key].color);
+    button.setAttribute('aria-pressed', String(selected.has(key)));
+    button.addEventListener('click', () => { selected.has(key) ? selected.delete(key) : selected.add(key); updateFilters(); });
+    host.append(button);
+  }
+  if (focusedKey) host.querySelector(`[data-quick-metric="${focusedKey}"]`)?.focus({ preventScroll: true });
+}
+document.querySelectorAll('[data-chart-view]').forEach(button => {
+  button.addEventListener('click', () => chooseChartView(button.dataset.chartView));
+});
 
 function updateFilters() {
   document.querySelector('#selection-count').textContent = t('{n} selected', { n: selected.size + Number(showMode) });
@@ -1048,7 +1101,11 @@ for (const [key, metric] of Object.entries(metrics)) {
   icon.append(svgElement('path', { d: paths[iconKey] }));
   const label = document.createElement('span'); label.textContent = metric.label;
   button.append(icon, label);
-  button.addEventListener('click', () => { selected.has(key) ? selected.delete(key) : selected.add(key); updateFilters(); });
+  button.addEventListener('click', () => {
+    selected.has(key) ? selected.delete(key) : selected.add(key);
+    activeChartView = metric.group;
+    updateFilters();
+  });
   const category = metric.legacy ? 'legacy' : ['battery', 'soc', 'battery_current'].includes(key) ? 'battery' : metric.group;
   filterContainers[category].append(button);
 }
@@ -1057,6 +1114,7 @@ modeButton.id = 'mode-filter'; modeButton.type = 'button'; modeButton.style.setP
 modeButton.addEventListener('click', () => { showMode = !showMode; updateFilters(); });
 filterContainers.supply.append(modeButton);
 document.querySelector('#select-all').addEventListener('click', () => {
+  activeChartView = 'all';
   showMode = true;
   selected.clear();
   Object.keys(metrics).filter(k => !metrics[k].legacy).forEach(k => selected.add(k));
@@ -1093,6 +1151,7 @@ if (linkedContext) {
   dateInput.value = athensDay(linkedContext.from);
   selected.clear();
   showMode = linkedContext.metric === 'mode';
+  activeChartView = showMode ? 'supply' : metrics[linkedContext.metric].group;
   if (!showMode) selected.add(linkedContext.metric);
 }
 dateInput.addEventListener('change', () => { if (dateInput.validity.valid && dateInput.value) load(); });
