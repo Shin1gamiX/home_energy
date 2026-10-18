@@ -3,7 +3,7 @@
 # Keep Cache-Control at server scope so location blocks retain ALL security headers.
 map "$status:$uri:$arg_v" $homeenergy_cache_control {
     default "no-store, max-age=0";
-    "~^(200|304):/(styles\.css|app\.js|theme\.js|theme\.css|history\.js|history-cache\.js|history-calendar\.js|history\.css|404\.css|404\.js|power-history\.js|power-history\.css|insights\.js|insights\.css):[A-Za-z0-9_-]+$" "public, max-age=31536000, immutable";
+    "~^(200|304):/(styles\.css|app\.js|theme\.js|theme\.css|history\.js|history-cache\.js|history-calendar\.js|history\.css|404\.css|404\.js|power-history\.js|power-history\.css|insights\.js|insights\.css|interface\.css|assets/solar-home\.webp):[A-Za-z0-9_-]+$" "public, max-age=31536000, immutable";
 }
 
 server {
@@ -61,6 +61,8 @@ server {
     location = /power-history.css { try_files $uri =404; }
     location = /insights.js { try_files $uri =404; }
     location = /insights.css { try_files $uri =404; }
+    location = /interface.css { try_files $uri =404; }
+    location = /assets/solar-home.webp { try_files $uri =404; }
     # Only the validated, public report feed is exposed. Publisher credentials,
     # private staging files and individual archive files have no HTTP route.
     location = /reports/index.json {

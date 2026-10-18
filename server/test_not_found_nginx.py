@@ -43,8 +43,10 @@ class NotFoundNginxTests(unittest.TestCase):
         cls.directory = pathlib.Path(cls.temp.name)
         public = cls.directory / "public"
         public.mkdir()
-        for name in ("404.html", "404.css", "404.js", "styles.css", "history-cache.js"):
+        for name in ("404.html", "404.css", "404.js", "styles.css", "history-cache.js", "interface.css"):
             shutil.copyfile(ROOT / name, public / name)
+        (public / 'assets').mkdir()
+        shutil.copyfile(ROOT / 'assets/solar-home.webp', public / 'assets/solar-home.webp')
         cls.page = (public / "404.html").read_bytes()
         with socket.socket() as probe:
             probe.bind(("127.0.0.1", 0))
@@ -56,7 +58,7 @@ class NotFoundNginxTests(unittest.TestCase):
             f'pid "{cls.directory / "nginx.pid"}";\n'
             f'error_log "{cls.directory / "error.log"}" notice;\n'
             'events { worker_connections 32; }\nhttp {\n'
-            'types { text/html html; text/css css; application/javascript js; }\n'
+            'types { text/html html; text/css css; application/javascript js; image/webp webp; }\n'
             + cache_map() + '\n'
             f'access_log "{cls.access_log}";\n'
             'server {\n'
@@ -71,6 +73,8 @@ class NotFoundNginxTests(unittest.TestCase):
             'location = /history.html { return 200 "history fixture"; }\n'
             'location = /styles.css { try_files $uri =404; }\n'
             'location = /history-cache.js { try_files $uri =404; }\n'
+            'location = /interface.css { try_files $uri =404; }\n'
+            'location = /assets/solar-home.webp { try_files $uri =404; }\n'
             'location = /api/collector/status { access_log off; return 404; }\n'
             '# A sentinel, never a real proxy or device action.\n'
             'location = /api/collector/restart { return 418 "control sentinel"; }\n'
@@ -116,7 +120,8 @@ class NotFoundNginxTests(unittest.TestCase):
 
     def test_missing_nested_and_private_paths_keep_real_404(self):
         for path in ("/missing-page", "/nested/missing/page?secret-probe=not-reflected",
-                     "/server/collector_control.py", "/.git/config", "/404.html"):
+                     "/server/collector_control.py", "/.git/config", "/404.html",
+                     "/assets/solar-home.provenance.json", "/assets/", "/.impeccable/design.json"):
             with self.subTest(path=path):
                 status, headers, body = self.request(path)
                 self.assertEqual(status, 404)
@@ -140,7 +145,8 @@ class NotFoundNginxTests(unittest.TestCase):
 
     def test_assets_are_allowlisted_and_serve_correct_content_types(self):
         for name, content_type in (("404.css", "text/css"), ("404.js", "application/javascript"),
-                                   ("styles.css", "text/css")):
+                                   ("styles.css", "text/css"), ("interface.css", "text/css"),
+                                   ("assets/solar-home.webp", "image/webp")):
             with self.subTest(name=name):
                 status, headers, body = self.request("/" + name)
                 self.assertEqual(status, 200)
@@ -161,13 +167,15 @@ class NotFoundNginxTests(unittest.TestCase):
         self.assertEqual(self.request("/api/collector/restart", "POST")[0], 418)
 
     def test_only_versioned_assets_are_cached_with_security_headers(self):
-        for path in ('/styles.css?v=release-1', '/404.js?v=release-2', '/history-cache.js?v=release-3'):
+        for path in ('/styles.css?v=release-1', '/404.js?v=release-2', '/history-cache.js?v=release-3',
+                     '/interface.css?v=release-4', '/assets/solar-home.webp?v=release-5'):
             status, headers, _ = self.request(path)
             self.assertEqual(status, 200)
             self.assertIn('immutable', headers['Cache-Control'])
             self.assertEqual(headers['X-Content-Type-Options'], 'nosniff')
             self.assertIn("script-src 'self'", headers['Content-Security-Policy'])
-        for path in ('/styles.css', '/history.html?v=release-1', '/missing?v=release-1',
+        for path in ('/styles.css', '/interface.css', '/assets/solar-home.webp',
+                     '/assets/solar-home.webp?v=invalid.version', '/history.html?v=release-1', '/missing?v=release-1',
                      '/api/collector/status?v=release-1', '/api/collector/restart?v=release-1'):
             _, headers, _ = self.request(path)
             self.assertIn('no-store', headers['Cache-Control'])
