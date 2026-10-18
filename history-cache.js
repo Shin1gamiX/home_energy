@@ -119,12 +119,14 @@
   }
 
   class HistoryDataCache {
-    constructor({ storage = new IndexedDayStore(), fetcher = (...args) => root.fetch(...args), now = Date.now, concurrency = 4 } = {}) {
+    constructor({ storage = new IndexedDayStore(), fetcher = (...args) => root.fetch(...args), now = Date.now, concurrency = 8 } = {}) {
       this.storage = storage;
       this.fetcher = fetcher;
       this.now = now;
       this.days = new Map();
-      this.concurrency = Math.max(1, Math.min(8, Math.floor(concurrency) || 4));
+      // Keep month loads moving without starting every day at once. Obsolete
+      // queued days are still removed when their last consumer cancels.
+      this.concurrency = Math.max(1, Math.min(8, Math.floor(concurrency) || 8));
       this.queue = [];
       this.active = 0;
     }
