@@ -165,7 +165,7 @@ def preview_reports(cutoff):
             ],
             'findings': [{'id': finding_id, 'category': 'data' if severity == 'data_issue' else 'energy',
                           'severity': severity, 'title': title, 'observation': observation,
-                          'start': start, 'end': end, 'metric': None}],
+                          'start': start, 'end': end, 'metric': {0: 'pv', 2: 'load'}.get(index)}],
             'limitations': [localized(
                 'Synthetic design preview; all figures and findings are invented.',
                 'Δοκιμαστική προεπισκόπηση· όλα τα στοιχεία και τα ευρήματα είναι υποθετικά.',

@@ -26,6 +26,7 @@
 .insights-newest { background: var(--theme-elevated); padding: 2px 7px; border-radius: 5px; color: var(--theme-text); font-weight: 600; }
 .insights-summary { margin: 8px 24px 8px 0; font-size: 16px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; color: var(--theme-text); }
 .insights-narrative { max-width: 72ch; font-size: 14px; line-height: 1.7; overflow-wrap: anywhere; }
+.insights-evidence-link { display: inline-flex; align-items: center; min-height: 44px; color: var(--theme-accent); font-size: 13px; text-underline-offset: 4px; }
 .insights-window { margin: 0; color: var(--theme-muted); font-size: 11px; line-height: 1.65; }
 .insights-chevron { position: absolute; top: 20px; right: 20px; width: 8px; height: 8px; border-right: 1.5px solid var(--theme-muted); border-bottom: 1.5px solid var(--theme-muted); transform: rotate(45deg); }
 .insights-report[open] .insights-chevron { transform: rotate(225deg); top: 24px; }

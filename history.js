@@ -67,6 +67,7 @@ let range;
 let requestId = 0;
 let loading = false;
 let hasError = false;
+let linkedContext = parseHistoryLink(location.search);
 const historyCalendar = new window.HistoryCalendar({
   trigger: document.querySelector('#open-calendar'),
   dialog: document.querySelector('#history-calendar'),
@@ -174,7 +175,26 @@ function midnight(day) {
   const offset = new Intl.DateTimeFormat('en', { timeZone: timezone, timeZoneName: 'shortOffset' }).formatToParts(utc).find(p => p.type === 'timeZoneName').value;
   return utc.getTime() / 1000 - Number(offset.replace('GMT', '')) * 3600;
 }
+function parseHistoryLink(search, now = Date.now() / 1000) {
+  const params = new URLSearchParams(search);
+  const allowed = new Set(['pv', 'grid', 'load', 'battery', 'soc', 'mode']);
+  if (!['from', 'to', 'metric'].every(key => params.getAll(key).length === 1)) return null;
+  if (!/^\d{1,10}$/.test(params.get('from')) || !/^\d{1,10}$/.test(params.get('to'))) return null;
+  const from = Number(params.get('from')), to = Number(params.get('to')), metric = params.get('metric');
+  if (!allowed.has(metric) || from < 946684800 || to > 4102444800 || from >= to || from >= now || to - from > 31 * 86400) return null;
+  return { from, to: Math.min(to, Math.floor(now)), metric };
+}
+function athensDay(seconds) {
+  const values = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: timezone,
+    year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(seconds * 1000).map(part => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
 function getRange() {
+  if (linkedContext) {
+    const { from, to } = linkedContext;
+    return { start: athensDay(from), end: shift(athensDay(to - 1), 1), from, to,
+      step: to - from <= 2 * 86400 ? 60 : to - from <= 10 * 86400 ? 900 : 3600 };
+  }
   let start = dateInput.value;
   let end = shift(start, 1);
   if (period === 'week') {
@@ -217,8 +237,16 @@ function createHistoryDataCache() {
   // the new helper. Persistence is optional; ordinary network loading still works.
   return { get: day => json(`/history/${day}.json`), invalidate() {} };
 }
-async function load({ refresh = false } = {}) {
+async function load({ refresh = false, keepContext = false } = {}) {
   const id = ++requestId;
+  if (!refresh && !keepContext && linkedContext) {
+    linkedContext = null;
+    const url = new URL(location.href);
+    for (const key of ['from', 'to', 'metric']) url.searchParams.delete(key);
+    if (url.hash === '#history-context') url.hash = '';
+    history.replaceState(null, '', url);
+  }
+  document.querySelectorAll('[data-period]').forEach(button => button.setAttribute('aria-pressed', String(!linkedContext && button.dataset.period === period)));
   historyCalendar.close();
   if (refresh) {
     indexPromise = undefined;
@@ -350,6 +378,7 @@ function render() {
   const active = document.activeElement;
   const cardId = active?.closest?.('.chart-card')?.id;
   const focusKey = active?.dataset?.historyFocus;
+  renderHistoryContext();
   renderView();
   if (cardId && !active.isConnected) {
     const card = document.getElementById(cardId);
@@ -357,6 +386,20 @@ function render() {
       .find(node => node.dataset.historyFocus === focusKey && !node.disabled);
     (replacement || card?.querySelector('.chart-area, h2'))?.focus({ preventScroll: true });
   }
+}
+function renderHistoryContext() {
+  const section = document.querySelector('#history-context');
+  section.hidden = !linkedContext;
+  section.replaceChildren();
+  if (!linkedContext) return;
+  section.setAttribute('aria-label', t('Report window'));
+  const label = document.createElement('strong');
+  label.textContent = `${t('Report window')} · ${linkedContext.metric === 'mode' ? t('House supply') : metrics[linkedContext.metric].label}`;
+  const times = document.createElement('p');
+  const stamp = value => `${dateFormat.format(value * 1000)} · ${timeFormat.format(value * 1000)}`;
+  times.textContent = `${stamp(linkedContext.from)} – ${stamp(linkedContext.to)} · ${t('Athens time')}`;
+  const hint = document.createElement('p'); hint.textContent = t('Showing the report interval. Date controls return to normal browsing.');
+  section.append(label, times, hint);
 }
 function renderView() {
   const allTime = period === 'all';
@@ -457,7 +500,7 @@ function renderView() {
     if (low < 0) svg.append(svgElement('line', { x1: left, x2: right, y1: y(0), y2: y(0), class: 'chart-zero', stroke: '#a8b9af', 'stroke-dasharray': '4 4' }));
     for (let i = 0; i <= 4; i++) {
       const t = view.from + span * i / 4;
-      const label = !zoom && period === 'day' && i === 4 ? '24:00' : new Intl.DateTimeFormat('en-GB', span <= 86400 ? { timeZone: timezone, hour: '2-digit', minute: '2-digit' } : { timeZone: timezone, day: '2-digit', month: '2-digit' }).format(t * 1000);
+      const label = !linkedContext && !zoom && period === 'day' && i === 4 ? '24:00' : new Intl.DateTimeFormat('en-GB', span <= 86400 ? { timeZone: timezone, hour: '2-digit', minute: '2-digit' } : { timeZone: timezone, day: '2-digit', month: '2-digit' }).format(t * 1000);
       svg.append(svgElement('text', { x: x(t), y: 234, 'text-anchor': i === 0 ? 'start' : i === 4 ? 'end' : 'middle', class: 'axis-label' }, label));
     }
     for (const key of keys) {
@@ -606,7 +649,7 @@ function renderSummary() {
   const section = document.querySelector('#energy-summary');
   section.replaceChildren();
   const heading = document.createElement('h2');
-  heading.textContent = t(period === 'day' ? 'Daily summary' : period === 'week' ? 'Weekly summary' : 'Monthly summary');
+  heading.textContent = t(linkedContext ? 'Selected period summary' : period === 'day' ? 'Daily summary' : period === 'week' ? 'Weekly summary' : 'Monthly summary');
   section.append(heading);
   const cards = document.createElement('div'); cards.className = 'summary-cards';
   const totals = summaryTotals();
@@ -930,7 +973,7 @@ function renderModeTimeline(container, view) {
   for (const name of ['pointercancel', 'pointerleave']) tracks.addEventListener(name, () => { drag = null; selection.hidden = true; });
   tracks.addEventListener('click', event => { const time = pointerTime(event); const segment = segments.find(s => s.start <= time && time < s.end); if (segment) inspect(segment, time); });
   const axis = document.createElement('div'); axis.className = 'mode-axis';
-  for (let i = 0; i <= 4; i++) { const tick = document.createElement('span'); const time = (view.from + span * i / 4) * 1000; tick.textContent = !zoom && period === 'day' && i === 4 ? '24:00' : span <= 86400 ? timeFormat.format(time) : new Intl.DateTimeFormat('en-GB', { timeZone: timezone, day: '2-digit', month: '2-digit' }).format(time); axis.append(tick); }
+  for (let i = 0; i <= 4; i++) { const tick = document.createElement('span'); const time = (view.from + span * i / 4) * 1000; tick.textContent = !linkedContext && !zoom && period === 'day' && i === 4 ? '24:00' : span <= 86400 ? timeFormat.format(time) : new Intl.DateTimeFormat('en-GB', { timeZone: timezone, day: '2-digit', month: '2-digit' }).format(time); axis.append(tick); }
   const help = document.createElement('p'); help.className = 'mode-help'; help.textContent = t(groups.some(group => group.items.length > 1) ? 'Rapid changes are grouped. Select a block to zoom into individual intervals.' : 'Select an interval for exact times. Drag across the timeline to zoom.');
   card.append(axis, help, detail);
   const totals = document.createElement('div'); totals.className = 'mode-totals';
@@ -1031,6 +1074,12 @@ document.querySelector('#today').addEventListener('click', () => {
   load();
 });
 dateInput.max = today(); dateInput.value = today();
+if (linkedContext) {
+  dateInput.value = athensDay(linkedContext.from);
+  selected.clear();
+  showMode = linkedContext.metric === 'mode';
+  if (!showMode) selected.add(linkedContext.metric);
+}
 dateInput.addEventListener('change', () => { if (dateInput.validity.valid && dateInput.value) load(); });
 function applyDisplayedDate() {
   const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(dateDisplay.value);
@@ -1047,7 +1096,7 @@ function applyDisplayedDate() {
 dateDisplay.addEventListener('blur', applyDisplayedDate);
 dateDisplay.addEventListener('keydown', event => { if (event.key === 'Enter') applyDisplayedDate(); });
 dateDisplay.addEventListener('input', () => dateDisplay.setCustomValidity(''));
-range = getRange(); updateFilters(); load();
+range = getRange(); updateFilters(); load({ keepContext: true });
 document.querySelector('#averaging').addEventListener('change', render);
 document.querySelector('#fit-history').addEventListener('click', fitRecordedTime);
 peaksToggle.addEventListener('change', () => {

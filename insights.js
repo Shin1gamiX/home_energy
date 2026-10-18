@@ -90,12 +90,22 @@
     return `${values.day}/${values.month}/${values.year} · ${values.hour}:${values.minute}`;
   }
 
-  if (typeof module !== 'undefined' && module.exports) module.exports = { validReport, validateFeed, localizedText, localizeReport, readBoundedJson, dateTime, MAX_BYTES };
+  // Report content supplies evidence, never a URL or an executable destination.
+  function findingHistoryLink(finding) {
+    if (!stamp(finding.start) || !stamp(finding.end) || finding.end <= finding.start || finding.end - finding.start > 31 * 86400) return null;
+    const mapping = { pv: 'pv', solar_generated: 'pv', grid: 'grid', load: 'load', house_usage: 'load',
+      battery: 'battery', battery_supplied: 'battery', battery_charged: 'battery', soc_max: 'soc', battery_max_soc: 'soc' };
+    const metric = finding.metric === null ? 'mode' : Object.hasOwn(mapping, finding.metric) ? mapping[finding.metric] : null;
+    if (!metric) return null;
+    return `history.html?from=${finding.start}&to=${finding.end}&metric=${metric}#history-context`;
+  }
+
+  if (typeof module !== 'undefined' && module.exports) module.exports = { validReport, validateFeed, localizedText, localizeReport, readBoundedJson, dateTime, findingHistoryLink, MAX_BYTES };
   if (typeof document === 'undefined' || !document.getElementById('energy-insights')) return;
 
   const translations = {
     el: {
-      'Review summary': 'Σύνοψη αναφοράς',
+      'View this period in History': 'Προβολή περιόδου στο ιστορικό', 'Review summary': 'Σύνοψη αναφοράς',
       'Recorded energy review': 'Ανασκόπηση καταγεγραμμένης ενέργειας', 'findings': 'ευρήματα',
       'THE BIGGER PICTURE': 'Η ΣΥΝΟΛΙΚΗ ΕΙΚΟΝΑ', 'Energy insights': 'Ενεργειακές αναφορές',
       'On-demand reviews of recorded energy and recent patterns.': 'Ανασκοπήσεις κατόπιν αιτήματος της καταγεγραμμένης ενέργειας και πρόσφατων μοτίβων.',
@@ -118,7 +128,7 @@
       'Automated review · observations are not a diagnosis.': 'Αυτόματη ανασκόπηση · οι παρατηρήσεις δεν αποτελούν διάγνωση.'
     },
     ru: {
-      'Review summary': 'Сводка отчёта',
+      'View this period in History': 'Открыть этот период в истории', 'Review summary': 'Сводка отчёта',
       'Recorded energy review': 'Обзор записанной энергии', 'findings': 'наблюдений',
       'THE BIGGER PICTURE': 'ОБЩАЯ КАРТИНА', 'Energy insights': 'Энергетические отчёты',
       'On-demand reviews of recorded energy and recent patterns.': 'Обзоры записанной энергии и недавних закономерностей по запросу.',
@@ -211,6 +221,12 @@
         if (note) {
           const commentary = element('p', 'insights-commentary', `${t('AI interpretation')}: ${note.commentary}`);
           item.append(commentary);
+        }
+        const href = findingHistoryLink(finding);
+        if (href) {
+          const link = element('a', 'insights-evidence-link', t('View this period in History'));
+          link.href = href;
+          item.append(link);
         }
         findings.append(item);
       }
