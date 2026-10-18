@@ -131,6 +131,7 @@ for (const page of ['overview', 'history']) {
     assertLanguage(f, saved);
     const title = page === 'overview' ? 'Home · Energy' : 'Energy history · Home';
     assert.equal(f.document.title, f.i18n.t(title));
+    assert.equal(f.i18n.t('Try again'), { en: 'Try again', ru: 'Повторить', el: 'Δοκιμή ξανά' }[saved]);
     assert.deepEqual(f.writes, []);
     assert.deepEqual(f.events, []);
   }

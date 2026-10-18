@@ -2,7 +2,8 @@
 const { t } = window.energyI18n;
 if (location.hostname === '127.0.0.1' && location.port === '8766') {
   const notice = document.createElement('p');
-  notice.textContent = 'Design preview · simulated history, not live inverter data.';
+  notice.dataset.i18n = 'Design preview · simulated history, not live inverter data.';
+  notice.textContent = t(notice.dataset.i18n);
   document.querySelector('.intro').append(notice);
 }
 const metrics = {
@@ -42,6 +43,7 @@ const timeFormat = new Intl.DateTimeFormat('en-GB', { timeZone: timezone, hour: 
 const refreshButton = document.querySelector('#refresh-history');
 const refreshCooldown = 5 * 60 * 1000;
 let nextRefreshAt = 0;
+let retryAt = 0;
 let indexPromise;
 let allTimeSummary = null;
 let summaryUnavailable = false;
@@ -142,6 +144,7 @@ function renderPeaks(card, area, svg, keys, x, y, width, inspect) {
       svg.append(marker);
       if (keys.length === 1) {
         const badge = button.cloneNode(true);
+        badge.tabIndex = -1; // The same action is keyboard-accessible in the peak summary.
         badge.className = `peak-label peak-${kind}`;
         badge.style.setProperty('--peak-color', metrics[key].color);
         badge.style.left = `clamp(70px, ${position.x / width * 100}%, calc(100% - 70px))`;
@@ -277,19 +280,24 @@ async function load({ refresh = false } = {}) {
     if (!indexReady) historyCalendar.setAvailability(null, 'error');
     loading = false;
     hasError = true;
+    retryAt = Date.now() + 5000;
     statusElement.textContent = t('History is unavailable. Please try again shortly.');
     render();
   } finally {
     if (id === requestId) updateRefreshButton();
   }
 }
+function refreshWait(now = Date.now()) {
+  return Math.max(0, Math.ceil(((hasError ? retryAt : nextRefreshAt) - now) / 1000));
+}
 function updateRefreshButton() {
-  const seconds = Math.max(0, Math.ceil((nextRefreshAt - Date.now()) / 1000));
+  const seconds = refreshWait();
   refreshButton.disabled = loading || seconds > 0;
-  refreshButton.textContent = loading ? t('Refreshing…') : seconds ? `↻ ${t('Refresh')} ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}` : `↻ ${t('Refresh')}`;
+  const time = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+  refreshButton.textContent = loading ? t('Refreshing…') : seconds ? t(hasError ? 'Retry in {time}' : 'Refresh available in {time}', { time }) : t(hasError ? 'Try again' : 'Refresh');
   const updated = document.querySelector('#history-updated');
   if (updated) updated.textContent = hasError ? t('History unavailable.') : snapshotObservedAt
-    ? t('Snapshot loaded {time} · refresh to update', { time: timeFormat.format(snapshotObservedAt * 1000) }) : '';
+    ? t('Snapshot loaded {time} · manual refresh', { time: timeFormat.format(snapshotObservedAt * 1000) }) : '';
 }
 function svgElement(name, attributes = {}, text) {
   const element = document.createElementNS('http://www.w3.org/2000/svg', name);
@@ -339,6 +347,18 @@ function needsSampleMarker(rows, index, key, step) {
   return !linked(rows[index - 1]) && !linked(rows[index + 1]);
 }
 function render() {
+  const active = document.activeElement;
+  const cardId = active?.closest?.('.chart-card')?.id;
+  const focusKey = active?.dataset?.historyFocus;
+  renderView();
+  if (cardId && !active.isConnected) {
+    const card = document.getElementById(cardId);
+    const replacement = [...(card?.querySelectorAll('[data-history-focus]') || [])]
+      .find(node => node.dataset.historyFocus === focusKey && !node.disabled);
+    (replacement || card?.querySelector('.chart-area, h2'))?.focus({ preventScroll: true });
+  }
+}
+function renderView() {
   const allTime = period === 'all';
   document.body.classList.toggle('all-time-view', allTime);
   document.querySelectorAll('.chart-settings, .chart-options, #chart-jumps, #fit-history, #charts').forEach(element => { element.hidden = allTime; });
@@ -373,9 +393,13 @@ function render() {
   if (showMode) renderModeTimeline(container, view);
   const inspectors = [];
   const byTime = new Map(points.map(p => [p.t, p]));
-  function inspectTogether(timestamp) {
+  function inspectTogether(timestamp, group) {
     inspectedTime = Math.max(view.from, Math.min(view.to - step, Math.floor(timestamp / step) * step));
     for (const update of inspectors) update(inspectedTime);
+    if (group) {
+      const announcement = document.querySelector('#history-inspection');
+      if (announcement) announcement.textContent = document.querySelector(`#chart-${group} .chart-tip`)?.textContent || '';
+    }
   }
   if (!selected.size && !showMode) {
     container.textContent = t('Select one or more statistics to display their graphs.');
@@ -389,12 +413,14 @@ function render() {
     card.id = `chart-${group}`;
     const heading = document.createElement('h2');
     heading.textContent = t(title);
+    heading.tabIndex = -1;
     const cardHeader = document.createElement('div');
     cardHeader.className = 'chart-header';
     cardHeader.append(heading);
     const reset = document.createElement('button');
     reset.textContent = t('Reset zoom');
     reset.className = 'reset-zoom';
+    reset.dataset.historyFocus = 'reset';
     reset.disabled = !zoom;
     reset.addEventListener('click', () => { zoom = null; render(); });
     cardHeader.append(reset);
@@ -408,6 +434,7 @@ function render() {
     const area = document.createElement('div');
     area.className = 'chart-area';
     area.tabIndex = 0;
+    area.dataset.historyFocus = 'plot';
     area.setAttribute('role', 'group');
     area.setAttribute('aria-label', t('{title} chart. Use left and right arrows to inspect values.', { title: t(title) }));
     const width = Math.max(300, Math.min(900, document.documentElement.clientWidth - 90));
@@ -452,7 +479,8 @@ function render() {
     area.append(svg);
     const tip = document.createElement('div');
     tip.className = 'chart-tip';
-    tip.setAttribute('aria-live', 'polite');
+    tip.id = `chart-${group}-tip`;
+    area.setAttribute('aria-describedby', tip.id);
     tip.textContent = t(loading ? 'Loading…' : hasError ? 'History unavailable.' : points.length ? 'Hover or touch the chart to inspect an interval.' : 'No data collected in this period.');
     const inspectionMarkers = new Map(keys.map(key => {
       const marker = svgElement('circle', { r: 3, fill: metrics[key].color, class: 'inspection-dot', visibility: 'hidden', 'pointer-events': 'none' });
@@ -478,7 +506,7 @@ function render() {
       }
     }
     inspectors.push(updateInspection);
-    const inspect = inspectTogether;
+    const inspect = (timestamp, announce = false) => inspectTogether(timestamp, announce ? group : null);
     const selection = svgElement('rect', { y: top, height: bottom - top, class: 'zoom-selection', visibility: 'hidden' });
     svg.append(selection);
     let drag = null;
@@ -523,11 +551,11 @@ function render() {
       if (event.target.closest('[data-peak-time]')) return;
       if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
         event.preventDefault();
-        inspect(event.key === 'Home' ? view.from : event.key === 'End' ? view.to - step : active + (event.key === 'ArrowLeft' ? -step : step));
+        inspect(event.key === 'Home' ? view.from : event.key === 'End' ? view.to - step : active + (event.key === 'ArrowLeft' ? -step : step), true);
       }
     });
     card.append(area, tip);
-    renderPeaks(card, area, svg, keys, x, y, width, inspect);
+    renderPeaks(card, area, svg, keys, x, y, width, timestamp => inspect(timestamp, true));
     container.append(card);
   }
   if (inspectedTime !== null && inspectedTime >= view.from && inspectedTime < view.to) inspectTogether(inspectedTime);
@@ -767,6 +795,7 @@ function renderModeTimeline(container, view) {
   gap(cutoff);
   const card = document.createElement('article'); card.className = 'chart-card mode-card'; card.id = 'chart-supply';
   const heading = document.createElement('h2'); heading.textContent = t('House supply');
+  heading.tabIndex = -1;
   const note = document.createElement('p'); note.textContent = t('Estimated source supplying the house');
   const header = document.createElement('div'); header.className = 'chart-header'; header.append(heading);
   const controls = document.createElement('div'); controls.className = 'mode-controls';
@@ -780,6 +809,7 @@ function renderModeTimeline(container, view) {
     ['Reset zoom', () => { zoom = null; render(); }]
   ]) {
     const button = document.createElement('button'); button.type = 'button'; button.textContent = t(label);
+    button.dataset.historyFocus = label;
     button.disabled = label === 'Reset zoom' ? !zoom : label === 'Fit recorded time' ? !recordedRange(rawRows, modeRows, range, snapshotTime) : view.to - view.from <= 120;
     button.addEventListener('click', action); controls.append(button);
   }
@@ -805,6 +835,7 @@ function renderModeTimeline(container, view) {
     return parts.join(' ') || t('{n}s', { n: 0 });
   }
   function inspect(segment, time = segment.start) {
+    const focusedNavigation = detail.contains(document.activeElement) ? document.activeElement.dataset.intervalNavigation : null;
     modeSelectedTime = time;
     guide.hidden = false; guide.style.left = `${(time - view.from) / (view.to - view.from) * 100}%`;
     for (const block of tracks.querySelectorAll('.mode-segment')) block.classList.toggle('is-selected', Number(block.dataset.start) <= time && time < Number(block.dataset.end));
@@ -820,9 +851,15 @@ function renderModeTimeline(container, view) {
     const index = segments.indexOf(segment);
     for (const [label, next] of [['Previous interval', index - 1], ['Next interval', index + 1]]) {
       const button = document.createElement('button'); button.type = 'button'; button.textContent = t(label); button.disabled = next < 0 || next >= segments.length;
+      button.dataset.intervalNavigation = label;
       button.addEventListener('click', () => inspect(segments[next])); navigation.append(button);
     }
     detail.replaceChildren(title, fields, navigation);
+    if (focusedNavigation) {
+      const buttons = [...navigation.querySelectorAll('button')];
+      (buttons.find(button => button.dataset.intervalNavigation === focusedNavigation && !button.disabled)
+        || buttons.find(button => !button.disabled))?.focus({ preventScroll: true });
+    }
   }
   plot.append(labels, tracks); card.append(plot); container.append(card);
   const span = view.to - view.from;
@@ -1021,7 +1058,7 @@ window.addEventListener('languagechange', () => { updateFilters(); updateRefresh
 // Repaint the cached snapshot: changing appearance must not reset zoom or fetch data.
 window.addEventListener('themechange', updateFilters);
 refreshButton.addEventListener('click', () => {
-  if (loading || Date.now() < nextRefreshAt) return;
+  if (loading || refreshWait() > 0) return;
   dateInput.max = today();
   load({ refresh: true });
 });

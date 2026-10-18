@@ -105,7 +105,7 @@
     return node;
   }
   function labels() {
-    for (const { key, button } of triggers) button.setAttribute('aria-label', t('View {source} power for the last 12 hours', { source: t(sources[key]) }));
+    for (const { key, button } of triggers) button.setAttribute('aria-label', t('View {source} power for the last 12 hours', { source: t(key === 'battery' ? 'Battery' : sources[key]) }));
     document.querySelector('.scene-caption').textContent = t('Select a box to explore its last 12 hours.');
     $('.power-history-eyebrow').textContent = t('Last 12 hours');
     $('#power-history-title').textContent = t(sources[source]);
@@ -245,7 +245,8 @@
     chart.onkeydown = event => {
       if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key) || loading || error) return;
       event.preventDefault();
-      inspect(event.key === 'Home' ? view.from : event.key === 'End' ? view.to - 1 : (active ?? visible.at(-1)?.t ?? view.from) + (event.key === 'ArrowLeft' ? -60 : 60));
+      inspect(event.key === 'Home' ? view.from : event.key === 'End' ? view.to - 1 : active === null
+        ? visible.at(-1)?.t ?? view.from : active + (event.key === 'ArrowLeft' ? -60 : 60));
     };
     if (active !== null && active >= view.from && active < view.to) inspect(active);
   }

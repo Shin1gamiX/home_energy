@@ -438,6 +438,11 @@ window.energyComets = (() => {
 window.energyI18n = (() => {
   const translations = {
     ru: {
+      'Design preview · simulated history, not live inverter data.': 'Предпросмотр · искусственная история, не данные вашего инвертора.',
+      'Refresh available in {time}': 'Обновление через {time}',
+      'Retry in {time}': 'Повтор через {time}',
+      'Try again': 'Повторить',
+      'Snapshot loaded {time} · manual refresh': 'Данные загружены в {time} · обновление вручную',
       'Overview': 'Обзор', 'History': 'История', 'Main navigation': 'Основная навигация',
       'Live · updated {seconds}s ago': 'Онлайн · обновлено {seconds} с назад',
       'Displayed statistics': 'Отображаемые показатели', 'Legacy readings': 'Старые показатели',
@@ -534,6 +539,11 @@ window.energyI18n = (() => {
       '{title} over time': '{title} во времени'
     },
     el: {
+      'Design preview · simulated history, not live inverter data.': 'Προεπισκόπηση · υποθετικό ιστορικό, όχι ζωντανά δεδομένα μετατροπέα.',
+      'Refresh available in {time}': 'Ανανέωση διαθέσιμη σε {time}',
+      'Retry in {time}': 'Δοκιμή ξανά σε {time}',
+      'Try again': 'Δοκιμή ξανά',
+      'Snapshot loaded {time} · manual refresh': 'Φόρτωση στις {time} · χειροκίνητη ανανέωση',
       'Overview': 'Επισκόπηση', 'History': 'Ιστορικό', 'Main navigation': 'Κύρια πλοήγηση',
       'Live · updated {seconds}s ago': 'Ζωντανά · ενημέρωση πριν από {seconds} δ',
       'Displayed statistics': 'Εμφανιζόμενα στοιχεία', 'Legacy readings': 'Παλαιές μετρήσεις',
