@@ -84,8 +84,8 @@ components:
     backgroundColor: "transparent"
     typography: "{typography.label}"
     rounded: "{rounded.control}"
-    padding: "7px"
-    height: "42px"
+    padding: "10px 12px"
+    height: "44px"
   insights-surface:
     backgroundColor: "{colors.theme-surface}"
     textColor: "{colors.theme-text}"
