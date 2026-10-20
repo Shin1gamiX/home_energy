@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="/theme.css?v=20261018-readability-2">
     <link rel="stylesheet" href="power-history.css?v=20261009-close-svg">
   <link rel="stylesheet" href="insights.css?v=20261018-readability">
-  <link rel="stylesheet" href="interface.css?v=20261020-navigation">
+  <link rel="stylesheet" href="interface.css?v=20261020-metric-icons-2">
 </head>
 <body class="overview">
 <main class="dashboard">
@@ -27,7 +27,7 @@
     <img class="house" src="assets/solar-home.webp?v=20261018-overview-b" width="1254" height="1254" alt="" aria-hidden="true" decoding="async">
     <div class="scene-label solar-label"><span class="mini-icon">☀</span><div>Solar<span><b data-value="pv">—</b> <small>kW</small></span><span><b data-value="pv_voltage">—</b> <small>V</small></span></div></div>
     <div class="scene-label grid-label"><span class="mini-icon">↯</span><div>Grid (est.)<span><b data-value="grid">—</b> <small>W</small></span><span><b data-value="grid_voltage">—</b> <small>V</small></span></div></div>
-    <div class="scene-label battery-label"><span class="mini-icon">▰</span><div>Battery<span><b data-value="soc">—</b><small>%</small></span><span class="battery-watts"><b data-value="battery">—</b> <small>W</small></span><span class="battery-status"></span><div class="meter"><span class="scene-charge-bar"></span></div></div></div>
+    <div class="scene-label battery-label" aria-describedby="battery-state-description"><span class="mini-icon">▰</span><div>Battery<span><b data-value="soc">—</b><small>%</small></span><span class="battery-watts"><b data-value="battery">—</b> <small>W</small></span><span class="battery-status" id="battery-state-description" hidden></span><div class="meter"><span class="scene-charge-bar"></span></div></div></div>
     <div class="scene-label load-label"><span class="mini-icon">⌂</span><div>House<span><b data-value="load">—</b> <small>W</small></span></div></div>
     <div class="scene-caption">A connected view of your home.</div>
   </section>
@@ -44,7 +44,7 @@
   <section class="metrics" aria-label="Energy readings">
     <article class="metric grid"><div class="metric-top"><span>Grid power</span><span class="symbol">↯</span></div><div class="reading"><b data-value="grid">—</b><span>W</span></div><p><span data-value="grid_voltage">—</span> V</p><p id="grid-state">Waiting for readings</p><div class="meter" hidden><span style="width:0%"></span></div></article>
     <article class="metric solar"><div class="metric-top"><span>Solar production</span><span class="symbol">☀</span></div><div class="reading"><b data-value="pv">—</b><span>kW</span></div><p><span data-value="pv_voltage">—</span> V</p><div class="meter" hidden><span style="width:65%"></span></div></article>
-    <article class="metric battery"><div class="metric-top"><span>Battery</span><span class="symbol">▰</span></div><div class="reading"><b data-value="soc">—</b><span>%</span></div><p class="battery-watts"><strong><span data-value="battery">—</span> <span>W</span></strong></p><p class="battery-status"></p><div class="meter"><span id="charge-bar" style="width:0%"></span></div></article>
+    <article class="metric battery" aria-describedby="battery-detail-state"><div class="metric-top"><span>Battery</span><span class="symbol">▰</span></div><div class="reading"><b data-value="soc">—</b><span>%</span></div><p class="battery-watts"><strong><span data-value="battery">—</span> <span>W</span></strong></p><p class="battery-status" id="battery-detail-state" hidden></p><div class="meter"><span id="charge-bar" style="width:0%"></span></div></article>
     <article class="metric load"><div class="metric-top"><span>House consumption</span><span class="symbol">⌂</span></div><div class="reading"><b data-value="load">—</b><span>W</span></div><p>Total house load</p><div class="meter" hidden><span style="width:42%"></span></div></article>
   </section>
   </details>
@@ -62,9 +62,9 @@
     <div class="collector-actions"><button type="button" id="collector-cancel" data-control-text="cancel">Cancel</button><button type="submit" id="collector-submit" data-control-text="confirm">Confirm restart</button></div>
   </form>
 </dialog>
-<script src="app.js?v=20261020-battery-voltage"></script>
+<script src="app.js?v=20261020-metric-icons-2"></script>
 <script src="history-cache.js?v=20261018-queue-8"></script>
-<script src="power-history.js?v=20261018-keyboard"></script>
+<script src="power-history.js?v=20261020-metric-icons"></script>
 <script src="insights.js?v=20261018-concepts"></script>
 <script src="collector-control.js?v=20261004-private-status"></script>
 </body></html>

@@ -17,8 +17,10 @@ for (const [file, current] of [['index.html', 'Overview'], ['history.html', 'His
     assert.ok(body.includes(`<span data-i18n="${label}">${label}</span>`));
     assert.match(body, /<svg class="page-nav-icon"[^>]*aria-hidden="true"[^>]*focusable="false"/);
   }
-  assert.match(html, /interface\.css\?v=20261020-navigation/);
+  assert.match(html, /interface\.css\?v=[\w-]+/);
 }
+assert.equal(read('index.html').match(/interface\.css\?v=[\w-]+/)[0],
+  read('history.html').match(/interface\.css\?v=[\w-]+/)[0], 'Both pages share the same navigation stylesheet');
 const css = read('interface.css');
 assert.match(css, /html \.dashboard \.page-nav a \{[^}]*min-height: 48px/);
 assert.match(css, /html \.dashboard \.page-nav a:not\(\[aria-current\]\):hover \{ background: transparent;/);

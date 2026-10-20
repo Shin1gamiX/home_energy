@@ -35,7 +35,10 @@ assert.match(source, /block.dataset.mode = state;/, 'Mode label contrast can fol
 assert.match(source, /function inspect\(segment[^]*?detail.hidden = false;/);
 assert.match(source, /historyCutoffs\(view, snapshotObservedAt, Date.now\(\) \/ 1000\).present/, 'Future shade is not a data gap');
 const app = read('app.js');
-assert.match(app, /details.textContent = .* V · .* A`;/, 'Both PV voltages and currents remain visible, including zero');
+for (const [quantity, unit] of [['power', 'W'], ['voltage', 'V'], ['current', 'A']]) {
+  assert.ok(app.includes(`createChannelReading(\`pv\${channel}_${quantity}\`, '${unit}')`),
+    `Both PV ${quantity} readings use the shared zero/missing-aware formatter`);
+}
 assert.match(app, /line.hidden = false;/, 'Zero current is a reading, not absent data');
 const html = read('index.html');
 for (const key of ['grid', 'grid_voltage', 'pv', 'load', 'soc', 'battery']) assert.ok(html.includes(`data-value="${key}"`));

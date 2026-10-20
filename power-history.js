@@ -85,11 +85,14 @@
   let source = 'load', range, zoom = null, points = [], active = null, loading = false, error = false;
   let sequence = 0, opener, request, resizeFrame = 0;
   const triggers = Object.entries({ grid: '.grid-label', pv: '.solar-label', load: '.load-label', battery: '.battery-label' }).map(([key, selector]) => {
+    const card = document.querySelector(selector);
     const button = document.createElement('button');
     button.type = 'button'; button.className = 'power-history-trigger';
     button.setAttribute('aria-haspopup', 'dialog'); button.setAttribute('aria-controls', dialog.id);
+    const description = card.getAttribute('aria-describedby');
+    if (description) button.setAttribute('aria-describedby', description);
     button.addEventListener('click', () => open(key, button));
-    document.querySelector(selector).append(button);
+    card.append(button);
     return { key, button };
   });
   function format(value) {

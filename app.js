@@ -829,6 +829,8 @@ const samples = [
   { grid: 0, pv: 1580, load: 910, battery: 670, soc: 84, battery_voltage: 53.2, pv_voltage: 382.9, grid_voltage: 232, pv_current: 4.1, battery_current: 12.7, load_current: 4.5, mode: 'Off-Grid' },
   { grid: 0, pv: 410, load: 910, battery: -500, soc: 84, battery_voltage: 52.6, pv_voltage: 360, grid_voltage: 232, pv_current: 1.1, battery_current: -9.5, load_current: 4.5, mode: 'Off-Grid' },
   { grid: 0, pv: 0, load: 940, battery: -940, soc: 64, battery_voltage: 51.9, pv_voltage: 31, grid_voltage: 232, pv_current: 0, battery_current: -18, load_current: 4.8, mode: 'Off-Grid' },
+  // Deliberately large synthetic values exercise narrow layouts, not equipment limits.
+  { grid: 0, pv: 12340, load: 19870, battery: -7530, soc: 100, battery_voltage: 52.9, pv_voltage: 382.9, grid_voltage: 234.5, pv_current: 32.2, battery_current: -142.3, load_current: 84.7, mode: 'Off-Grid' },
 ];
 // Explicitly synthetic channel values for the loopback-only preview.
 samples.forEach(sample => {
@@ -840,6 +842,13 @@ samples.forEach(sample => {
   }
 });
 const pvChannelViews = [];
+function createChannelReading(key, unit) {
+  const line = document.createElement('span'); line.className = 'channel-reading';
+  const value = document.createElement('b'); value.dataset.value = key;
+  const suffix = document.createElement('small'); suffix.textContent = unit;
+  line.append(value, document.createTextNode(' '), suffix);
+  return line;
+}
 for (const selector of ['.solar-label>div', '.metric.solar']) {
   const parent = document.querySelector(selector);
   parent.querySelector('[data-value="pv_voltage"]').parentElement.remove();
@@ -847,10 +856,13 @@ for (const selector of ['.solar-label>div', '.metric.solar']) {
   for (const channel of [1, 2]) {
     const row = document.createElement('div'); row.className = 'pv-channel';
     const name = document.createElement('strong'); name.textContent = `PV${channel}`;
-    const power = document.createElement('span'); power.className = 'pv-channel-power';
+    const power = createChannelReading(`pv${channel}_power`, 'W'); power.className = 'pv-channel-power';
     const details = document.createElement('span'); details.className = 'pv-channel-details';
+    const voltage = createChannelReading(`pv${channel}_voltage`, 'V');
+    const current = createChannelReading(`pv${channel}_current`, 'A');
+    details.append(voltage, current);
     row.append(name, power, details); channels.append(row);
-    pvChannelViews.push({ channel, power, details });
+    pvChannelViews.push({ channel, power, voltage, current });
   }
   parent.append(channels);
 }
@@ -904,6 +916,27 @@ for (const [name, d] of Object.entries(icons)) {
     icon.append(svgElement('path', { d })); holder.replaceChildren(icon);
   });
 }
+// Decorative quantity icons are created once; readings and units remain text.
+const measurementPaths = {
+  power: 'm13 3-8 10h6l-1 8 9-11h-6l1-7Z',
+  voltage: 'M4 18a9 9 0 1 1 16 0M4 18h16M12 13l4-5M5 11l2 1m10 0 2-1M12 4v2',
+  current: 'M3 12h18m-4-4 4 4-4 4M4 7h4m-4 10h4',
+  charge: icons.battery,
+};
+function measurementKind(key) {
+  return key === 'soc' ? 'charge' : key.endsWith('_voltage') ? 'voltage'
+    : key.endsWith('_current') ? 'current' : 'power';
+}
+function createMeasurementIcon(kind) {
+  const icon = svgElement('svg', { class: 'measurement-icon', viewBox: '0 0 24 24',
+    fill: 'none', stroke: 'currentColor', 'stroke-width': '1.7', 'stroke-linecap': 'round',
+    'stroke-linejoin': 'round', 'aria-hidden': 'true', focusable: 'false' });
+  icon.append(svgElement('path', { d: measurementPaths[kind] }));
+  return icon;
+}
+document.querySelectorAll('.scene-label [data-value], .metric [data-value]').forEach(value => {
+  value.parentElement.prepend(createMeasurementIcon(measurementKind(value.dataset.value)));
+});
 const flowAnimation = window.energyComets.create(scene);
 let paused = false;
 const pauseButton = document.querySelector('#pause');
@@ -953,16 +986,10 @@ function render(sample) {
       element.nextElementSibling.textContent = power.unit;
     }
   });
-  for (const { channel, power, details } of pvChannelViews) {
-    const prefix = `pv${channel}_`;
-    const watts = formatPower(values[prefix + 'power']);
-    power.textContent = `${watts.value} ${watts.unit}`;
+  for (const { channel, power, voltage, current } of pvChannelViews) {
     power.title = t(`PV${channel} power`);
-    const format = value => Number.isFinite(value)
-      ? new Intl.NumberFormat(window.energyI18n.locale, { maximumFractionDigits: 1 }).format(value) : '—';
-    const current = values[prefix + 'current'];
-    details.textContent = `${format(values[prefix + 'voltage'])} V · ${format(current)} A`;
-    details.title = `${t(`PV${channel} voltage`)} · ${t(`PV${channel} current`)}`;
+    voltage.title = t(`PV${channel} voltage`);
+    current.title = t(`PV${channel} current`);
   }
   document.querySelectorAll('#charge-bar, .scene-charge-bar').forEach(element => { element.style.width = `${Math.max(0, Math.min(100, sample.soc ?? 0))}%`; });
   document.querySelector('#grid-state').textContent = t(Number.isFinite(values.grid) ? 'Estimated' : 'Estimate unavailable');
@@ -1064,7 +1091,7 @@ if (demo) {
   document.querySelector('#scene-status').textContent = 'Sample energy flow';
   const previewChoice = document.createElement('select');
   previewChoice.setAttribute('aria-label', 'Preview scenario');
-  ['Grid / waiting', 'Solar / charging', 'Solar + battery', 'Battery only'].forEach((label, index) => {
+  ['Grid / waiting', 'Solar / charging', 'Solar + battery', 'Battery only', 'High power / layout check'].forEach((label, index) => {
     const option = document.createElement('option'); option.value = index; option.textContent = label; previewChoice.append(option);
   });
   previewChoice.addEventListener('change', () => { sampleIndex = Number(previewChoice.value); paused = true; pauseButton.textContent = 'Resume demo'; document.body.classList.remove('paused'); render(samples[sampleIndex]); });

@@ -70,7 +70,8 @@ html .overview .energy-scene { height: 660px; background: var(--theme-surface); 
 :root .overview .comet-track { stroke-width: 1.6; opacity: 1; }
 :root .overview .comet-port { opacity: 1; stroke: var(--theme-surface); stroke-width: 1; }
 .overview .scene-label { width: 198px; max-width: 34%; padding: 16px; gap: 12px; border-radius: 12px; background: var(--theme-surface); border-color: var(--theme-border); align-items: flex-start; font-size: 13px; }
-.overview .scene-label .mini-icon { margin-top: 5px; }
+.overview .scene-label > .mini-icon { display: none; }
+.overview .scene-label > div { min-width: 0; width: 100%; }
 .overview .scene-label div > span { font-size: 29px; line-height: 1.25; color: var(--theme-text); }
 .overview .scene-label div > span:has([data-value=grid_voltage]) { font-size: 18px; margin-top: 8px; }
 .overview .scene-label small { font-size: 13px; }
@@ -87,7 +88,16 @@ html .overview .energy-scene { height: 660px; background: var(--theme-surface); 
 .overview .pv-channel > span.pv-channel-power { font-size: 14px; }
 .overview .pv-channel > strong { font-size: 12px; }
 .overview .scene-label .battery-watts { font-size: 19px; }
-.overview .scene-label .battery-status { font-size: 12px; }
+.overview .battery-status { display: none; }
+/* One compact, stroke-based icon family for quantities, not additional controls. */
+.overview .measurement-icon { display: inline-block; width: 18px; height: 18px; margin-inline-end: 6px; vertical-align: -.12em; flex-shrink: 0; }
+.overview .reading > .measurement-icon { align-self: center; margin-inline-end: 0; }
+.overview :is(.current-reading, .voltage-reading) .measurement-icon { width: 15px; height: 15px; }
+.overview .pv-channel > span.pv-channel-details { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.overview .pv-channel .channel-reading { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+.overview .pv-channel .measurement-icon { width: 12px; height: 12px; margin-inline-end: 2px; }
+.overview .pv-channel small { font: inherit; }
+.overview .pv-channel .channel-reading b { font-weight: 400; }
 .overview .scene-caption { text-align: left; padding: 0 24px; font-size: 12px; bottom: 22px; color: var(--theme-muted); }
 .overview .reading-details { margin-top: 16px; border-radius: 12px; background: var(--theme-surface); }
 .overview footer { font-size: 12px; margin-top: 22px; }
@@ -275,4 +285,24 @@ html .history-workspace .mode-tracks { height: 36px !important; background: var(
   .history-workspace .mode-controls { gap: 4px; }
   .history-workspace .mode-controls button { font-size: 12px; }
   .history-workspace .mode-detail-fields { grid-template-columns: 1fr; }
+}
+/* Keep quantity icons and full readings inside the smallest / zoomed cards. */
+@media (max-width: 360px) {
+  .overview .scene-heading { top: 47px; left: 16px; right: auto; }
+  .overview .scene-label { width: calc(50% - 18px); padding: 10px 8px; }
+  .overview .grid-label, .overview .load-label { left: 12px; }
+  .overview .solar-label, .overview .battery-label { right: 12px; }
+  .overview .grid-label, .overview .solar-label { top: 82px; }
+  .overview .scene-label div > span { font-size: 22px; }
+  .overview .scene-label > div > span:has(> [data-value]) {
+    display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 3px; white-space: normal;
+  }
+  .overview .scene-label > div > span > .measurement-icon {
+    width: 14px; height: 14px; margin-inline-end: 0; align-self: center;
+  }
+  .overview .scene-label .pv-channel { grid-template-columns: minmax(0, 1fr); row-gap: 4px; }
+  .overview .scene-label .pv-channel-power { justify-self: start; }
+}
+@media (max-width: 300px) {
+  html .overview .energy-scene { height: 650px; }
 }
