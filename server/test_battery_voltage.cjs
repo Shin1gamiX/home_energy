@@ -1,0 +1,26 @@
+'use strict';
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+const read = name => fs.readFileSync(path.join(__dirname, '..', name), 'utf8');
+const source = read('history.js');
+const context = { t: text => text, historyColor: color => color };
+vm.runInNewContext(source.slice(source.indexOf('const metrics ='), source.indexOf('const historyDarkPalette')) +
+  '\nresult = metrics;', context);
+assert.equal(context.result.battery_voltage.label, 'Battery voltage');
+assert.equal(context.result.battery_voltage.unit, 'V');
+assert.equal(context.result.battery_voltage.group, 'voltage');
+assert.match(source, /'#577d50': '#a3ce95'/, 'Battery voltage has a contrasting dark-theme color');
+assert.match(source, /voltage: \['pv1_voltage', 'pv2_voltage', 'grid_voltage', 'battery_voltage'\]/);
+assert.match(source, /battery_voltage: 'battery'/);
+const app = read('app.js');
+const translations = app.slice(app.indexOf('const translations ='), app.indexOf('\n  const locales'));
+assert.ok(translations.includes("'Battery voltage': 'Напряжение батареи'"));
+assert.ok(translations.includes("'Battery voltage': 'Τάση μπαταρίας'"));
+assert.match(app, /value.dataset.value = 'battery_voltage'/);
+assert.match(app, /line.setAttribute\('aria-label', `\$\{t\('Battery voltage'\)\}: \$\{value\} V`\)/);
+assert.match(app, /key.endsWith\('_voltage'\)[^]*?Number.isFinite\(values\[key\]\)[^]*?: '—'/);
+assert.match(app, /for \(const \[selector, tag\] of \[\['\.battery-label>div', 'span'\], \['\.metric.battery', 'p'\]\]/);
+assert.doesNotMatch(app, /battery_voltage\s*[:=]\s*(?:sample|values)\.battery\s*\//);
+console.log('Battery voltage: measured-only UI, separate V metric, selection and EN/EL/RU labels passed.');

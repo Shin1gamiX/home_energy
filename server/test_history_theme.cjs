@@ -22,7 +22,8 @@ const metricsEnd = source.indexOf('const selected =');
 assert.ok(metricsEnd > metricsStart, 'Metrics and theme palette end before selection state');
 vm.runInContext(source.slice(metricsStart, metricsEnd) + '\nthis.metrics = metrics;', context);
 const light = Object.fromEntries(Object.entries(context.metrics).map(([key, value]) => [key, value.color]));
-assert.equal(Object.keys(light).length, 16);
+assert.equal(Object.keys(light).length, 17);
+assert.equal(light.battery_voltage, '#577d50');
 assert.equal(light.grid, '#8861ba');
 assert.equal(light.pv, '#c39232');
 
@@ -38,6 +39,7 @@ function contrast(a, b) {
   return (values[0] + .05) / (values[1] + .05);
 }
 document.documentElement.dataset.theme = 'dark';
+assert.ok(contrast(light.battery_voltage, '#ffffff') >= 3, 'Battery voltage is visible on light charts');
 for (const [key, metric] of Object.entries(context.metrics)) {
   assert.notEqual(metric.color, light[key], `${key} adapts for dark surfaces`);
   assert.ok(contrast(metric.color, '#172624') >= 3, `${key} line contrast`);

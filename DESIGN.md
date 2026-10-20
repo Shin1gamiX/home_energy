@@ -162,7 +162,7 @@ Use fine borders for separation, small circles for semantic keys, and a narrow u
 - **Actions:** quiet outlined secondary buttons; insights actions have a minimum height (44px). Preserve the inherited hover, disabled, and keyboard-focus states.
 - **Fields:** the date field accepts the displayed date format and works beside the native-dialog calendar. It is not a substitute for validation in the existing date logic. The averaging selector keeps its visible label and explicit focus outline.
 - **Navigation and selection:** page links use `aria-current`; periods, chart views, and series use `aria-pressed`. Current page uses an underline; selected chart view uses accent/on-accent fill. Preserve keyboard inspection, zoom/reset, peaks, and the calendar.
-- **Overview readings:** source cards open the existing last-12-hours view. Retain PV1/PV2 power, voltage, and current; estimated grid power and voltage; house power/current; battery SOC, signed power, average current, and state. Positive battery power means charging; negative means discharging. The public feed supplies no battery voltage.
+- **Overview readings:** source cards open the existing last-12-hours power view. Retain PV1/PV2 power, voltage, and current; estimated grid power and voltage; house power/current; battery SOC, signed power, measured voltage, average current, and state. Positive battery power means charging; negative means discharging. Battery voltage uses the measured public-feed field and remains unavailable when that field is missing.
 - **History summary and charts:** retain all six energy totals, including Battery charged. Show recorded coverage; missing readings break chart paths and do not become zero. Future time is labeled Later today or Upcoming, separately from recording gaps.
 - **Insights:** the latest saved review leads an editorial column. Native disclosures retain the review window, limitations, provenance, evidence links, and access to older reports. Saved reviews are not live alerts.
 - **Illustration:** `assets/solar-home.webp` is decorative, with empty alternative text and explicit dimensions. Its built-in-generation provenance is in `assets/solar-home.provenance.json`. It is a conceptual home, not a depiction of the actual installation.
@@ -182,7 +182,7 @@ The sidecar contains five compact, framework-free examples of actions, date entr
 
 ### Don't
 
-- Don't convert missing measurements into zero or add battery voltage that the public feed does not supply.
+- Don't convert missing measurements into zero or infer battery voltage from power/current. Older history without the measurement stays unavailable.
 - Don't hide A, W/kW, or V readings to simplify a small-screen layout.
 - Don't present future time as a recording gap or a saved review as a live alert.
 - Don't treat Overview or History composition as a universal page template.

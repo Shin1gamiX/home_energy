@@ -102,6 +102,33 @@ class HistoryTests(unittest.TestCase):
             self.assertEqual(point['values']['load_current'], 2.0)
             self.assertEqual(point['counts']['load_current'], 1)
 
+    def test_battery_voltage_records_forward_without_backfill(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runtime = Path(directory)
+            sample = {'status': 'live', 'updated_at': 1790100000, 'values': {'pv': 100}}
+            record(sample, runtime)
+            sample['updated_at'] += 60
+            sample['values'] = {'pv': 100, 'battery_voltage': 51.6}
+            record(sample, runtime)
+            record(sample, runtime)  # Same heartbeat must not count twice.
+            sample['updated_at'] += 5
+            sample['values']['battery_voltage'] = 52.0
+            record(sample, runtime)
+            sample['updated_at'] += 5
+            sample['values']['battery_voltage'] = None
+            record(sample, runtime)
+            sample['updated_at'] += 60
+            sample['status'] = 'stale'
+            sample['values']['battery_voltage'] = 55
+            record(sample, runtime)
+            index = json.loads((runtime / 'history/index.json').read_text())
+            data = json.loads((runtime / 'history' / (index['days'][0] + '.json')).read_text())
+            self.assertNotIn('battery_voltage', data['points'][0]['values'])
+            self.assertAlmostEqual(data['points'][1]['values']['battery_voltage'], 51.8)
+            self.assertEqual(data['points'][1]['counts']['battery_voltage'], 2)
+            self.assertEqual(len(data['points']), 2)
+            self.assertNotIn('battery_voltage', index['energy_summary']['totals'])
+
     def test_deduplication_averages_and_stale_reports(self):
         with tempfile.TemporaryDirectory() as directory:
             runtime = Path(directory)

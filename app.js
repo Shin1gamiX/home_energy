@@ -510,6 +510,7 @@ window.energyI18n = (() => {
       'Waiting for 40% charge before battery use resumes.': 'Ожидание заряда 40% для возобновления работы от батареи.',
       'Current': 'Ток', 'Solar current': 'Ток солнечных панелей', 'House current': 'Ток нагрузки дома',
       'Battery current (avg.)': 'Ток батареи (средний)', 'A (avg.)': 'A (сред.)',
+      'Battery voltage': 'Напряжение батареи',
       'Communication lost': 'Связь потеряна',
       'Live inverter data is unavailable. Check the dongle, home Wi-Fi, or VPN connection.': 'Текущие данные инвертора недоступны. Проверьте адаптер, домашнюю сеть Wi-Fi или VPN-соединение.',
       'Unable to reach the data service. Check your internet connection or try again shortly.': 'Не удаётся связаться с сервисом данных. Проверьте подключение к интернету или повторите попытку позже.',
@@ -617,6 +618,7 @@ window.energyI18n = (() => {
       'Waiting for 40% charge before battery use resumes.': 'Αναμονή φόρτισης στο 40% για επαναφορά της χρήσης μπαταρίας.',
       'Current': 'Ένταση ρεύματος', 'Solar current': 'Ρεύμα φωτοβολταϊκών', 'House current': 'Ρεύμα σπιτιού',
       'Battery current (avg.)': 'Ρεύμα μπαταρίας (μέσο)', 'A (avg.)': 'A (μέσο)',
+      'Battery voltage': 'Τάση μπαταρίας',
       'Communication lost': 'Η επικοινωνία χάθηκε',
       'Live inverter data is unavailable. Check the dongle, home Wi-Fi, or VPN connection.': 'Τα ζωντανά δεδομένα του μετατροπέα δεν είναι διαθέσιμα. Ελέγξτε τον προσαρμογέα, το οικιακό Wi-Fi ή τη σύνδεση VPN.',
       'Unable to reach the data service. Check your internet connection or try again shortly.': 'Δεν είναι δυνατή η σύνδεση με την υπηρεσία δεδομένων. Ελέγξτε τη σύνδεσή σας στο διαδίκτυο ή δοκιμάστε ξανά σε λίγο.',
@@ -823,10 +825,10 @@ const { t } = window.energyI18n;
 // Simulation is limited to the local preview. Production reads the allowlisted endpoint.
 const demo = location.hostname === '127.0.0.1' && location.port === '8766';
 const samples = [
-  { grid: 535, pv: 0, load: 563, battery: 0, soc: 20, pv_voltage: 34.7, grid_voltage: 234.5, pv_current: 0, battery_current: 0, load_current: 3.1, mode: 'Mains' },
-  { grid: 0, pv: 1580, load: 910, battery: 670, soc: 84, pv_voltage: 382.9, grid_voltage: 232, pv_current: 4.1, battery_current: 12.7, load_current: 4.5, mode: 'Off-Grid' },
-  { grid: 0, pv: 410, load: 910, battery: -500, soc: 84, pv_voltage: 360, grid_voltage: 232, pv_current: 1.1, battery_current: -9.5, load_current: 4.5, mode: 'Off-Grid' },
-  { grid: 0, pv: 0, load: 940, battery: -940, soc: 64, pv_voltage: 31, grid_voltage: 232, pv_current: 0, battery_current: -18, load_current: 4.8, mode: 'Off-Grid' },
+  { grid: 535, pv: 0, load: 563, battery: 0, soc: 20, battery_voltage: 49.8, pv_voltage: 34.7, grid_voltage: 234.5, pv_current: 0, battery_current: 0, load_current: 3.1, mode: 'Mains' },
+  { grid: 0, pv: 1580, load: 910, battery: 670, soc: 84, battery_voltage: 53.2, pv_voltage: 382.9, grid_voltage: 232, pv_current: 4.1, battery_current: 12.7, load_current: 4.5, mode: 'Off-Grid' },
+  { grid: 0, pv: 410, load: 910, battery: -500, soc: 84, battery_voltage: 52.6, pv_voltage: 360, grid_voltage: 232, pv_current: 1.1, battery_current: -9.5, load_current: 4.5, mode: 'Off-Grid' },
+  { grid: 0, pv: 0, load: 940, battery: -940, soc: 64, battery_voltage: 51.9, pv_voltage: 31, grid_voltage: 232, pv_current: 0, battery_current: -18, load_current: 4.8, mode: 'Off-Grid' },
 ];
 // Explicitly synthetic channel values for the loopback-only preview.
 samples.forEach(sample => {
@@ -871,6 +873,17 @@ for (const [name, key, label] of [
     currentReadings.push({ line, unit, label, key, battery: name === 'battery' });
   }
 }
+const batteryVoltageReadings = [];
+for (const [selector, tag] of [['.battery-label>div', 'span'], ['.metric.battery', 'p']]) {
+  const line = document.createElement(tag);
+  line.className = 'voltage-reading';
+  const value = document.createElement('b'); value.dataset.value = 'battery_voltage';
+  const unit = document.createElement('small'); unit.textContent = 'V';
+  line.append(value, document.createTextNode(' '), unit);
+  const parent = document.querySelector(selector);
+  parent.insertBefore(line, parent.querySelector('.current-reading, .meter'));
+  batteryVoltageReadings.push(line);
+}
 // Existing illustration stays decorative; paths attach to the actual card edges.
 const scene = document.querySelector('.energy-scene');
 const svgNS = 'http://www.w3.org/2000/svg';
@@ -904,6 +917,12 @@ function formatPower(watts) {
   return { value: new Intl.NumberFormat(window.energyI18n.locale, { maximumFractionDigits: kilo ? 2 : 0, useGrouping: false }).format(kilo ? watts / 1000 : watts), unit: kilo ? 'kW' : 'W' };
 }
 function render(sample) {
+  batteryVoltageReadings.forEach(line => {
+    line.title = t('Battery voltage');
+    const value = Number.isFinite(sample.battery_voltage)
+      ? new Intl.NumberFormat(window.energyI18n.locale, { maximumFractionDigits: 1 }).format(sample.battery_voltage) : '—';
+    line.setAttribute('aria-label', `${t('Battery voltage')}: ${value} V`);
+  });
   currentReadings.forEach(({ line, unit, label, key, battery }) => {
     line.title = t(label);
     unit.textContent = battery ? t('A (avg.)') : 'A';

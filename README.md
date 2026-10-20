@@ -9,6 +9,7 @@ The optional reporting launchers and guarded deployment helpers are installation
 ## What it does
 
 - Displays solar, estimated grid import, house consumption, battery charge percentage and signed battery power, with available voltage/current readings.
+- Includes measured battery voltage in Overview and History's **Voltage** view (English, Greek and Russian). It reads the `battery_voltage` entity in volts, never estimates it from power/current. Recording starts after exporter activation; older history remains unavailable for this metric, with no backfill or change to kWh totals.
 - Shows inverter mode and a translated communication-loss warning when reports stop arriving.
 - Records fresh readings into minute aggregates, with daily, weekly and monthly history, plus all-time kWh totals and a monthly breakdown.
 - Supports metric filters, averaging intervals, drag-to-zoom, synchronized inspection and optional minimum/maximum indicators.

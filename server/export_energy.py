@@ -15,6 +15,7 @@ PV_PREFIX = os.environ.get('ENERGY_PV_ENTITY_PREFIX', 'sensor.living_room_anenji
 FIELDS = {'grid': ('grid_to_home_power', 'W'), 'pv': ('pv_power', 'W'),
           'battery': ('battery_power', 'W'), 'soc': ('battery_percent', '%'), 'load': ('load_power', 'W'),
           'pv_voltage': ('pv_voltage', 'V'), 'grid_voltage': ('grid_voltage', 'V'),
+          'battery_voltage': ('battery_voltage', 'V'),
           'pv_current': ('pv_current', 'A'), 'battery_current': ('battery_average_current', 'A'),
           'load_current': ('output_current', 'A')}
 CHANNEL_FIELDS = {f'pv{channel}_{metric}': (f'pv{channel}_{metric}', unit)

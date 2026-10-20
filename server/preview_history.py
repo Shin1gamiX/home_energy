@@ -47,7 +47,8 @@ def preview_day(day, cutoff):
             power = solar * share
             values.update({f'pv{channel}_power': power, f'pv{channel}_voltage': voltage if solar else 30,
                            f'pv{channel}_current': power / voltage})
-        values.update(grid_voltage=232, battery_current=battery / 52, load_current=load / 230, pv_current=solar / 300)
+        values.update(grid_voltage=232, battery_voltage=52 + math.sin(minute / 240) * 2,
+                      battery_current=battery / 52, load_current=load / 230, pv_current=solar / 300)
         points.append({'t': stamp, 'values': values, 'counts': dict.fromkeys(values, 1)})
     boundaries = [(0, 360, 'grid'), (360, 450, 'mixed'), (450, 600, 'solar'),
                   (620, 720, 'solar'), (780, 990, 'solar'), (990, 1080, 'mixed'),

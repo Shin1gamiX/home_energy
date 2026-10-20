@@ -57,7 +57,9 @@ html .overview .energy-scene { height: 660px; background: var(--theme-surface); 
 .overview .scene-label div > span { font-size: 29px; line-height: 1.25; color: var(--theme-text); }
 .overview .scene-label div > span:has([data-value=grid_voltage]) { font-size: 18px; margin-top: 8px; }
 .overview .scene-label small { font-size: 13px; }
-.overview .scene-label div > span.current-reading { font-size: 15px; line-height: 1.5; color: var(--theme-muted); }
+.overview .scene-label div > :is(span.current-reading, span.voltage-reading) { font-size: 15px; line-height: 1.5; color: var(--theme-muted); }
+.overview .metric .voltage-reading { font-size: 15px; color: var(--theme-muted); }
+.overview .voltage-reading b { font-variant-numeric: tabular-nums; }
 .overview .grid-label, .overview .solar-label { top: 80px; }
 .overview .grid-label, .overview .load-label { left: 24px; }
 .overview .solar-label, .overview .battery-label { right: 24px; }
@@ -226,7 +228,7 @@ html .history-workspace .mode-tracks { height: 36px !important; background: var(
   .overview .scene-label div > span { font-size: 27px; }
   .overview .pv-channel > span.pv-channel-details { font-size: 11px; }
   .overview .scene-label small { font-size: 12px; }
-  .overview .scene-label div > span.current-reading { font-size: 14px; }
+  .overview .scene-label div > :is(span.current-reading, span.voltage-reading) { font-size: 14px; }
   .overview .scene-label .battery-watts { font-size: 18px; }
   .overview .scene-caption { font-size: 11px; padding-inline: 16px; bottom: 20px; }
   .overview-workspace .energy-insights { padding: 20px; }

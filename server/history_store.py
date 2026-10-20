@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 from energy_summary import update_summary
 
 # Generic PV voltage remains in old rows, but only channel voltages are recorded now.
-KEYS = ('grid', 'pv', 'battery', 'soc', 'load', 'grid_voltage',
+KEYS = ('grid', 'pv', 'battery', 'soc', 'load', 'grid_voltage', 'battery_voltage',
         'pv_current', 'battery_current', 'load_current',
         'pv1_power', 'pv1_voltage', 'pv1_current', 'pv2_power', 'pv2_voltage', 'pv2_current')
 ATHENS = ZoneInfo('Europe/Athens')

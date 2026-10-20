@@ -65,6 +65,30 @@ class SnapshotTests(unittest.TestCase):
         self.db.execute('UPDATE state_attributes SET shared_attrs=? WHERE attributes_id=1', ('{"unit_of_measurement":"V"}',))
         self.assertIsNone(snapshot(self.db, 1000)['values']['grid'])
 
+    def test_battery_voltage_is_measured_not_derived(self):
+        index = list(FIELDS).index('battery_voltage') + 1
+        self.assertEqual(FIELDS['battery_voltage'], ('battery_voltage', 'V'))
+        for value in ('51.6', '0'):
+            self.db.execute('UPDATE states SET state=? WHERE metadata_id=?', (value, index))
+            self.assertEqual(snapshot(self.db, 1000)['values']['battery_voltage'], float(value))
+
+    def test_unavailable_or_invalid_battery_voltage_is_not_zero(self):
+        index = list(FIELDS).index('battery_voltage') + 1
+        for value in ('unknown', 'unavailable', 'NaN', 'Infinity', ''):
+            with self.subTest(value=value):
+                self.db.execute('UPDATE states SET state=? WHERE metadata_id=?', (value, index))
+                result = snapshot(self.db, 1000)
+                self.assertIsNone(result['values']['battery_voltage'])
+                self.assertEqual(result['status'], 'partial')
+        self.db.execute('DELETE FROM states WHERE metadata_id=?', (index,))
+        self.assertIsNone(snapshot(self.db, 1000)['values']['battery_voltage'])
+
+    def test_battery_voltage_rejects_wrong_unit(self):
+        index = list(FIELDS).index('battery_voltage') + 1
+        self.db.execute('UPDATE state_attributes SET shared_attrs=? WHERE attributes_id=?',
+                        ('{"unit_of_measurement":"mV"}', index))
+        self.assertIsNone(snapshot(self.db, 1000)['values']['battery_voltage'])
+
 
 if __name__ == '__main__':
     unittest.main()

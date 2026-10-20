@@ -20,6 +20,7 @@ const metrics = {
   soc: { get label() { return t('Battery %'); }, get color() { return historyColor('#80a57c'); }, unit: '%', group: 'soc' },
   pv_voltage: { get label() { return t('PV voltage (legacy)'); }, get color() { return historyColor('#337eb9'); }, unit: 'V', group: 'voltage', legacy: true },
   grid_voltage: { get label() { return t('Grid voltage'); }, get color() { return historyColor('#aa4e91'); }, unit: 'V', group: 'voltage' },
+  battery_voltage: { get label() { return t('Battery voltage'); }, get color() { return historyColor('#577d50'); }, unit: 'V', group: 'voltage' },
   pv_current: { get label() { return t('Solar current'); }, get color() { return historyColor('#c39232'); }, unit: 'A', group: 'current', legacy: true },
   battery_current: { get label() { return t('Battery current (avg.)'); }, get color() { return historyColor('#d65c66'); }, unit: 'A', group: 'current' },
   load_current: { get label() { return t('House current'); }, get color() { return historyColor('#168b8a'); }, unit: 'A', group: 'current' },
@@ -28,6 +29,7 @@ const historyDarkPalette = {
   '#c39232': '#e9b65d', '#b56610': '#f4a65a', '#365dc1': '#91adff',
   '#337eb9': '#79baff', '#c27019': '#f3ad65', '#8861ba': '#b893ed',
   '#168b8a': '#5fd4bb', '#d65c66': '#ff939d', '#80a57c': '#a3ce95',
+  '#577d50': '#a3ce95',
   '#aa4e91': '#e49ccb', '#596cb0': '#a5b6ed', '#869b98': '#a9beb4',
   '#adb8b4': '#8fa69d', '#c3ccc8': '#718b80', '#60776c': '#9cb4a8',
   '#284e43': '#80d4b3',
@@ -1014,7 +1016,7 @@ function renderModeTimeline(container, view) {
 // statistics are retained, so switching views never requests the period again.
 const chartViewDefaults = {
   power: ['pv', 'load', 'grid', 'battery'], soc: ['soc'],
-  voltage: ['pv1_voltage', 'pv2_voltage', 'grid_voltage'],
+  voltage: ['pv1_voltage', 'pv2_voltage', 'grid_voltage', 'battery_voltage'],
   current: ['pv1_current', 'pv2_current', 'battery_current', 'load_current'],
 };
 function chooseChartView(view) {
@@ -1097,7 +1099,7 @@ for (const [key, metric] of Object.entries(metrics)) {
     grid_voltage: 'M8 22l4-20 4 20M6 8h12M5 13h14M9 18h6M9 8l6 5m-6 0 6 5',
   };
   const iconKey = /^pv[12]_/.test(key) ? (key.endsWith('_voltage') ? 'pv_voltage' : 'pv')
-    : { pv_current: 'pv', battery_current: 'battery', load_current: 'load' }[key] || key;
+    : { pv_current: 'pv', battery_current: 'battery', battery_voltage: 'battery', load_current: 'load' }[key] || key;
   icon.append(svgElement('path', { d: paths[iconKey] }));
   const label = document.createElement('span'); label.textContent = metric.label;
   button.append(icon, label);
@@ -1106,7 +1108,7 @@ for (const [key, metric] of Object.entries(metrics)) {
     activeChartView = metric.group;
     updateFilters();
   });
-  const category = metric.legacy ? 'legacy' : ['battery', 'soc', 'battery_current'].includes(key) ? 'battery' : metric.group;
+  const category = metric.legacy ? 'legacy' : ['battery', 'soc', 'battery_current', 'battery_voltage'].includes(key) ? 'battery' : metric.group;
   filterContainers[category].append(button);
 }
 const modeButton = document.createElement('button');
