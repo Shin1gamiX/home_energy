@@ -1,7 +1,9 @@
 # Overview Energy trends
 
 Compares the last 7 completed Athens calendar days with the preceding 7;
-14/30-day choices compare equal preceding calendar windows. It follows Power
+1/14/30-day choices compare equal preceding calendar windows. The 1-day option
+compares yesterday with the day before and shows each day's battery peak directly.
+It follows Power
 flow, with expandable paired bars, daily values, coverage and battery activity.
 English, Greek and Russian, light/dark themes and keyboard controls are retained.
 
@@ -72,3 +74,37 @@ release, both origins pass asset/cache/security/history checks, and the current
 index contains 60 days ending before 04/11/2026. The activation verified protected
 reports, raw history exports and access; only Nginx was reloaded and the exporter
 restarted. The data-cache and dashboard features are published separately.
+
+## One-day follow-up (deployed 04/11/2026)
+
+The 1-day option retains the 7-day default and the existing 95%-per-day coverage
+rule. It omits mini line charts for a single point and retains the expanded paired
+bars and exact daily values. All three languages use a singular day label, and
+the four period controls wrap into a two-by-two grid on narrow screens. The
+existing 60-day snapshot is reused; no backend change or extra request is needed.
+
+Calculation and UI regression tests cover yesterday/day-before boundaries,
+single-day energy and battery peaks, missing data, DST denominators, translated
+labels and period switching without new requests. Browser checks passed in both
+themes, all languages and at 320 CSS pixels. Six deployment tests cover the
+write allowlist, metadata preservation, protected state and failure rollback.
+All four installed files match the approved release hashes. Origin checks on
+both hostnames passed for assets, security headers, report feed, history/304
+and fresh telemetry. Public Cloudflare browser checks confirmed the 1-day
+selection, dates, recorded totals and battery peak bars without console errors.
+
+Stage `activate-trends-day.py`, the unchanged `activate-interface.py` verifier,
+and `trends-data.js`, `trends.js`, `trends.css`, `index.html` in a private
+`/home/shini/homeenergy-trends-day-release.<unique>` directory. `manifest.json`
+pins each installed/candidate hash, both helpers and the Nginx baseline. Run
+`--check`, then `sudo .../activate-trends-day.py --activate`. The helper backs up
+these four files and restores them if verification fails. It preserves reports,
+closed history, reporting access, Nginx configuration and running services.
+No reload or restart is required. Manual rollback uses `--rollback` with the
+printed `homeenergy-trends-day-backup.<unique>` path. Check the public pages after
+activation before committing and pushing this follow-up separately.
+
+Do not rerun activation after it has installed the release. The helper expects
+the original file hashes and deliberately rejects an already-updated baseline.
+If this happens, compare all four installed hashes with the manifest's `after`
+values and verify the live pages before deciding whether recovery is needed.

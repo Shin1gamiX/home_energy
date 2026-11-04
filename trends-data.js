@@ -54,7 +54,7 @@
       complete: known.length === rows.length && rows.every(row => row.coverage[key] >= 95)};
   }
   function buildComparison(days, rows) {
-    if (![7, 14, 30].includes(days) || rows.length !== 60) throw new RangeError('Invalid comparison period');
+    if (![1, 7, 14, 30].includes(days) || rows.length !== 60) throw new RangeError('Invalid comparison period');
     const current = rows.slice(-days), previous = rows.slice(-days * 2, -days);
     const metrics = Object.fromEntries([...METRICS, 'charged', 'supplied'].map(key => {
       const now = summarize(current, key), before = summarize(previous, key);

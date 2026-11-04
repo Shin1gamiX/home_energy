@@ -8,7 +8,7 @@ const copy = {
     loadError: "Daily comparisons could not be loaded. Try again to get the latest snapshot.",
     retry: "Try again",
     refresh: "Refresh",
-    recorded: "recorded",
+    recorded: "recorded", day: 'day', dayPeak: 'Daily maximum',
     title: 'Energy trends', subtitle: 'See what changed, without digging through history.', days: 'days',
     complete: 'Completed days · Athens time',
     versus: 'compared with', house: 'House usage', solar: 'Solar generated', grid: 'Grid consumed',
@@ -31,7 +31,7 @@ const copy = {
     loadError: "Δεν ήταν δυνατή η φόρτωση των συγκρίσεων. Δοκιμάστε ξανά για το πιο πρόσφατο στιγμιότυπο.",
     retry: "Δοκιμή ξανά",
     refresh: "Ανανέωση",
-    recorded: "καταγεγραμμένο",
+    recorded: "καταγεγραμμένο", day: 'ημέρα', dayPeak: 'Ημερήσιο μέγιστο',
     title: 'Ενεργειακές τάσεις', subtitle: 'Δείτε τι άλλαξε, χωρίς αναζήτηση στο ιστορικό.', days: 'ημέρες',
     complete: 'Ολοκληρωμένες ημέρες · Ώρα Αθήνας',
     versus: 'σε σύγκριση με', house: 'Κατανάλωση σπιτιού', solar: 'Παραγωγή φωτοβολταϊκών', grid: 'Κατανάλωση δικτύου',
@@ -54,7 +54,7 @@ const copy = {
     loadError: "Не удалось загрузить сравнения. Повторите попытку для получения актуального снимка.",
     retry: "Повторить",
     refresh: "Обновить",
-    recorded: "записано",
+    recorded: "записано", day: 'день', dayPeak: 'Максимум за день',
     title: 'Энергетические тенденции', subtitle: 'Узнайте, что изменилось, без поиска в истории.', days: 'дней',
     complete: 'Полные дни · Афинское время',
     versus: 'в сравнении с', house: 'Потребление дома', solar: 'Солнечная генерация', grid: 'Потребление из сети',
@@ -83,7 +83,7 @@ const t = key => (copy[document.documentElement.lang] || copy.en)[key];
 const number = (value, precision = 1) => Number.isFinite(value) ? new Intl.NumberFormat(document.documentElement.lang, {maximumFractionDigits: precision}).format(value) : '—';
 const date = value => value.split('-').reverse().join('/');
 const shortDate = value => date(value).slice(0, 5);
-const range = rows => `${date(rows[0].date)} – ${date(rows.at(-1).date)}`;
+const range = rows => rows.length === 1 ? date(rows[0].date) : `${date(rows[0].date)} – ${date(rows.at(-1).date)}`;
 const unit = key => key === 'soc' ? '%' : 'kWh';
 const deltaUnit = key => key === 'soc' ? t('points') : 'kWh';
 function change(metric, key) {
@@ -95,6 +95,8 @@ function change(metric, key) {
 }
 function coverage(row, key) { return number(row.coverage[key]) + '% ' + t('recorded'); }
 function spark(data, key) {
+  // A single daily total has no within-period trend; the paired bars show it.
+  if (data.days === 1) return '';
   const max = key === 'soc' ? 100 : Math.max(...[...data.current, ...data.previous].map(row => row[key]).filter(Number.isFinite), 1);
   const lines = (items, className) => {
     let segments = [], points = [];
@@ -140,17 +142,17 @@ function render() {
   const data = buildComparison(days, rows);
   const high = extreme(data.current, 'house', true);
   const low = extreme(data.current, 'solar', false);
-  host.innerHTML = `<div class="trends-heading"><div><h2 id="trends-title">${t('title')}</h2><p>${t('subtitle')}</p></div><div class="trend-periods" role="group" aria-label="${t('periodLabel')}">${[7, 14, 30].map(value => `<button type="button" data-period="${value}" aria-pressed="${value === days}">${value} ${t('days')}</button>`).join('')}</div></div>
+  host.innerHTML = `<div class="trends-heading"><div><h2 id="trends-title">${t('title')}</h2><p>${t('subtitle')}</p></div><div class="trend-periods" role="group" aria-label="${t('periodLabel')}">${[1, 7, 14, 30].map(value => `<button type="button" data-period="${value}" aria-pressed="${value === days}">${value} ${t(value === 1 ? 'day' : 'days')}</button>`).join('')}</div></div>
     <div class="trend-dates"><strong>${range(data.current)}</strong><span>${t('versus')} ${range(data.previous)}</span><span>${t('complete')}</span></div>
     <div class="trend-summary">${METRICS.map(key => {const metric = data.metrics[key]; return `<button class="trend-metric" type="button" data-metric="${key}" data-source="${key}" aria-expanded="${expanded && selected === key}" aria-controls="trend-details"><span class="trend-label"><i></i>${t(key)}<svg class="metric-open" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="m6 8 4 4 4-4"/></svg></span><span class="metric-visual"><span class="trend-value">${number(metric.now.total)} <small>${unit(key)}</small></span>${spark(data, key)}</span><span class="trend-previous">${t('previous')} ${number(metric.before.total)} ${unit(key)}</span><span class="trend-change">${change(metric, key)}</span><span class="trend-previous">${number(metric.now.coverage)}% ${t("recorded")} · ${t("previous")} ${number(metric.before.coverage)}%</span></button>`;}).join('')}</div>
-    <div class="trend-bottom"><div><span>${t("complete")} · <button id="trends-retry" type="button">${t("refresh")}</button></span><p class="spark-key">${t('sparkKey')}</p></div><button id="trend-expand" type="button" aria-expanded="${expanded}" aria-controls="trend-details">${t(expanded ? 'collapse' : 'explore')} <span aria-hidden="true">${expanded ? '−' : '+'}</span></button></div>
+    <div class="trend-bottom"><div><span>${t("complete")} · <button id="trends-retry" type="button">${t("refresh")}</button></span>${days === 1 ? '' : `<p class="spark-key">${t('sparkKey')}</p>`}</div><button id="trend-expand" type="button" aria-expanded="${expanded}" aria-controls="trend-details">${t(expanded ? 'collapse' : 'explore')} <span aria-hidden="true">${expanded ? '−' : '+'}</span></button></div>
     <div id="trend-details" ${expanded ? '' : 'hidden'}><div class="trend-detail-grid">${expanded ? chart(data) + battery(data) : ''}</div>${expanded ? `<div class="trend-observations"><h3>${t('observations')}</h3><dl><div><dt>${t('high')}</dt><dd>${number(high?.house)} kWh <span>· ${high ? shortDate(high.date) : t("insufficient")}</span></dd></div><div><dt>${t('low')}</dt><dd>${number(low?.solar)} kWh <span>· ${low ? shortDate(low.date) : t("insufficient")}</span></dd></div><div><dt>${t('gridShare')}</dt><dd>${number(ratio(data, 'now'))}% <span>· ${t('previous')} ${number(ratio(data, 'before'))}%</span></dd></div></dl><p>${t('shareNote')}</p></div><p class="trend-footnote">${t('note')}</p><p class="trend-footnote">${t('coverageNote')}</p>` : ''}</div>`;
   for (const key of METRICS) {
     host.querySelector(`[data-metric="${key}"] .trend-change`).dataset.tone = changeTone(key, data.metrics[key]);
   }
   const peakDescription = document.createElement('span');
   peakDescription.className = 'trend-previous';
-  peakDescription.textContent = t('socSummary');
+  peakDescription.textContent = t(days === 1 ? 'dayPeak' : 'socSummary');
   host.querySelector('[data-metric="soc"] .metric-visual').after(peakDescription);
 }
 host.addEventListener('click', event => {

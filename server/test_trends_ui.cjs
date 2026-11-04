@@ -39,6 +39,29 @@ async function main() {
   assert.equal(requests,2); // Chart selection is computed in memory, never daily fan-out.
   events.click({target:{closest:()=>({dataset:{metric:'soc'}})}});
   assert.match(host.innerHTML,/id="trend-details" hidden/);
+  // One-day comparison is calculated from the same snapshot, including real values.
+  for (const [i,row] of empty.days.slice(-2).entries()) {
+    row.totals = Object.fromEntries(['load','pv','grid','battery','battery_charged']
+      .map(key=>[key,{kwh:10+i,seconds:row.seconds}]));
+    row.soc = {minimum:20,maximum:90+i,seconds:row.seconds};
+  }
+  events.click({target:{closest:()=>({id:'trends-retry'})}});
+  await new Promise(setImmediate);
+  events.click({target:{closest:()=>({dataset:{period:'1'}})}});
+  events.click({target:{closest:()=>({dataset:{metric:'soc'}})}});
+  assert.match(host.innerHTML,/data-period="1" aria-pressed="true">1 day/);
+  assert.equal((host.innerHTML.match(/class="bar-pair"/g)||[]).length,1);
+  assert.ok(!/NaN|Infinity|undefined|class="trend-spark"|class="spark-key"/.test(host.innerHTML));
+  const yesterday=D.shiftDate(today,-1).split('-').reverse().join('/');
+  const dayBefore=D.shiftDate(today,-2).split('-').reverse().join('/');
+  assert.ok(host.innerHTML.includes(`<strong>${yesterday}</strong><span>compared with ${dayBefore}</span>`));
+  assert.equal(requests,3);
+  for (const [lang,label] of [['el','1 ημέρα'],['ru','1 день'],['en','1 day']]) {
+    context.document.documentElement.lang=lang;
+    windowEvents.languagechange();
+    assert.ok(host.innerHTML.includes(label));
+  }
+  assert.equal(requests,3);
   windowEvents.pagehide();
   assert.equal(pendingSignal.aborted,true);
   console.log('PASS: offline/retry, empty data, missing bars, toggle, no request fan-out and navigation cancellation');
