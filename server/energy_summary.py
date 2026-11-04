@@ -5,7 +5,7 @@ represent recorded minute averages, not billing meters or inverter lifetime tota
 """
 import json
 import math
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 ATHENS = ZoneInfo('Europe/Athens')
@@ -110,4 +110,44 @@ def update_summary(db, days, day, cutoff, previous_stamp=None):
     summaries = [{'day': value, 'from': first, 'totals': json.loads(totals)}
                  for value, first, totals in db.execute('SELECT day,first_minute,totals FROM energy_daily_summary ORDER BY day')
                  if value in available]
-    return combine_days(summaries, cutoff)
+    result = combine_days(summaries, cutoff)
+    result['trends'] = daily_trends(db, summaries, cutoff)
+    return result
+
+
+def daily_trends(db, summaries, cutoff):
+    """Small 60-completed-day index; never rewrite readings or daily exports.
+
+    Energy reuses the existing integration cache. SOC extrema come from recorded
+    minute averages, not instantaneous samples. Closed days are cached once.
+    Missing calendar days are explicit and coverage uses actual Athens duration.
+    """
+    today = datetime.fromtimestamp(cutoff, ATHENS).replace(hour=0, minute=0, second=0, microsecond=0)
+    first = today - timedelta(days=60)
+    db.execute('CREATE TABLE IF NOT EXISTS energy_trends_soc '
+               '(day TEXT PRIMARY KEY, minimum REAL, maximum REAL, seconds REAL NOT NULL)')
+    cached = {day: dict(minimum=low, maximum=high, seconds=seconds)
+              for day, low, high, seconds in db.execute(
+                  'SELECT day,minimum,maximum,seconds FROM energy_trends_soc WHERE day>=? AND day<?',
+                  (first.strftime('%Y-%m-%d'), today.strftime('%Y-%m-%d')))}
+    energy = {row['day']: row['totals'] for row in summaries}
+    rows = []
+    for offset in range(60):
+        start = first + timedelta(days=offset)
+        end = start + timedelta(days=1)
+        day = start.strftime('%Y-%m-%d')
+        if day not in cached and day in energy:
+            values = []
+            for total, count in db.execute(
+                    "SELECT total,count FROM readings WHERE day=? AND metric='soc' AND minute>=? AND minute<?",
+                    (day, start.timestamp(), end.timestamp())):
+                if finite(total) and finite(count) and count > 0 and 0 <= total / count <= 100:
+                    values.append(total / count)
+            cached[day] = dict(minimum=min(values, default=None), maximum=max(values, default=None),
+                               seconds=len(values) * 60)
+            db.execute('INSERT INTO energy_trends_soc VALUES (?,?,?,?)',
+                       (day, cached[day]['minimum'], cached[day]['maximum'], cached[day]['seconds']))
+        rows.append(dict(day=day, seconds=end.timestamp() - start.timestamp(),
+                         totals=energy.get(day, empty_totals()),
+                         soc=cached.get(day, dict(minimum=None, maximum=None, seconds=0))))
+    return dict(version=1, completed_before=today.strftime('%Y-%m-%d'), days=rows)
