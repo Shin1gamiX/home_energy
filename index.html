@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="power-history.css?v=20261009-close-svg">
   <link rel="stylesheet" href="insights.css?v=20261018-readability">
   <link rel="stylesheet" href="interface.css?v=20261020-metric-icons-2">
+  <link rel="stylesheet" href="trends.css?v=20261103-trends">
 </head>
 <body class="overview">
 <main class="dashboard">
@@ -21,6 +22,7 @@
     <button class="theme-toggle" data-theme-toggle type="button" aria-label="Switch to dark mode" hidden><svg class="theme-moon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20.5 13.2A8.6 8.6 0 0 1 10.8 3.5a8.7 8.7 0 1 0 9.7 9.7Z"/></svg><svg class="theme-sun" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg></button></header>
   <section class="intro"><div><h1>Home, at a glance</h1><p id="supply-status"></p></div><div class="intro-status"><span id="live-status"></span><span class="date" id="date"></span></div></section>
   <div class="overview-workspace">
+  <section id="energy-trends" aria-labelledby="trends-title"></section>
   <section class="energy-scene" aria-label="Illustrated home energy flow">
     <h2 class="scene-title" data-i18n="Power flow">Power flow</h2>
     <div class="scene-heading"><span><i class="status-dot"></i><span id="scene-status">Waiting for readings</span></span><span>POWER OVERVIEW</span></div>
@@ -67,4 +69,6 @@
 <script src="power-history.js?v=20261020-metric-icons"></script>
 <script src="insights.js?v=20261018-concepts"></script>
 <script src="collector-control.js?v=20261004-private-status"></script>
+<script src="trends-data.js?v=20261103-trends"></script>
+<script src="trends.js?v=20261103-trends"></script>
 </body></html>

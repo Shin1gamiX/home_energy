@@ -1,0 +1,137 @@
+#energy-trends { border: 1px solid var(--theme-border); border-radius: 12px; background: var(--theme-surface); padding: 26px 28px 0; margin-bottom: 28px; color: var(--theme-text); }
+#energy-trends * { box-sizing: border-box; }
+.overview-workspace > #energy-trends { grid-column: 1 / -1; grid-row: 2; margin: 0; }
+@media (min-width: 1001px) { .overview-workspace > .energy-insights { grid-column: 2; grid-row: 1; } }
+#energy-trends { --change-green: #19713c; --change-red: #b83736; --change-amber: #946000; }
+[data-theme=dark] #energy-trends { --change-green: #80dba1; --change-red: #ff9595; --change-amber: #efbd68; }
+#energy-trends [data-tone=favorable] { color: var(--change-green); }
+#energy-trends [data-tone=unfavorable] { color: var(--change-red); }
+#energy-trends [data-tone=small] { color: var(--change-amber); }
+#energy-trends h2 { margin: 0; font-size: 24px; letter-spacing: -.025em; }
+#energy-trends h3 { font-size: 17px; margin: 0; letter-spacing: -.015em; }
+#energy-trends p { margin: 6px 0 0; color: var(--theme-muted); font-size: 13px; line-height: 1.6; }
+#energy-trends button { font: inherit; cursor: pointer; box-shadow: none; text-align: start; }
+#energy-trends button:focus-visible, #energy-trends summary:focus-visible, .bars-scroll:focus-visible { outline: 2px solid var(--theme-focus); outline-offset: 3px; }
+.trends-heading { display: flex; justify-content: space-between; gap: 20px; align-items: center; }
+.trend-periods { display: flex; background: var(--theme-elevated); border-radius: 8px; padding: 4px; gap: 3px; flex-shrink: 0; }
+#energy-trends .trend-periods button { border: 1px solid transparent; background: transparent; color: var(--theme-muted); border-radius: 6px; padding: 9px 14px; min-height: 42px; white-space: nowrap; font-size: 13px; }
+#energy-trends .trend-periods button[aria-pressed=true] { background: var(--theme-surface); color: var(--theme-text); border-color: var(--theme-border); font-weight: 650; }
+.trend-dates { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 12px; font-size: 12px; color: var(--theme-muted); margin-top: 22px; }
+.trend-dates strong { color: var(--theme-text); font-weight: 600; }
+.trend-dates span:last-child { margin-inline-start: auto; }
+.trend-summary { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); margin: 22px -14px 16px; }
+[data-source=soc] { --source: #ae4263; }
+[data-theme=dark] [data-source=soc] { --source: #f19bb8; }
+[data-source=house] { --source: #147d70; }
+[data-source=solar] { --source: #a96800; }
+[data-source=grid] { --source: #8653ba; }
+[data-theme=dark] [data-source=house] { --source: #5bd6bd; }
+[data-theme=dark] [data-source=solar] { --source: #efb657; }
+[data-theme=dark] [data-source=grid] { --source: #c2a0ef; }
+#energy-trends .trend-metric { display: block; min-width: 0; border: 0; border-inline-end: 1px solid var(--theme-border); border-radius: 0; padding: 10px 22px; background: transparent; color: var(--theme-text); }
+#energy-trends .trend-metric:last-child { border-inline-end: 0; }
+#energy-trends .trend-metric:hover, #energy-trends .trend-metric[aria-expanded=true] { background: var(--theme-elevated); border-radius: 8px; }
+.trend-label { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 550; }
+.trend-label i { width: 7px; height: 7px; border-radius: 50%; background: var(--source); flex-shrink: 0; }
+.metric-open { margin-inline-start: auto; color: var(--theme-muted); width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.trend-metric[aria-expanded=true] .metric-open { transform: rotate(180deg); }
+.metric-visual { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+.trend-value { font-size: clamp(24px,2.4vw,34px); letter-spacing: -.04em; font-weight: 650; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.trend-value small { font-size: 12px; letter-spacing: 0; font-weight: 400; color: var(--theme-muted); }
+.trend-spark { width: 105px; min-width: 48px; height: 42px; margin-inline-start: auto; overflow: visible; }
+.trend-spark polyline { fill: none; stroke: var(--source); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.trend-spark .spark-before { stroke: var(--theme-muted); stroke-width: 1.4; stroke-dasharray: 3 4; opacity: .65; }
+.trend-previous { display: block; font-size: 12px; color: var(--theme-muted); margin-top: 4px; }
+.trend-change { display: block; font-size: 13px; font-weight: 600; margin-top: 16px; }
+.trend-change span { font-weight: 400; color: var(--theme-muted); white-space: nowrap; }
+.trend-bottom { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 0; border-top: 1px solid var(--theme-border); }
+.trend-bottom > div > span { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--theme-muted); }
+#energy-trends .spark-key { font-size: 11px; margin-top: 5px; }
+.coverage-dot { display: inline-block; width: 6px; height: 6px; background: var(--theme-accent); border-radius: 50%; flex-shrink: 0; }
+#energy-trends #trend-expand { border: 0; color: var(--theme-accent); background: transparent; padding: 8px 0 8px 10px; min-height: 44px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 16px; }
+#trend-expand span { font-size: 20px; }
+#trend-details { border-top: 1px solid var(--theme-border); padding: 26px 0 22px; }
+.trend-detail-grid { display: grid; grid-template-columns: minmax(0,1fr) 235px; gap: 30px; }
+.chart-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.trend-legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--theme-muted); }
+.trend-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.trend-legend i { width: 9px; height: 9px; background: var(--source); border-radius: 2px; }
+.trend-legend .before-key { background: transparent; border: 1px solid var(--theme-muted); }
+#energy-trends .chart-unit { margin-top: 22px; font-size: 11px; }
+.chart-plot { display: flex; gap: 10px; margin-top: 8px; }
+.chart-axis { display: flex; flex-direction: column; justify-content: space-between; height: 180px; min-width: 23px; font-size: 11px; color: var(--theme-muted); text-align: end; }
+.bars-scroll { overflow-x: auto; flex: 1; min-width: 0; scrollbar-width: thin; padding: 3px 3px 8px; }
+.trend-bars { display: grid; grid-template-columns: repeat(var(--days),minmax(0,1fr)); background: linear-gradient(to bottom,var(--theme-border) 1px,transparent 1px) 0 0/100% 90px; }
+#energy-trends .bar-pair { position: relative; background: transparent; border: 0; border-radius: 5px; padding: 0 6px; color: var(--theme-muted); min-width: 0; text-align: center; }
+#energy-trends .bar-pair:hover, #energy-trends .bar-pair[aria-pressed=true] { background: var(--theme-elevated); }
+.bar-well { height: 180px; display: flex; align-items: flex-end; justify-content: center; gap: 4px; padding: 0 3px; border-bottom: 1px solid var(--theme-border); }
+.bar-well i { display: block; width: 17px; max-width: 44%; background: var(--source); border-radius: 3px 3px 0 0; min-height: 1px; }
+.bar-well .bar-before { background: transparent; border: 1px solid var(--theme-muted); border-bottom: 0; opacity: .8; }
+.bar-label { display: block; font-size: 10px; line-height: 30px; white-space: nowrap; }
+.day-readout { display: flex; flex-wrap: wrap; gap: 14px 22px; padding: 14px 16px; background: var(--theme-elevated); border-radius: 8px; margin-top: 4px; }
+.day-readout span { font-size: 11px; color: var(--theme-muted); }
+.day-readout strong { display: block; font-size: 15px; margin-top: 3px; font-weight: 600; color: var(--theme-text); }
+.trend-battery { border-inline-start: 1px solid var(--theme-border); padding-inline-start: 28px; }
+.battery-stat { margin-top: 22px; }
+.battery-stat > span { font-size: 13px; color: var(--theme-muted); display: block; }
+.battery-stat strong { display: block; font-size: 24px; letter-spacing: -.03em; margin-top: 6px; font-weight: 600; }
+.battery-stat small { font-size: 12px; font-weight: 400; letter-spacing: 0; color: var(--theme-muted); }
+#energy-trends .battery-stat p { font-size: 12px; margin-top: 4px; }
+.trend-table { margin-top: 16px; font-size: 12px; }
+.trend-table summary { padding: 12px 0; color: var(--theme-accent); cursor: pointer; }
+.table-scroll { overflow-x: auto; }
+.trend-table table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+.trend-table caption { text-align: start; padding: 10px 0; }
+.trend-table th, .trend-table td { padding: 9px 10px; border-bottom: 1px solid var(--theme-border); text-align: end; white-space: nowrap; }
+.trend-table th { font-weight: 500; }
+.trend-table th:first-child { text-align: start; }
+.trend-observations { border-top: 1px solid var(--theme-border); margin-top: 24px; padding-top: 22px; }
+.trend-observations dl { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 22px; margin: 18px 0 12px; }
+.trend-observations dt { font-size: 12px; color: var(--theme-muted); }
+.trend-observations dd { margin: 7px 0 0; font-size: 16px; font-weight: 600; }
+.trend-observations dd span { font-size: 12px; color: var(--theme-muted); font-weight: 400; }
+#energy-trends .trend-footnote { font-size: 11px; margin-top: 16px; }
+@media(max-width:1100px) {
+  .trend-summary { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px 0; }
+  #energy-trends .trend-metric:nth-child(2n) { border-inline-end: 0; }
+  #energy-trends .trend-metric { padding: 10px 16px; }
+  .metric-visual { gap: 4px; }
+  .trend-spark { width: 80px; }
+  .trend-detail-grid { grid-template-columns: minmax(0,1fr) 205px; gap: 20px; }
+  .trend-battery { padding-inline-start: 20px; }
+  .chart-heading { flex-wrap: wrap; }
+}
+@media(max-width:760px) {
+  #energy-trends { padding: 20px 18px 0; }
+  .trends-heading { align-items: stretch; flex-direction: column; gap: 16px; }
+  .trend-periods { align-self: flex-start; }
+  .trend-dates { flex-direction: column; gap: 5px; margin-top: 16px; }
+  .trend-dates span:last-child { margin-inline-start: 0; }
+  .trend-summary { grid-template-columns: 1fr; margin: 14px 0 8px; }
+  #energy-trends .trend-metric { padding: 18px 0; border-inline-end: 0; border-bottom: 1px solid var(--theme-border); }
+  #energy-trends .trend-metric:last-child { border-bottom: 0; }
+  #energy-trends .trend-metric:hover, #energy-trends .trend-metric[aria-expanded=true] { background: transparent; }
+  #energy-trends .trend-metric[aria-expanded=true] .trend-label { color: var(--source); }
+  .metric-visual { margin-top: 8px; }
+  .trend-value { font-size: 30px; }
+  .trend-spark { width: 115px; }
+  .trend-change { margin-top: 10px; }
+  .trend-bottom { flex-wrap: wrap; gap: 4px; padding: 10px 0; }
+  .trend-bottom > div > span { font-size: 11px; }
+  .trend-detail-grid { grid-template-columns: minmax(0,1fr); }
+  .trend-battery { border-inline-start: 0; border-top: 1px solid var(--theme-border); padding: 22px 0 0; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 18px; }
+  .trend-battery h3 { grid-column: 1/-1; }
+  .battery-stat { margin-top: 0; }
+  .battery-stat:last-child { grid-column: 1/-1; }
+  .trend-observations dl { grid-template-columns: 1fr; gap: 18px; }
+  .trend-bars { min-width: 238px; }
+  #energy-trends .bar-pair { padding: 0 2px; }
+  .bar-well { gap: 3px; padding: 0 2px; }
+}
+@media(prefers-reduced-motion:reduce) { #energy-trends *, #energy-trends *::before, #energy-trends *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+
+#energy-trends #trends-retry { padding: 8px 12px; min-height: 44px; border: 1px solid var(--theme-border); border-radius: 8px; background: transparent; color: var(--theme-accent); }
+#energy-trends > p[role=status] { padding-bottom: 24px; }
+#energy-trends .trend-table small { display:block; font-size:11px; color:var(--theme-muted); }
+#energy-trends .bar-well .bar-missing { height:3px; background:var(--theme-muted); border-radius:0; }
+#energy-trends .bar-well .bar-partial { opacity:.5; border-top:2px dotted var(--theme-text); }

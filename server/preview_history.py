@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-from energy_summary import ATHENS, combine_days, summarize_points
+from energy_summary import ATHENS, combine_days, summarize_points, empty_totals
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -191,7 +191,24 @@ def preview_reports(cutoff):
 
 CACHEABLE_ASSETS = {'styles.css', 'app.js', 'theme.js', 'theme.css', 'history.js',
                     'history-cache.js', 'history-calendar.js', 'history.css', '404.css', '404.js',
-                    'power-history.js', 'power-history.css', 'insights.js', 'insights.css'}
+                    'power-history.js', 'power-history.css', 'insights.js', 'insights.css',
+                    'trends.js', 'trends-data.js', 'trends.css'}
+
+
+@lru_cache(maxsize=2)
+def preview_trends(today):
+    start = datetime.strptime(today, '%Y-%m-%d').replace(tzinfo=ATHENS)
+    rows = []
+    for offset in range(-60, 0):
+        date = start + timedelta(days=offset)
+        end = date + timedelta(days=1)
+        day = date.strftime('%Y-%m-%d')
+        points = preview_day(day, end.timestamp())['points'] if date.day % 17 else []
+        values = [row['values']['soc'] for row in points]
+        rows.append(dict(day=day, seconds=end.timestamp() - date.timestamp(),
+                         totals=summarize_points(points, end.timestamp())['totals'] if points else empty_totals(),
+                         soc=dict(minimum=min(values, default=None), maximum=max(values, default=None), seconds=len(values) * 60)))
+    return dict(version=1, completed_before=today, days=rows)
 
 
 class Preview(SimpleHTTPRequestHandler):
@@ -238,6 +255,7 @@ class Preview(SimpleHTTPRequestHandler):
             start = summaries[0]['from']
             payload = {'days': days, 'updated_at': cutoff, 'mode_recorded_from': start,
                        'energy_summary': combine_days(summaries, cutoff)}
+            payload['energy_summary']['trends'] = preview_trends(now.strftime('%Y-%m-%d'))
         elif route in ['/history/' + day + '.json' for day in days]:
             day = route.split('/')[-1][:-5]
             end = int((datetime.strptime(day, '%Y-%m-%d').replace(tzinfo=ATHENS) + timedelta(days=1)).timestamp())
