@@ -5,7 +5,7 @@ export const THEME_SCHEDULE = Object.freeze([
     id: 'christmas',
     start: '12-01',
     end: '01-01',
-    stylesheet: './christmas/theme.css?v=20261114-christmas-1',
+    stylesheet: './christmas/theme.css?v=20261114-christmas-2',
     module: './christmas/theme.js?v=20261114-christmas-1',
   }),
 ]);

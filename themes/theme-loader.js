@@ -1,4 +1,4 @@
-import { themeForDate } from './schedule.js?v=20261114-christmas-1';
+import { themeForDate } from './schedule.js?v=20261114-christmas-2';
 
 async function loadThemeAssets(theme) {
   const stylesheet = document.createElement('link');

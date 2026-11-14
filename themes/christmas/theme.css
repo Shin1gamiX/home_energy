@@ -141,6 +141,13 @@ body[data-winter-motion=off] .season-snow { display: none; }
   .season-lights { height: 35px; }
   .christmas .scene-caption { font-size: 11px; }
 }
+@media (max-width: 420px) {
+  /* Keep the title and status in separate rows, including at browser zoom. */
+  .christmas .scene-title { right: 16px; }
+  .christmas .scene-heading { top: 70px; left: 16px; right: 16px; }
+  .christmas .grid-label, .christmas .solar-label { top: 112px; }
+  .christmas .energy-scene { min-height: 642px; }
+}
 @media (prefers-reduced-motion: reduce) {
   .season-snow { display: none; }
   .season-animated { animation: none !important; }

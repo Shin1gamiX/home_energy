@@ -39,3 +39,27 @@ HTML and static assets were verified separately, and module loading worked in
 the browser. History rendered without seasonal assets, and the Overview had no
 horizontal overflow at 320px. December/New Year transitions, cleanup, both
 appearances and all three languages passed locally using synthetic fixtures.
+
+## Mobile heading correction
+
+The `20261114-christmas-2` update separates the title and status at 420px and below,
+reserving matching space above the source cards. It changes only the Christmas
+CSS and its version chain through the schedule, loader and Overview HTML.
+The December window and theme JavaScript stay unchanged.
+
+Use `activate-seasonal-update.py` with the unchanged `activate-interface.py`
+verifier, the four allowlisted frontend files and a private `manifest.json` in
+`/home/shini/homeenergy-seasonal-update.<unique>/`. The manifest format matches
+the original release, with existing before hashes for all four files. Run
+`--check` before sudo `--activate`. It backs up first, preserves file ownership,
+installs dependencies before HTML, checks the same protected state and restores
+on verification failure. No configuration reload or service restart is needed.
+Rollback uses `--rollback /home/shini/homeenergy-seasonal-update-backup.<unique>`.
+
+Correction status: deployed and verified on both HTTPS hostnames on 14 November
+2026. Public versioned assets matched the release hashes; the new loader and
+schedule ran without browser errors. History rendered normally without seasonal
+scripts. Origin checks confirmed unchanged History/report bytes, protected data,
+Nginx configuration and service state. No reload or restart was needed. Local
+responsive checks passed at 320–1024px, including 393px, with translated headings
+and both appearances. December activation and January cleanup remain unchanged.
