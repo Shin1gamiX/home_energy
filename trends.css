@@ -1,7 +1,16 @@
 #energy-trends { border: 1px solid var(--theme-border); border-radius: 12px; background: var(--theme-surface); padding: 26px 28px 0; margin-bottom: 28px; color: var(--theme-text); }
 #energy-trends * { box-sizing: border-box; }
-.overview-workspace > #energy-trends { grid-column: 1 / -1; grid-row: 2; margin: 0; }
-@media (min-width: 1001px) { .overview-workspace > .energy-insights { grid-column: 2; grid-row: 1; } }
+/* Keep Power flow first when the connection warning adds a row to the workspace. */
+.overview .overview-workspace { grid-template-areas: "flow insights" "trends trends"; }
+.overview .overview-workspace:has(> .connection-alert:not([hidden])) { grid-template-areas: "connection connection" "flow insights" "trends trends"; }
+.overview-workspace > .connection-alert { grid-area: connection; }
+.overview-workspace > .energy-scene { grid-area: flow; }
+.overview-workspace > .energy-insights { grid-area: insights; }
+.overview-workspace > #energy-trends { grid-area: trends; margin: 0; }
+@media (max-width: 1000px) {
+  .overview .overview-workspace { grid-template-areas: "flow" "trends" "insights"; }
+  .overview .overview-workspace:has(> .connection-alert:not([hidden])) { grid-template-areas: "connection" "flow" "trends" "insights"; }
+}
 #energy-trends { --change-green: #19713c; --change-red: #b83736; --change-amber: #946000; }
 [data-theme=dark] #energy-trends { --change-green: #80dba1; --change-red: #ff9595; --change-amber: #efbd68; }
 #energy-trends [data-tone=favorable] { color: var(--change-green); }
