@@ -1,0 +1,61 @@
+/* Overview only. Never fade measurement text to communicate a stale state. */
+.overview { --connection-amber: #80540c; --connection-tint: #faf7ef; --connection-line: #ded5bd; }
+[data-theme=dark] .overview { --connection-amber: #e6bd72; --connection-tint: #202c26; --connection-line: #53604b; }
+html .overview .connection-panel {
+  display: block; min-width: 0; padding: 20px 24px 0; margin: 0;
+  color: var(--theme-text); background: var(--connection-tint);
+  border: 1px solid var(--connection-line); border-radius: 12px;
+  box-shadow: none;
+}
+html .overview .connection-panel[hidden] { display: none; }
+.connection-main { display: flex; gap: 14px; align-items: flex-start; }
+.connection-main .connection-icon { width: 24px; height: 24px; flex: none; margin-top: 2px; color: var(--connection-amber); }
+.connection-copy { flex: 1; min-width: 0; }
+.connection-copy h2 { font-size: 18px; line-height: 1.4; font-weight: 650; letter-spacing: -.015em; margin: 0 0 5px; text-wrap: balance; }
+html .connection-copy p { margin: 0; max-width: 82ch; font-size: 14px; line-height: 1.6; color: var(--theme-muted); }
+html .overview .connection-retry { flex: none; min-height: 44px; padding: 10px 16px; border: 1px solid var(--connection-line); border-radius: 8px; background: transparent; color: var(--theme-text); font-size: 13px; font-weight: 600; }
+html .overview .connection-retry:hover:not(:disabled) { background: var(--theme-hover); }
+.connection-meta { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 20px; padding: 12px 0 14px 38px; color: var(--theme-muted); font-size: 12px; line-height: 1.6; }
+.connection-stamp { display: flex; flex-wrap: wrap; gap: 4px 20px; min-width: 0; }
+.connection-auto { display: inline-flex; align-items: center; gap: 7px; }
+.connection-auto::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--connection-amber); }
+.connection-details { border-top: 1px solid var(--connection-line); }
+.connection-details > summary { display: flex; gap: 10px; align-items: center; justify-content: space-between; min-height: 44px; padding: 10px 0; font-size: 13px; color: var(--theme-text); cursor: pointer; list-style: none; }
+.connection-details > summary::-webkit-details-marker { display: none; }
+.connection-details > summary::after { content: ''; width: 7px; height: 7px; flex: none; margin-right: 4px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg); }
+.connection-details[open] > summary::after { transform: rotate(225deg); }
+.connection-steps { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; list-style: none; margin: 0; padding: 6px 0 0; }
+.connection-steps li { min-width: 0; padding: 12px 14px; background: var(--theme-surface); border: 1px solid var(--theme-border); border-radius: 8px; }
+.connection-step-name { display: block; color: var(--theme-muted); font-size: 12px; line-height: 1.5; }
+html .connection-steps strong { display: flex; align-items: baseline; gap: 7px; font-size: 14px; line-height: 1.5; font-weight: 600; margin: 5px 0 0; overflow-wrap: anywhere; }
+.connection-steps i { display: inline-block; flex: 0 0 6px; width: 6px; height: 6px; border-radius: 50%; background: var(--theme-muted); }
+.connection-steps [data-state=up] i { background: var(--theme-accent); }
+.connection-steps [data-state=down] i, .connection-steps [data-state=stale] i { background: var(--connection-amber); }
+html .overview .connection-steps small { display: block; color: var(--theme-muted); margin-top: 6px; font-size: 12px; line-height: 1.5; }
+html .connection-details .connection-explanation { font-size: 12px; color: var(--theme-muted); line-height: 1.6; margin: 12px 0 16px; max-width: 100ch; }
+html body.overview.communication-lost :is(.scene-label,.metrics) { opacity: 1; }
+html body.overview.communication-lost { --battery-fill: var(--theme-muted); --battery-text: var(--theme-muted); }
+html .overview.communication-lost :is(.battery-label,.battery-label [data-value],.battery-watts,.metric.battery .reading,.metric.battery .reading b) { color: var(--theme-muted); }
+.overview .intro :is(#supply-status,#live-status,.mode-badge)[hidden] { display: none; }
+.overview .reading-details .metric-top > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+@media(max-width:700px) {
+  html .overview .connection-panel { padding: 16px 16px 0; }
+  .connection-main { display: grid; grid-template-columns: 20px minmax(0,1fr); gap: 10px; }
+  .connection-main .connection-icon { width: 20px; height: 20px; }
+  .connection-copy h2 { font-size: 17px; }
+  html .connection-copy p { font-size: 13px; }
+  .connection-meta { padding-left: 0; display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 12px; }
+  .connection-stamp { display: contents; }
+  .connection-last { grid-column: 1 / -1; }
+  .connection-auto { grid-column: 1; }
+  .connection-retry { grid-column: 2; grid-row: 2; }
+  html .overview .connection-retry { padding: 10px 12px; }
+  .connection-steps { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+  .connection-steps li { padding: 10px; }
+}
+@media(max-width:360px) {
+  .connection-steps { grid-template-columns: minmax(0,1fr); }
+  .connection-steps li { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 3px 12px; align-items: start; }
+  html .connection-steps strong { margin: 0; white-space: nowrap; }
+  .connection-steps small { grid-column: 1 / -1; }
+}

@@ -1012,52 +1012,48 @@ pauseButton.addEventListener('click', () => {
   else render(samples[sampleIndex]);
 });
 let latest = null;
+// Retain one complete, timestamped snapshot in memory, never merge old/new fields.
+let displayed = null;
 let requestFailed = false;
 let pending = false;
-const connectionAlert = document.createElement('section');
-connectionAlert.className = 'connection-alert';
-connectionAlert.hidden = true;
-connectionAlert.setAttribute('role', 'alert');
-connectionAlert.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3 2 21h20L12 3Z" stroke-linejoin="round"/><path d="M12 9v5m0 3v1"/></svg><div><strong></strong><p></p><small></small></div>';
-document.querySelector('.energy-scene').before(connectionAlert);
-function setAlertText(selector, text) {
-  const element = connectionAlert.querySelector(selector);
-  // Avoid repeating screen-reader announcements on every status timer tick.
-  if (element.textContent !== text) element.textContent = text;
-}
+const connection = window.energyConnectionStatus;
+const connectionView = connection.create({ scene, retry: () => refresh() });
 function updateStatus() {
   const now = Date.now() / 1000;
-  const stale = !latest || !latest.updated_at || now - latest.updated_at > 90 || now - latest.generated_at > 20;
-  const status = requestFailed ? 'offline' : stale ? 'stale' : latest.status;
+  const model = connection.assess({ latest, requestFailed, online: navigator.onLine, now });
+  const status = model.status;
   const labels = { live: '', partial: 'Some readings unavailable', stale: 'Waiting for fresh data', offline: 'Connection unavailable' };
-  const communicationLost = ['stale', 'offline'].includes(status) && Boolean(latest || requestFailed);
+  const communicationLost = model.lost;
   document.body.classList.toggle('communication-lost', communicationLost);
+  connectionView.update(model, { now, readings: displayed, pending });
   if (communicationLost) {
-    setAlertText('strong', t('Communication lost'));
-    setAlertText('p', t(requestFailed
-      ? 'Unable to reach the data service. Check your internet connection or try again shortly.'
-      : 'Live inverter data is unavailable. Check the dongle, home Wi-Fi, or VPN connection.'));
-    setAlertText('small', t(latest ? 'Showing last known readings — not live data.' : 'No readings are available yet.'));
+    document.body.dataset.batteryState = 'unknown';
+    document.querySelectorAll('.battery-status').forEach(element => {
+      element.textContent = connection.translate(document.documentElement.lang, 'lastBattery');
+      element.title = '';
+    });
   }
-  connectionAlert.hidden = !communicationLost;
   document.body.dataset.connection = status;
   document.body.classList.toggle('paused', status !== 'live');
   flowAnimation.setEnabled(status === 'live');
   document.querySelector('.demo').lastChild.textContent = ` ${t(labels[status])}`;
   document.querySelector('#scene-status').textContent = t(labels[status]);
-  document.querySelector('.demo').style.display = status === 'live' || communicationLost ? 'none' : '';
-  document.querySelector('#scene-status').parentElement.style.visibility = status === 'live' || communicationLost ? 'hidden' : '';
+  document.querySelector('.demo').style.display = 'none';
+  document.querySelector('#scene-status').parentElement.style.visibility = 'hidden';
   const mode = ['live', 'partial'].includes(status) ? latest?.mode : null;
+  document.querySelector('#supply-status').hidden = !model.fresh;
+  document.querySelector('.mode-badge').hidden = !model.fresh;
   if (!['live', 'partial'].includes(status)) {
     document.body.dataset.activeSource = '';
     document.querySelector('#supply-status').textContent = t(labels[status]);
   }
   document.querySelector('#operating-mode').textContent = t(window.energyModeLabel(mode));
-  document.querySelector('#freshness').textContent = latest?.updated_at
-    ? `${t('Last inverter report')} ${new Date(latest.updated_at * 1000).toLocaleTimeString('en-GB', { timeZone: 'Europe/Athens' })} (${new Date(latest.updated_at * 1000).toLocaleDateString('en-GB', { timeZone: 'Europe/Athens' })}) · ${t('Athens')}`
+  document.querySelector('#freshness').textContent = displayed?.updated_at
+    ? `${t('Last inverter report')} ${new Date(displayed.updated_at * 1000).toLocaleTimeString('en-GB', { timeZone: 'Europe/Athens' })} (${new Date(displayed.updated_at * 1000).toLocaleDateString('en-GB', { timeZone: 'Europe/Athens' })}) · ${t('Athens')}`
     : t('Waiting for inverter readings');
   const liveStatus = document.querySelector('#live-status');
   if (liveStatus) {
+    liveStatus.hidden = status !== 'live';
     liveStatus.textContent = status === 'live'
       ? t('Live · updated {seconds}s ago', { seconds: Math.max(0, Math.floor(now - latest.updated_at)) })
       : t(labels[status] || 'Connection unavailable');
@@ -1067,18 +1063,21 @@ function updateStatus() {
 async function refresh() {
   if (pending || document.hidden) return;
   pending = true;
+  updateStatus();
   try {
     const response = await fetch('/api/energy', { cache: 'no-store', signal: AbortSignal.timeout(8000) });
     if (!response.ok) throw new Error('Unavailable');
     const data = await response.json();
     if (!data.values || !Number.isFinite(data.generated_at) ||
+        !(data.updated_at === null || Number.isFinite(data.updated_at)) ||
         !['live', 'partial', 'stale', 'offline'].includes(data.status) ||
         !['grid', 'pv', 'soc', 'battery', 'load'].every(key => data.values[key] === null || Number.isFinite(data.values[key]))) {
       throw new Error('Invalid response');
     }
     latest = data;
     requestFailed = false;
-    render(data.values);
+    displayed = connection.selectReadings(displayed, data, Date.now() / 1000);
+    render(displayed?.values || { grid: null, pv: null, soc: null, battery: null, load: null });
   } catch {
     requestFailed = true;
   } finally {
@@ -1110,11 +1109,14 @@ if (demo) {
   setInterval(refresh, 5000);
   setInterval(updateStatus, 1000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+  window.addEventListener('offline', () => { requestFailed = true; updateStatus(); });
+  window.addEventListener('online', () => { refresh(); });
 }
 window.addEventListener('languagechange', () => {
   updateDate();
-  if (latest) render(latest.values);
+  if (displayed) render(displayed.values);
   else if (demo) render(samples[sampleIndex]);
-  if (!demo) updateStatus();
+  // Other Overview modules translate captions synchronously in this same event.
+  if (!demo) queueMicrotask(updateStatus);
 });
 }

@@ -7,6 +7,7 @@ from pathlib import Path
 import sqlite3
 import time
 from history_store import record
+from connection_health import HealthMonitor
 
 DATABASE = Path(os.environ.get('HA_DATABASE', '/srv/homeassistant/config/home-assistant_v2.db'))
 OUTPUT = Path(os.environ.get('ENERGY_OUTPUT', '/var/www/homeenergy/runtime/energy.json'))
@@ -76,6 +77,12 @@ def publish(payload):
 
 def main():
     logging.basicConfig(level=logging.INFO)
+    try:
+        health = HealthMonitor.from_environment()
+    except (ValueError, OSError):
+        # Optional diagnostics must never stop the existing recording service.
+        logging.warning('Connection health disabled: invalid local probe configuration')
+        health = HealthMonitor()
     previous_error = None
     while True:
         try:
@@ -93,6 +100,7 @@ def main():
             previous_error = type(error).__name__
             payload = {'values': dict.fromkeys(FIELDS), 'updated_at': None,
                        'generated_at': time.time(), 'status': 'offline'}
+        payload['health'] = health.snapshot(time.time(), payload)
         publish(payload)
         try:
             record(payload, OUTPUT.parent)

@@ -10,7 +10,7 @@ The optional reporting launchers and guarded deployment helpers are installation
 
 - Displays solar, estimated grid import, house consumption, battery charge percentage and signed battery power, with available voltage/current readings.
 - Includes measured battery voltage in Overview and History's **Voltage** view (English, Greek and Russian). It reads the `battery_voltage` entity in volts, never estimates it from power/current. Recording starts after exporter activation; older history remains unavailable for this metric, with no backfill or change to kWh totals.
-- Shows inverter mode and a translated communication-loss warning when reports stop arriving.
+- Shows inverter mode and translated connection status with retained, timestamped readings. Optional bounded health checks distinguish VPN reachability, the monitoring listener, a dongle TCP connection and delayed inverter readings; uncertain causes remain unknown. See [connection status and its limits](docs/CONNECTION_STATUS.md).
 - Records fresh readings into minute aggregates, with daily, weekly and monthly history, plus all-time kWh totals and a monthly breakdown.
 - Supports metric filters, averaging intervals, drag-to-zoom, synchronized inspection and optional minimum/maximum indicators.
 - Clicking an Overview source box opens its last 12 elapsed hours of power (Solar total, Grid, House or signed Battery power), with minute averages, gaps, zoom and keyboard/touch inspection. It loads only on demand through the shared history cache; this is recorded history, not a live power stream. `power-history.js` and `power-history.css` implement this view. Deploy their exact asset routes before the updated Overview HTML; no backend or device changes are needed.
