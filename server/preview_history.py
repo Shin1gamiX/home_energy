@@ -191,6 +191,7 @@ def preview_reports(cutoff):
 
 CACHEABLE_ASSETS = {'styles.css', 'app.js', 'theme.js', 'theme.css', 'history.js',
                     'history-cache.js', 'history-calendar.js', 'history.css', '404.css', '404.js',
+                    'history-custom-range.js', 'history-custom-range.css',
                     'power-history.js', 'power-history.css', 'insights.js', 'insights.css',
                     'trends.js', 'trends-data.js', 'trends.css'}
 

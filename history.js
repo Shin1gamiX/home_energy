@@ -78,6 +78,7 @@ const historyCalendar = new window.HistoryCalendar({
   input: dateInput, t, locale: () => window.energyI18n.locale, today,
   onSelect: day => { dateInput.value = day; load(); },
 });
+const customRange = createCustomRange();
 const peaksToggle = document.querySelector('#show-peaks');
 try { peaksToggle.checked = localStorage.getItem('homeenergy-show-peaks') !== 'false'; } catch {}
 
@@ -189,7 +190,9 @@ function shift(day, count) {
 function midnight(day) {
   const utc = new Date(day + 'T00:00:00Z');
   const offset = new Intl.DateTimeFormat('en', { timeZone: timezone, timeZoneName: 'shortOffset' }).formatToParts(utc).find(p => p.type === 'timeZoneName').value;
-  return utc.getTime() / 1000 - Number(offset.replace('GMT', '')) * 3600;
+  const parts = /^GMT([+-])(\d{1,2})(?::(\d{2}))?(?::(\d{2}))?$/.exec(offset);
+  const seconds = parts ? (Number(parts[2]) * 3600 + Number(parts[3] || 0) * 60 + Number(parts[4] || 0)) * (parts[1] === '-' ? -1 : 1) : 0;
+  return utc.getTime() / 1000 - seconds;
 }
 function parseHistoryLink(search, now = Date.now() / 1000) {
   const params = new URLSearchParams(search);
@@ -211,6 +214,7 @@ function getRange() {
     return { start: athensDay(from), end: shift(athensDay(to - 1), 1), from, to,
       step: to - from <= 2 * 86400 ? 60 : to - from <= 10 * 86400 ? 900 : 3600 };
   }
+  if (period === 'custom') return window.HistoryCustomRange.bounds(customRange.applied, midnight);
   let start = dateInput.value;
   let end = shift(start, 1);
   if (period === 'week') {
@@ -253,6 +257,14 @@ function createHistoryDataCache() {
   // the new helper. Persistence is optional; ordinary network loading still works.
   return { get: day => json(`/history/${day}.json`), invalidate() {} };
 }
+function createCustomRange() {
+  const form = document.querySelector('#history-custom-range');
+  // An older open HTML page may fetch the updated script during a release.
+  // Its existing date controls must work without the new form/helper script.
+  if (!form) return { opened: false, hide() {}, closeCalendars() {}, setAvailability() {} };
+  return new window.HistoryCustomRange({ form, today,
+    onApply: () => { period = 'custom'; load(); } });
+}
 async function load({ refresh = false, keepContext = false } = {}) {
   const id = ++requestId;
   if (!refresh && !keepContext && linkedContext) {
@@ -262,15 +274,17 @@ async function load({ refresh = false, keepContext = false } = {}) {
     if (url.hash === '#history-context') url.hash = '';
     history.replaceState(null, '', url);
   }
-  document.querySelectorAll('[data-period]').forEach(button => button.setAttribute('aria-pressed', String(!linkedContext && button.dataset.period === period)));
+  updateRangeNavigation();
   rangeRequest?.abort();
   const controller = new AbortController();
   rangeRequest = controller;
   historyCalendar.close();
+  customRange.closeCalendars();
   if (refresh) {
     indexPromise = undefined;
     historyData.invalidate();
     historyCalendar.setAvailability(null, 'loading');
+    customRange.setAvailability(null, 'loading');
   }
   let indexReady = false;
   const previousRange = range;
@@ -299,6 +313,7 @@ async function load({ refresh = false, keepContext = false } = {}) {
     if (id !== requestId) return;
     if (!Array.isArray(index.days)) throw new Error('Invalid history');
     historyCalendar.setAvailability(index.days);
+    customRange.setAvailability(index.days);
     indexReady = true;
     if (period === 'all') {
       summaryUnavailable = !index.energy_summary;
@@ -325,7 +340,10 @@ async function load({ refresh = false, keepContext = false } = {}) {
   } catch {
     if (id !== requestId) return;
     controller.abort();
-    if (!indexReady) historyCalendar.setAvailability(null, 'error');
+    if (!indexReady) {
+      historyCalendar.setAvailability(null, 'error');
+      customRange.setAvailability(null, 'error');
+    }
     loading = false;
     hasError = true;
     retryAt = Date.now() + 5000;
@@ -425,7 +443,7 @@ function renderView() {
   const allTime = period === 'all';
   document.body.classList.toggle('all-time-view', allTime);
   document.querySelectorAll('.history-view-controls, .chart-settings, .chart-options, #chart-jumps, #fit-history, #charts').forEach(element => { element.hidden = allTime; });
-  document.querySelectorAll('#previous, #next, #date-display, .date-picker, .date-controls>span').forEach(element => { element.hidden = allTime; });
+  updateRangeNavigation();
   document.querySelector('#monthly-breakdown').hidden = !allTime;
   if (allTime) { renderAllTime(); return; }
   renderChartViews();
@@ -445,7 +463,7 @@ function renderView() {
   points = aggregatedRows(step).filter(p => p.t >= view.from && p.t < view.to);
   if (loading) statusElement.textContent = t('Loading history…');
   else if (hasError) statusElement.textContent = t('History is unavailable. Please try again shortly.');
-  else statusElement.textContent = points.length ? step === 3600 ? t('Hourly averages') : step === 60 ? t('1-minute averages') : t('{n}-minute averages', { n: step / 60 }) : t('No readings for this period.');
+  else statusElement.textContent = points.length ? step === 21600 ? window.HistoryCustomRange.t('6-hour averages') : step === 3600 ? t('Hourly averages') : step === 60 ? t('1-minute averages') : t('{n}-minute averages', { n: step / 60 }) : t('No readings for this period.');
   const container = document.querySelector('#charts');
   container.replaceChildren();
   const jumps = document.querySelector('#chart-jumps');
@@ -674,7 +692,7 @@ function renderSummary() {
   const section = document.querySelector('#energy-summary');
   section.replaceChildren();
   const heading = document.createElement('h2');
-  heading.textContent = t(linkedContext ? 'Selected period summary' : period === 'day' ? 'Daily summary' : period === 'week' ? 'Weekly summary' : 'Monthly summary');
+  heading.textContent = t(linkedContext || period === 'custom' ? 'Selected period summary' : period === 'day' ? 'Daily summary' : period === 'week' ? 'Weekly summary' : 'Monthly summary');
   section.append(heading);
   const cards = document.createElement('div'); cards.className = 'summary-cards';
   const totals = summaryTotals();
@@ -1123,7 +1141,21 @@ document.querySelector('#select-all').addEventListener('click', () => {
   updateFilters();
 });
 document.querySelector('#clear-all').addEventListener('click', () => { showMode = false; selected.clear(); updateFilters(); });
+function updateRangeNavigation() {
+  const active = customRange.opened ? 'custom' : linkedContext ? null : period;
+  document.querySelectorAll('[data-period]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.period === active)));
+  document.querySelector('.date-controls').hidden = customRange.opened;
+  document.querySelectorAll('#previous, #next, #date-display, #open-calendar, .date-controls>span').forEach(element => { element.hidden = period === 'all'; });
+}
 document.querySelectorAll('[data-period]').forEach(button => button.addEventListener('click', () => {
+  if (button.dataset.period === 'custom') {
+    historyCalendar.close();
+    customRange.show({ start: period === 'all' ? shift(today(), -6) : range.start,
+      end: period === 'all' ? today() : [shift(range.end, -1), today()].sort()[0] });
+    updateRangeNavigation();
+    return;
+  }
+  customRange.hide();
   period = button.dataset.period;
   document.querySelectorAll('[data-period]').forEach(b => b.setAttribute('aria-pressed', String(b === button)));
   load();
@@ -1139,6 +1171,7 @@ function move(direction) {
 document.querySelector('#previous').addEventListener('click', () => move(-1));
 document.querySelector('#next').addEventListener('click', () => move(1));
 document.querySelector('#today').addEventListener('click', () => {
+  customRange.hide();
   period = 'day';
   dateInput.max = today();
   dateInput.value = dateInput.max;

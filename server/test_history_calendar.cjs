@@ -113,4 +113,28 @@ for (const [language, month] of [['ru-RU', 'сентябрь'], ['el-GR', 'Σε�
 assert.ok(Number.parseFloat(dialog.style.left) >= 12);
 assert.ok(Number.parseFloat(dialog.style.left) + 352 <= 390 - 12);
 assert.ok(Number.parseFloat(dialog.style.top) >= 12);
+
+const rangeDialog = new Element('dialog'); rangeDialog.id = 'range-end';
+const endCalendar = new Calendar({trigger: new Element('button'), dialog: rangeDialog,
+  input: {value: '2026-09-10'}, t: key => key, locale: () => 'en-GB', today: () => '2026-10-05',
+  minimum: () => '2026-09-23', selection: () => ({start: '2026-09-23', end: '2026-09-27'}),
+  onSelect: day => selections.push(day)});
+endCalendar.open(); endCalendar.setAvailability(['2026-09-23', '2026-09-24']);
+assert.equal(document.activeElement.dataset.date, '2026-09-23', 'End picker opens at a valid date even after start moves forward');
+const rangeDay = day => endCalendar.body.querySelector(`button[data-date="${day}"]`);
+assert.equal(rangeDay('2026-09-22').disabled, true);
+assert.equal(rangeDay('2026-09-23').disabled, false, 'Equal dates remain selectable');
+assert.ok(rangeDay('2026-09-24').className.includes('in-range'));
+assert.ok(rangeDay('2026-09-24').className.includes('has-readings'), 'Range highlight preserves recorded-data markers');
+assert.ok(rangeDay('2026-09-24').getAttribute('aria-label').includes('Selected range'));
+assert.ok(rangeDay('2026-09-27').className.includes('range-edge'));
+assert.equal(endCalendar.previous.disabled, true);
+const beforeSelection = selections.length;
+endCalendar.select('2026-09-22'); assert.equal(selections.length, beforeSelection);
+endCalendar.navigate({target: rangeDay('2026-09-23'), key: 'ArrowLeft', preventDefault() {}});
+assert.equal(document.activeElement.dataset.date, '2026-09-23', 'Keyboard cannot go before the start');
+assert.notEqual(endCalendar.title.id, calendar.title.id);
+assert.equal(rangeDialog.getAttribute('aria-labelledby'), endCalendar.title.id);
+assert.equal(endCalendar.table.getAttribute('aria-describedby'), endCalendar.keys.id);
+console.log('Range calendar: minimum date, keyboard bounds, recorded markers, range labels and unique accessible IDs passed.');
 console.log('Calendar validation, leap years, DST, availability states, focus, keyboard, selection, localization and positioning checks passed.');

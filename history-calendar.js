@@ -34,8 +34,8 @@ window.HistoryCalendar = class HistoryCalendar {
     return Array.from({ length: 42 }, (_, index) => HistoryCalendar.shiftDay(first, index - offset));
   }
 
-  constructor({ trigger, dialog, input, t, locale, today, onSelect }) {
-    Object.assign(this, { trigger, dialog, input, t, locale, today, onSelect });
+  constructor({ trigger, dialog, input, t, locale, today, onSelect, minimum = () => '', selection = () => null }) {
+    Object.assign(this, { trigger, dialog, input, t, locale, today, onSelect, minimum, selection });
     this.recordedDays = null;
     this.availability = 'loading';
     this.month = today().slice(0, 7);
@@ -52,7 +52,8 @@ window.HistoryCalendar = class HistoryCalendar {
       return node;
     };
     const header = element('div', 'calendar-header');
-    this.title = element('h2', 'calendar-title'); this.title.id = 'calendar-title';
+    const prefix = dialog.id || 'calendar';
+    this.title = element('h2', 'calendar-title'); this.title.id = `${prefix}-title`;
     this.title.setAttribute('aria-live', 'polite');
     this.previous = button('calendar-nav', '‹', () => this.changeMonth(-1));
     this.next = button('calendar-nav', '›', () => this.changeMonth(1));
@@ -60,15 +61,17 @@ window.HistoryCalendar = class HistoryCalendar {
     header.append(this.previous, this.title, this.next, this.dismiss);
     this.table = element('table', 'calendar-grid');
     this.table.setAttribute('role', 'grid');
-    this.table.setAttribute('aria-labelledby', 'calendar-title');
-    this.table.setAttribute('aria-describedby', 'calendar-keys');
+    this.table.setAttribute('aria-labelledby', this.title.id);
+    this.table.setAttribute('aria-describedby', `${prefix}-keys`);
     this.weekdays = document.createElement('thead');
     this.body = document.createElement('tbody');
     this.table.append(this.weekdays, this.body);
     this.legend = element('p', 'calendar-legend');
     this.legend.setAttribute('role', 'status');
-    this.help = element('p', 'calendar-help'); this.help.id = 'calendar-help';
-    this.keys = element('p', 'calendar-sr-only'); this.keys.id = 'calendar-keys';
+    this.help = element('p', 'calendar-help'); this.help.id = `${prefix}-help`;
+    this.keys = element('p', 'calendar-sr-only'); this.keys.id = `${prefix}-keys`;
+    dialog.setAttribute('aria-labelledby', this.title.id);
+    dialog.setAttribute('aria-describedby', this.help.id);
     const footer = element('div', 'calendar-footer');
     this.todayButton = button('calendar-today', '', () => this.select(this.today()));
     this.timezoneLabel = element('span', 'calendar-timezone');
@@ -104,6 +107,7 @@ window.HistoryCalendar = class HistoryCalendar {
   open() {
     if (this.dialog.open) return;
     this.focusedDay = HistoryCalendar.validDay(this.input.value) && this.input.value <= this.today() ? this.input.value : this.today();
+    if (this.minimum() && this.focusedDay < this.minimum()) this.focusedDay = this.minimum();
     this.month = this.focusedDay.slice(0, 7);
     this.render();
     this.dialog.showModal();
@@ -117,7 +121,7 @@ window.HistoryCalendar = class HistoryCalendar {
   }
 
   select(day) {
-    if (!HistoryCalendar.validDay(day) || day > this.today()) return;
+    if (!HistoryCalendar.validDay(day) || day > this.today() || day < this.minimum()) return;
     this.close();
     this.onSelect(day);
   }
@@ -126,6 +130,7 @@ window.HistoryCalendar = class HistoryCalendar {
     const next = HistoryCalendar.shiftMonth(this.focusedDay, offset);
     if (!next || next.slice(0, 7) > this.today().slice(0, 7)) return;
     this.focusedDay = next > this.today() ? this.today() : next;
+    if (this.minimum() && this.focusedDay < this.minimum()) this.focusedDay = this.minimum();
     this.month = this.focusedDay.slice(0, 7);
     this.render();
     if (document.activeElement?.disabled) this.focusDay();
@@ -144,6 +149,7 @@ window.HistoryCalendar = class HistoryCalendar {
     event.preventDefault();
     if (!next) return;
     this.focusedDay = next > this.today() ? this.today() : next;
+    if (this.minimum() && this.focusedDay < this.minimum()) this.focusedDay = this.minimum();
     this.month = this.focusedDay.slice(0, 7);
     this.render();
     this.focusDay();
@@ -169,16 +175,18 @@ window.HistoryCalendar = class HistoryCalendar {
     const restoreDayFocus = this.body.contains(document.activeElement);
     const { t } = this;
     const currentDay = this.today();
+    const minimum = this.minimum();
+    const selection = this.selection();
     const formatter = options => new Intl.DateTimeFormat(this.locale(), { timeZone: 'UTC', ...options });
     this.title.textContent = formatter({ month: 'long', year: 'numeric' }).format(new Date(`${this.month}-01T12:00:00Z`));
     this.previous.setAttribute('aria-label', t('Previous month'));
     this.next.setAttribute('aria-label', t('Next month'));
     this.dismiss.setAttribute('aria-label', t('Close calendar'));
-    this.previous.disabled = this.month === '0001-01';
+    this.previous.disabled = this.month <= (minimum ? minimum.slice(0, 7) : '0001-01');
     this.next.disabled = this.month >= currentDay.slice(0, 7);
     this.todayButton.textContent = t('Today');
     this.timezoneLabel.textContent = t('Athens time');
-    this.help.textContent = t('A highlight means some readings exist, not a complete day.');
+    this.help.textContent = t(selection ? 'Dots mark recorded data; shading marks the selected range. Days may have gaps.' : 'A highlight means some readings exist, not a complete day.');
     this.keys.textContent = t('Use arrow keys for days, Page Up or Page Down for months, and Escape to close.');
     this.legend.classList.toggle('is-ready', this.recordedDays !== null);
     this.legend.textContent = t(this.recordedDays !== null ? 'Recorded data available' : this.availability === 'loading' ? 'Loading recorded dates…' : 'Recorded dates unavailable');
@@ -206,17 +214,20 @@ window.HistoryCalendar = class HistoryCalendar {
           const recorded = this.recordedDays?.has(day) ?? false;
           const selected = day === this.input.value;
           const future = day > currentDay;
+          const beforeStart = Boolean(minimum && day < minimum);
+          const inRange = selection && day >= selection.start && day <= selection.end;
+          const edge = selection && (day === selection.start || day === selection.end);
           const button = document.createElement('button');
           button.type = 'button'; button.dataset.date = day;
           button.textContent = String(Number(day.slice(-2)));
-          button.className = `calendar-day${recorded && !future ? ' has-readings' : ''}${selected ? ' is-selected' : ''}${day === currentDay ? ' is-today' : ''}`;
-          button.disabled = future;
+          button.className = `calendar-day${recorded && !future ? ' has-readings' : ''}${selected ? ' is-selected' : ''}${day === currentDay ? ' is-today' : ''}${inRange ? ' in-range' : ''}${edge ? ' range-edge' : ''}`;
+          button.disabled = future || beforeStart;
           button.tabIndex = day === this.focusedDay ? 0 : -1;
           cell.setAttribute('aria-selected', String(selected));
           if (day === currentDay) button.setAttribute('aria-current', 'date');
           const dateLabel = day.split('-').reverse().join('/');
           const availability = future ? 'Future date' : this.recordedDays === null ? this.availability === 'loading' ? 'Loading recorded dates…' : 'Recorded dates unavailable' : recorded ? 'Recorded data available' : 'No recorded data';
-          button.setAttribute('aria-label', `${dateLabel} · ${t(availability)}${day === currentDay ? ` · ${t('Today')}` : ''}`);
+          button.setAttribute('aria-label', `${dateLabel} · ${t(availability)}${day === currentDay ? ` · ${t('Today')}` : ''}${inRange ? ` · ${t('Selected range')}` : ''}${beforeStart ? ` · ${t('Before start date')}` : ''}`);
           button.title = button.getAttribute('aria-label');
           cell.append(button);
         }
