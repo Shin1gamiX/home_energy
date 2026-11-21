@@ -3,7 +3,7 @@ from pathlib import Path
 import sqlite3
 from tempfile import TemporaryDirectory
 import unittest
-from export_energy import (FIELDS, CHANNEL_FIELDS, SNAPSHOT_KEYS, PREFIX, PV_PREFIX,
+from export_energy import (FIELDS, CHANNEL_FIELDS, FLOW_OBSERVATIONS_ENTITY, SNAPSHOT_KEYS, PREFIX, PV_PREFIX,
                            estimate_grid_split, estimate_house_sources, snapshot)
 from history_store import record
 
@@ -33,6 +33,70 @@ class SnapshotTests(unittest.TestCase):
 
     def set_time(self, key, timestamp):
         self.db.execute('UPDATE states SET last_updated_ts=? WHERE metadata_id=?', (timestamp, self.field_id(key)))
+
+    def add_flow_helper(self, attributes, timestamp=999, state='1'):
+        self.db.execute('INSERT INTO states_meta VALUES(201,?)', (FLOW_OBSERVATIONS_ENTITY,))
+        self.db.execute('INSERT INTO state_attributes VALUES(201,?)', (json.dumps(attributes),))
+        self.db.execute('INSERT INTO states(metadata_id,state,last_updated_ts,attributes_id) VALUES(201,?,?,201)',
+                        (state, timestamp))
+
+    def test_repeated_value_with_no_new_recorder_row_can_supply_the_house(self):
+        self.db.execute('ALTER TABLE states ADD COLUMN last_reported_ts REAL')
+        self.set_readings(grid=0, bridge=569, load=657, battery=-37, pv=482)
+        self.set_time('battery', 411.123456)
+        before = snapshot(self.db, 1000)
+        self.assertEqual(before['status'], 'partial')
+        self.assertIsNone(before['values']['battery_house'])
+        self.add_flow_helper({'reports': {PREFIX + 'battery_power': ['-37', 411.123456, 990]}})
+        after = snapshot(self.db, 1000)
+        self.assertEqual(after['status'], 'live')
+        self.assertEqual([after['values'][k] for k in ('solar_house', 'battery_house', 'grid_house', 'grid_battery')],
+                         [482, 37, 0, 0])
+
+    def test_fresh_helper_cannot_replace_missing_or_invalid_sensor_evidence(self):
+        self.set_readings(grid=0, bridge=569, load=657, battery=-37, pv=482)
+        self.set_time('battery', 400)
+        self.add_flow_helper({})
+        key = PREFIX + 'battery_power'
+        for description, attributes in (
+            ('wrong entity', {'reports': {PREFIX + 'load_power': ['-37', 400, 998]}}),
+            ('same value from a different revision', {'reports': {key: ['-37', 390, 998]}}),
+            ('value mismatch', {'reports': {key: ['37', 400, 998]}}),
+            ('source went silent', {'reports': {key: ['-37', 400, 909]}}),
+            ('report after helper sampled', {'reports': {key: ['-37', 400, 999.5]}}),
+            ('future report', {'reports': {key: ['-37', 400, 1040]}}),
+            ('report before revision', {'reports': {key: ['-37', 400, 399]}}),
+            ('restored helper', {'restored': True, 'reports': {key: ['-37', 400, 998]}}),
+            ('invalid timestamps', {'reports': {key: ['-37', 400, '998']}}),
+            ('invalid entry', {'reports': {key: '998'}}),
+            ('invalid map', {'reports': []}),
+        ):
+            with self.subTest(description=description):
+                self.db.execute('UPDATE state_attributes SET shared_attrs=? WHERE attributes_id=201',
+                                (json.dumps(attributes),))
+                result = snapshot(self.db, 1000)
+                self.assertEqual(result['status'], 'partial')
+                self.assertIsNone(result['values']['battery_house'])
+                self.assertIsNone(result['values']['solar_house'])
+
+    def test_freshness_boundary_and_explicit_outage(self):
+        self.set_readings(grid=0, bridge=569, load=657, battery=-37, pv=482)
+        self.set_time('battery', 400)
+        self.add_flow_helper({'reports': {PREFIX + 'battery_power': ['-37', 400, 910]}})
+        self.assertEqual(snapshot(self.db, 1000)['values']['battery_house'], 37)
+        self.assertIsNone(snapshot(self.db, 1000.001)['values']['battery_house'])
+        self.set_readings(battery='unavailable')
+        self.set_time('battery', 999)
+        self.assertIsNone(snapshot(self.db, 1000)['values']['battery_house'])
+
+    def test_unavailable_helper_falls_back_to_each_sensors_own_recorder_row(self):
+        self.set_readings(grid=0, bridge=569, load=657, battery=-37, pv=482)
+        self.set_time('battery', 400)
+        self.add_flow_helper({'reports': {PREFIX + 'battery_power': ['-37', 400, 998]}}, state='unavailable')
+        self.assertIsNone(snapshot(self.db, 1000)['values']['battery_house'])
+        self.db.execute('ALTER TABLE states ADD COLUMN last_reported_ts REAL')
+        self.db.execute('UPDATE states SET last_reported_ts=998 WHERE metadata_id=?', (self.field_id('battery'),))
+        self.assertEqual(snapshot(self.db, 1000)['values']['battery_house'], 37)
 
     def test_reference_cycle_records_split_and_independent_import(self):
         self.set_readings(grid=720, bridge=-68, load=662, battery=2964, pv=3125)

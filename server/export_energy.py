@@ -26,12 +26,14 @@ CHANNEL_FIELDS = {f'pv{channel}_{metric}': (f'pv{channel}_{metric}', unit)
 FIELDS.update(CHANNEL_FIELDS)
 SNAPSHOT_KEYS = (*FIELDS, 'grid_house', 'grid_battery', 'solar_house', 'battery_house', 'solar_battery')
 ROUTING_INPUTS = ('grid', 'bridge', 'load', 'battery', 'pv')
+FLOW_OBSERVATIONS_ENTITY = 'sensor.home_energy_flow_observations'
+FRESH_SECONDS = 90
 
 
 def latest(connection, suffix, prefix=PREFIX, *, reported_time=False):
     stamp = 'COALESCE(NULLIF(s.last_reported_ts,0),s.last_updated_ts)' if reported_time else 's.last_updated_ts'
     return connection.execute(
-        f'SELECT s.state,{stamp},a.shared_attrs FROM states s '
+        f'SELECT s.state,{stamp},a.shared_attrs,s.last_updated_ts FROM states s '
         'LEFT JOIN state_attributes a ON a.attributes_id=s.attributes_id '
         'WHERE s.metadata_id=(SELECT metadata_id FROM states_meta WHERE entity_id=?) '
         'ORDER BY s.last_updated_ts DESC LIMIT 1', (prefix + suffix,),
@@ -51,6 +53,30 @@ def recorded_attributes(row, now):
     if not isinstance(attributes, dict) or attributes.get('restored'):
         return None
     return attributes
+
+
+def flow_observations(connection, now):
+    row = latest(connection, FLOW_OBSERVATIONS_ENTITY, prefix='')
+    attributes = recorded_attributes(row, now)
+    if attributes is None or row[0] != '1' or now - row[1] > FRESH_SECONDS:
+        return {}, None
+    reports = attributes.get('reports')
+    return (reports, row[1]) if isinstance(reports, dict) else ({}, None)
+
+
+def flow_reading_is_fresh(row, observation, sampled_at, now):
+    if now - row[1] <= FRESH_SECONDS:
+        return True
+    # Recorder may leave the open row untouched when EyeBond repeats a value.
+    # Only reuse it with a live report for the same entity, state and revision.
+    if sampled_at is None or not isinstance(observation, list) or len(observation) != 3:
+        return False
+    state, updated, reported = observation
+    if state != row[0] or type(updated) not in (int, float) or type(reported) not in (int, float):
+        return False
+    return (0 <= updated <= reported <= sampled_at + 0.000001
+            and now - reported <= FRESH_SECONDS
+            and isinstance(row[3], (int, float)) and abs(updated - row[3]) <= 0.000001)
 
 
 def estimate_grid_split(grid_import, bridge_w, load, battery, pv):
@@ -116,14 +142,13 @@ def estimate_house_sources(grid_house, grid_battery, bridge_w, load, battery, pv
 def snapshot(connection, now):
     values = {}
     route_inputs = {}
-    # Older Recorder schemas only track changes. Do not reuse an old bridge
-    # reading when its entity has silently stopped reporting or was disabled.
+    observations, sampled_at = flow_observations(connection, now)
     has_reported_time = connection.execute(
         "SELECT 1 FROM pragma_table_info('states') WHERE name='last_reported_ts'"
     ).fetchone() is not None
     for key, (suffix, unit) in FIELDS.items():
-        row = latest(connection, suffix, PV_PREFIX if key in CHANNEL_FIELDS else PREFIX,
-                     reported_time=has_reported_time)
+        prefix = PV_PREFIX if key in CHANNEL_FIELDS else PREFIX
+        row = latest(connection, suffix, prefix, reported_time=has_reported_time)
         attributes = recorded_attributes(row, now)
         try:
             value = float(row[0])
@@ -136,7 +161,8 @@ def snapshot(connection, now):
         except (TypeError, ValueError, IndexError):
             value = None
         if key in ROUTING_INPUTS or key in ('pv1_power', 'pv2_power'):
-            route_inputs[key] = value if value is not None and now - row[1] <= 90 else None
+            usable = value is not None and flow_reading_is_fresh(row, observations.get(prefix + suffix), sampled_at, now)
+            route_inputs[key] = value if usable else None
             if key == 'bridge':
                 value = route_inputs[key]
         values[key] = value
@@ -144,7 +170,7 @@ def snapshot(connection, now):
     heartbeat = latest(connection, 'inverter_time')
     updated = (heartbeat[1] if recorded_attributes(heartbeat, now) is not None
                and heartbeat[0] not in ('unknown', 'unavailable') else None)
-    fresh = updated is not None and -30 <= now - updated <= 90
+    fresh = updated is not None and -30 <= now - updated <= FRESH_SECONDS
     mode = latest(connection, 'operating_mode')
     known_modes = ('Power On', 'Standby', 'Mains', 'Off-Grid', 'Bypass', 'Charging', 'Fault')
     mode_value = mode[0] if recorded_attributes(mode, now) is not None and mode[0] in known_modes else None

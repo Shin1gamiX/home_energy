@@ -107,6 +107,22 @@ The overview polls every five seconds while visible. This does not increase the 
 
 The heartbeat is a device-level freshness check, not proof that every individual entity updated at the same instant. A publish filesystem failure can stop the exporter; systemd restarts it, so inspect logs and disk permissions for repeated failures.
 
+### Freshness of power-flow readings
+
+When EyeBond reports the same wattage repeatedly, Home Assistant advances the entity's live `last_reported` timestamp. Its latest SQLite Recorder row can still show the time of the last value or attribute change. The [flow observations template](../server/homeassistant/flow_observations.yaml) captures each of the seven routing sensors' raw values, update times and report times every 30 seconds. Unavailable, restored, missing and nonnumeric entities are omitted. The collector can use a matching observation for up to 90 seconds after that sensor's own report. A new template tick or a healthy inverter heartbeat alone does not extend that window. This establishes when EyeBond submitted the reading. Firmware can still return a cached register.
+
+To install the template on a compatible Home Assistant version with `State.last_reported` and `default_entity_id`:
+
+1. Match the two entity prefixes in the YAML to the exporter's `ENERGY_ENTITY_PREFIX` and `ENERGY_PV_ENTITY_PREFIX`. Confirm that the seven entity IDs refer to this inverter.
+2. The file is a **list of template blocks**. If there is no top-level `template:` yet, place the file at `/config/flow_observations.yaml` and add `template: !include flow_observations.yaml` to `configuration.yaml`. With an existing inline or included template list, append the block to that list. With an existing `template: !include_dir_merge_list …`, place the file once in that directory. Home Assistant searches these directories recursively, so keep backup copies outside the included tree.
+3. Validate the Home Assistant configuration and apply the template. Verify that `sensor.home_energy_flow_observations` appears, with a `reports` dictionary in Developer tools → States. If the registry assigns a different ID, resolve the conflict before enabling the collector. Check that Recorder includes this entity and its attributes. Compare two observations during steady power: the third item for the same entity should advance even while the wattage and second item stay the same.
+
+On this server, the [activation helper](../deploy/activate-flow-observations.py) validates the Home Assistant configuration and waits for two advancing report times for each sensor before switching the exporter. A first installation can use its explicit Home Assistant restart option to load the template. If the readings cannot be verified in time, the previous exporter keeps running and the helper prints the command to resume from the private backup.
+
+The collector continues to read Recorder through a read-only SQLite connection. The helper is private to Home Assistant and needs no API token. A change in the report times normally records one small attribute snapshot per 30-second interval in Home Assistant Recorder. Existing energy History and reports do not require migration.
+
+For a local regression check, run `python -B -m unittest discover -s server -p test_export_energy.py`. With an existing Playwright and Chromium installation, `node server/test_flow_observations_ui.cjs` also checks the actual Overview SVG through steady reports, outages and recovery. It uses an in-memory Recorder and fulfills all browser requests locally. `CHROMIUM_EXECUTABLE` can select an installed browser.
+
 ## Overview flow animation
 
 The dependency-free `energyComets` engine in `app.js` draws decorative SVG paths
@@ -125,8 +141,9 @@ are deliberately fainter than travelling comets so readings remain the focus.
 
 Repeated polls within the same tier preserve animation progress. Route, tier or
 card-geometry changes rebuild the effect. A single requestAnimationFrame loop
-runs only with live, visible, active flows. Stale/offline/partial reports hide
-the effect; hidden tabs suspend the loop; reduced motion leaves static tracks.
+runs for visible, active flows. A fresh partial report from the current exporter
+can still animate routes with sufficient readings. Stale and offline snapshots
+hide all routes. Hidden tabs suspend the loop, and reduced motion leaves static tracks.
 ResizeObserver keeps paths attached after responsive layout or language changes.
 At viewport widths up to 700px, Battery-to-House ports share a level line within
 the cards' overlapping vertical span, avoiding the sagging curve in a narrow gap.

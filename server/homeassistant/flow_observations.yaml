@@ -1,0 +1,26 @@
+- triggers:
+    - trigger: time_pattern
+      seconds: "/30"
+  sensor:
+    - name: Home Energy Flow Observations
+      default_entity_id: sensor.home_energy_flow_observations
+      unique_id: home_energy_flow_observations
+      state: "1"
+      attributes:
+        reports: >-
+          {%- set main = 'sensor.anenji_anj_11kw_48v_wifi_p_' -%}
+          {%- set channels = 'sensor.living_room_anenji_anj_11kw_48v_wifi_p_' -%}
+          {%- set inputs = [main ~ 'grid_power', main ~ 'inverter_power',
+                            main ~ 'load_power', main ~ 'battery_power', main ~ 'pv_power',
+                            channels ~ 'pv1_power', channels ~ 'pv2_power'] -%}
+          {%- set found = namespace(pairs=[]) -%}
+          {%- for entity_id in inputs -%}
+            {%- set sensor = states[entity_id] -%}
+            {%- if sensor is defined and sensor is not none
+                  and not sensor.attributes.get('restored', false) and is_number(sensor.state) -%}
+              {%- set reading = [sensor.state, as_timestamp(sensor.last_updated),
+                                 as_timestamp(sensor.last_reported)] -%}
+              {%- set found.pairs = found.pairs + [(entity_id, reading)] -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ dict(found.pairs) }}
