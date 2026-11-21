@@ -51,6 +51,20 @@ assert.equal(directions.battery_charged.seconds, 180, 'Real zero counts as cover
 assert.equal(energyTotals(chargeRows, 30, 360, 45).battery_charged.kwh, .0025, 'Clip to both range and snapshot');
 assert.equal(energyTotals([...chargeRows, chargeRows[0]], 0, 360, 360).battery_charged.kwh, .01, 'Do not count duplicate minutes');
 assert.equal(energyTotals([row(0, {})], 0, 60, 60).battery_charged.seconds, 0);
+const gridCharge = { pv: 800, load: 800, battery: 1000, grid: 1000, grid_house: 0, grid_battery: 1000 };
+const legacyCharge = { pv: 800, load: 800, battery: 1000, grid: 1000 };
+const mix = energyTotals([row(0, legacyCharge), row(60, gridCharge)], 0, 120, 120);
+assert.equal(mix.solar_to_house.kwh, 800 / 60000, 'Only the new minute credits solar for the grid-charging house');
+assert.equal(mix.solar_to_house.seconds, 120);
+assert.equal(mix.grid_house.seconds, 60, 'Old minutes do not provide grid destination coverage');
+assert.equal(mix.grid_house.kwh, 0, 'Recorded zero has coverage');
+assert.equal(mix.grid_battery.kwh, 1000 / 60000);
+assert.equal(mix.grid.kwh, 2000 / 60000, 'Total grid import includes both destinations');
+assert.equal(total({ ...gridCharge, grid: null, battery: 1400 }).kwh, 400 / 60000, 'PV allocated to charging is unavailable to the house');
+assert.equal(total({ ...gridCharge, grid_house: null }).seconds, 0, 'Unknown split cannot borrow total import');
+assert.equal(total({ ...legacyCharge, grid_house: null }).seconds, 0, 'A marked new minute never gets the old assumption');
+assert.equal(total({ ...gridCharge, grid_house: 200, battery: -300 }).kwh, 300 / 60000);
+assert.equal(energyTotals([row(0, legacyCharge)], 0, 60, 60).grid_battery.seconds, 0);
 console.log('History energy regression checks passed.');
 const historyCutoffs = readFunction('historyCutoffs');
 const view = {from: 0, to: 86400};
@@ -99,6 +113,24 @@ const cumulative = {
 assert.equal(validateEnergySummary(cumulative, 120), cumulative);
 const emptyCumulative = {version: 2, from: null, to: null, totals: energyFields(0, 0), months: []};
 assert.equal(validateEnergySummary(emptyCumulative, 0), emptyCumulative);
+const splitCumulative = structuredClone(cumulative);
+for (const key of ['grid_house', 'grid_battery']) {
+  splitCumulative.months[0].totals[key] = { kwh: 0, seconds: 0 };
+  splitCumulative.months[1].totals[key] = { kwh: key === 'grid_house' ? 0 : 1, seconds: 60 };
+  splitCumulative.totals[key] = { ...splitCumulative.months[1].totals[key] };
+}
+assert.equal(validateEnergySummary(splitCumulative, 120), splitCumulative);
+for (const corrupt of [
+  data => { delete data.totals.grid_house; },
+  data => { delete data.months[0].totals.grid_battery; },
+  data => { data.months[0].totals.grid_battery.seconds = 10; },
+  data => { data.months[1].totals.grid_battery.kwh = NaN; },
+  data => { delete data.totals.grid_battery; delete data.totals.grid_house; }
+]) {
+  const bad = structuredClone(splitCumulative);
+  corrupt(bad);
+  assert.throws(() => validateEnergySummary(bad, 120));
+}
 assert.throws(() => validateEnergySummary(undefined, 120), 'Old exporters have no summary');
 assert.throws(() => validateEnergySummary(cumulative, 121), 'Snapshot boundaries must agree');
 for (const corrupt of [
@@ -126,6 +158,7 @@ delete legacyInput.totals.battery_charged;
 for (const month of legacyInput.months) delete month.totals.battery_charged;
 const legacySummary = validateEnergySummary(legacyInput, 120);
 assert.equal(legacySummary.totals.battery_charged, null);
+assert.equal(legacySummary.totals.grid_house, null);
 assert.ok(legacySummary.months.every(month => month.totals.battery_charged === null));
 assert.equal(legacySummary.totals.battery.kwh, cumulative.totals.battery.kwh);
 assert.equal(legacyInput.totals.battery_charged, undefined, 'Do not mutate the fetched cache');
@@ -149,9 +182,9 @@ function renderSummaryState(state) {
   const context = {
     loading: false, hasError: false, summaryUnavailable: false,
     allTimeSummary: emptyCumulative, ...state, statusElement,
-    summaryLabels: Object.fromEntries(energyKeys.map(key => [key, key])),
+    summaryLabels: Object.fromEntries([...energyKeys, 'grid_house', 'grid_battery'].map(key => [key, key])),
     summaryMetricKeys: {solar_to_house: 'pv', battery_charged: 'soc'},
-    metrics: Object.fromEntries([...energyKeys, 'soc'].map(key => [key, {color: '#000'}])),
+    metrics: Object.fromEntries([...energyKeys, 'soc', 'grid_house', 'grid_battery'].map(key => [key, {color: '#000'}])),
     window: {energyI18n: {locale: 'en-GB'}}, t: interpolate,
     dateFormat: new Intl.DateTimeFormat('en-GB', {timeZone: 'Europe/Athens'}),
     timezone: 'Europe/Athens', today: () => '2026-10-05', formatRecordedDuration,
@@ -162,7 +195,7 @@ function renderSummaryState(state) {
   const ready = !context.loading && !context.hasError && context.allTimeSummary.months.length > 0;
   if (!ready) {
     assert.equal(sections['#monthly-breakdown'].children.length, 0);
-    assert.equal(elements.filter(node => node.tag === 'strong' && node.textContent === '—').length, 6);
+    assert.equal(elements.filter(node => node.tag === 'strong' && node.textContent === '—').length, 8);
   }
   return {status: statusElement.textContent, elements, sections};
 }
@@ -172,10 +205,12 @@ assert.equal(renderSummaryState({hasError: true, summaryUnavailable: true}).stat
 assert.equal(renderSummaryState({hasError: true, allTimeSummary: cumulative}).status, 'History is unavailable. Please try again shortly.');
 const readyState = renderSummaryState({allTimeSummary: cumulative});
 assert.equal(readyState.status, 'Recorded energy · kWh');
-assert.equal(readyState.elements.filter(node => node.tag === 'h3').length, 6);
-assert.equal(readyState.elements.filter(node => node.tag === 'td').length, 18, 'Six values per month and grand total');
+assert.equal(readyState.elements.filter(node => node.tag === 'h3').length, 8);
+assert.equal(readyState.elements.filter(node => node.tag === 'td').length, 24, 'Eight values per month and grand total');
 const legacyState = renderSummaryState({allTimeSummary: legacySummary});
 assert.equal(legacyState.status, 'Recorded energy · kWh');
-assert.equal(legacyState.elements.filter(node => node.textContent === 'Not available').length, 4, 'Legacy charge is unknown on card, months and grand total');
-assert.equal(legacyState.elements.filter(node => node.tag === 'strong' && node.textContent === '—').length, 4);
+assert.equal(legacyState.elements.filter(node => node.textContent === 'Not available').length, 12, 'Legacy charge and grid destinations are unknown on cards, months and grand total');
+assert.equal(legacyState.elements.filter(node => node.tag === 'strong' && node.textContent === '—').length, 12);
+const splitState = renderSummaryState({allTimeSummary: splitCumulative});
+assert.equal(splitState.elements.filter(node => node.tag === 'strong' && node.textContent === '—').length, 2, 'Only the pre-split month lacks both branch totals');
 console.log('All-time loading, empty, old-exporter and failed-refresh UI checks passed.');

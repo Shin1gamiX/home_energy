@@ -36,8 +36,7 @@ class SnapshotTests(unittest.TestCase):
             day = json.loads((Path(tmp) / 'history' / '1970-01-01.json').read_text())
             recorded = day['points'][0]['values']
             self.assertEqual(recorded['grid'], 859)
-            self.assertNotIn('grid_house', recorded)
-            self.assertNotIn('grid_battery', recorded)
+            self.assertEqual((recorded['grid_house'], recorded['grid_battery']), (678, 181))
 
     def test_grid_can_charge_without_supplying_the_house(self):
         values = snapshot(self.db, 1000)['values']

@@ -15,6 +15,54 @@ class HistoryTests(unittest.TestCase):
         self.assertEqual(supply_mode({'grid': 1000, 'pv': 0, 'battery': 0, 'load': 1000}), 'grid')
         self.assertEqual(supply_mode({'pv': 1000}), 'unknown')
 
+    def test_split_supply_and_missing_branches(self):
+        sample = dict(grid=1000, grid_house=0, grid_battery=1000, load=800, pv=800, battery=1000)
+        self.assertEqual(supply_mode(sample), 'solar')
+        self.assertEqual(supply_mode(dict(sample, grid_house=200, grid=1200)), 'mixed')
+        self.assertEqual(supply_mode(dict(sample, pv=0, grid_house=800, grid=1800)), 'grid')
+        self.assertEqual(supply_mode(dict(sample, grid_house=None)), 'unknown')
+        self.assertEqual(supply_mode(dict(sample, grid=None, grid_battery=None)), 'solar')
+        self.assertEqual(supply_mode(dict(sample, load=0)), 'standby')
+
+    def test_legacy_day_and_upgrade_minute_are_retained_without_inventing_split(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runtime = Path(directory)
+            minute = 1790100000
+            legacy = dict(pv=800, load=800, battery=1000, grid=1000)
+            split = dict(legacy, grid_house=0, grid_battery=1000)
+            def send(stamp, values):
+                record(dict(status='live', updated_at=stamp, values=values), runtime)
+
+            send(minute - 86400, legacy)
+            old_day = next(path for path in (runtime / 'history').glob('????-??-??.json'))
+            old_bytes = old_day.read_bytes()
+            send(minute + 2, legacy)
+            send(minute + 22, split)
+            send(minute + 60, split)
+            send(minute + 65, split)
+            send(minute + 65, split)  # Duplicate heartbeat.
+            send(minute + 120, dict(legacy, grid_house=None, grid_battery=None))
+            send(minute + 180, dict(legacy, grid_house=-4, grid_battery=0))
+            index = json.loads((runtime / 'history/index.json').read_text())
+            day = json.loads((runtime / 'history' / (index['days'][-1] + '.json')).read_text())
+            first, full, missing, invalid = day['points']
+            self.assertNotIn('grid_house', first['values'])
+            self.assertNotIn('grid_battery', first['values'])
+            self.assertEqual(full['values']['grid_house'], 0)
+            self.assertEqual(full['values']['grid_battery'], 1000)
+            self.assertEqual(full['counts']['grid_house'], 2)
+            self.assertIsNone(missing['values']['grid_house'])
+            self.assertNotIn('grid_house', missing['counts'])
+            self.assertIsNone(invalid['values']['grid_house'])
+            self.assertEqual(invalid['values']['grid_battery'], 0)
+            self.assertEqual([(mode['start'], mode['state']) for mode in day['modes']],
+                             [(minute + 2, 'grid'), (minute + 22, 'solar'), (minute + 120, 'unknown')])
+            totals = index['energy_summary']['totals']
+            self.assertEqual(totals['grid_house'], {'kwh': 0, 'seconds': 60})
+            self.assertEqual(totals['grid_battery'], {'kwh': 1000 / 60000, 'seconds': 60})
+            self.assertEqual(totals['solar_to_house'], {'kwh': 800 / 60000, 'seconds': 180})
+            self.assertEqual(old_bytes, old_day.read_bytes())
+
     def test_supply_intervals_transitions_and_outages(self):
         with tempfile.TemporaryDirectory() as directory:
             runtime = Path(directory)

@@ -1,14 +1,16 @@
 """Loopback-only connection and power-flow previews with synthetic data."""
-from datetime import datetime
+from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import argparse
 import json
 from pathlib import Path
 import re
+from tempfile import TemporaryDirectory
 from urllib.parse import parse_qs, urlsplit
 
 from connection_health import HealthMonitor
 from export_energy import SNAPSHOT_KEYS
+from history_store import record
 from preview_history import ATHENS, preview_days, preview_day, preview_reports, preview_summary, preview_trends, combine_days
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,6 +22,36 @@ FLOW_SCENARIOS = {
     'grid-only': dict(grid_house=1570, pv_house=0, grid_battery=2100, pv_battery=0),
     'solar-only': dict(grid_house=0, pv_house=910, grid_battery=0, pv_battery=670),
 }
+
+
+def grid_history_preview(today):
+    """Record matching synthetic mornings on either side of the split rollout."""
+    links = {}
+    with TemporaryDirectory(prefix='grid-history-preview-') as temporary:
+        runtime = Path(temporary)
+        for label, offset in (('legacy', 2), ('split', 1)):
+            start = today.replace(hour=9, minute=0, second=0, microsecond=0) - timedelta(days=offset)
+            first = int(start.timestamp())
+            end = first + 2 * 3600
+            links['/' + label] = f'/history.html?from={first}&to={end}&metric=grid'
+            for stamp in range(first, end + 1, 60):
+                # Forty minutes each of solar house supply, mixed supply and grid supply.
+                elapsed = stamp - first
+                if elapsed < 40 * 60:
+                    house, charging, pv, load = 0, 1000, 1400, 800
+                elif elapsed < 80 * 60:
+                    house, charging, pv, load = 300, 500, 900, 900
+                else:
+                    house, charging, pv, load = 900, 0, 0, 900
+                battery = house + charging + pv - load
+                values = dict(grid=house + charging, battery=battery, pv=pv, load=load,
+                              soc=60, battery_voltage=53, grid_voltage=230)
+                if label == 'split':
+                    values.update(grid_house=house, grid_battery=charging)
+                record(dict(status='live', updated_at=stamp, values=values), runtime)
+        bodies = {'/history/' + path.name: path.read_bytes() for path in (runtime / 'history').glob('*.json')}
+    links['/'] = links['/split']
+    return bodies, links
 
 
 def energy(scenario, now):
@@ -116,6 +148,8 @@ TOOLBAR_CSS = '#connection-preview{display:flex;align-items:center;justify-conte
 class Preview(BaseHTTPRequestHandler):
     scenarios = SCENARIOS
     default_state = 'inverter'
+    history_fixtures = None
+    history_links = {}
 
     def respond(self, body, mime='application/json', status=200):
         self.send_response(status)
@@ -132,6 +166,16 @@ class Preview(BaseHTTPRequestHandler):
         route = parsed.path
         now = datetime.now(ATHENS)
         stamp = now.timestamp()
+        if route in self.history_links:
+            self.send_response(302)
+            self.send_header('Location', self.history_links[route])
+            self.send_header('Cache-Control', 'no-store')
+            self.end_headers()
+            return
+        if self.history_fixtures is not None and route.startswith('/history/'):
+            if route in self.history_fixtures:
+                return self.respond(self.history_fixtures[route])
+            return self.respond(b'{}', status=404)
         if route == '/__preview__/controls.js':
             return self.respond(CONTROLS.encode(), 'text/javascript; charset=utf-8')
         if route == '/__preview__/controls.css':
@@ -160,6 +204,9 @@ class Preview(BaseHTTPRequestHandler):
         if name not in STATIC:
             return self.respond(b'{}', status=404)
         body = (ROOT / name).read_bytes()
+        if name == 'history.html' and self.history_fixtures is not None:
+            notice = 'Design preview · simulated history, not live inverter data.'
+            body = body.replace(b'</h1>', f'</h1><p data-i18n="{notice}">{notice}</p>'.encode('utf-8'), 1)
         if name == 'index.html':
             html = body.decode('utf-8').replace('</head>', f'<link rel="stylesheet" href="/__preview__/controls.css"><script src="/__preview__/controls.js" data-default-state="{self.default_state}"></script></head>')
             options = ''.join(f'<option value="{state}">{state}</option>' for state in self.scenarios)
@@ -178,10 +225,14 @@ class Preview(BaseHTTPRequestHandler):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--port', type=int, default=8778)
-    parser.add_argument('--flows', action='store_true', help='Show live power-flow scenarios')
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument('--flows', action='store_true', help='Show live power-flow scenarios')
+    modes.add_argument('--grid-history', action='store_true', help='Compare aggregate-only and split grid history')
     args = parser.parse_args()
     if args.flows:
         Preview.scenarios = tuple(FLOW_SCENARIOS)
         Preview.default_state = 'shared-charge'
-    print(f'Local synthetic Overview preview: http://127.0.0.1:{args.port}/', flush=True)
+    if args.grid_history:
+        Preview.history_fixtures, Preview.history_links = grid_history_preview(datetime.now(ATHENS))
+    print(f'Local synthetic preview: http://127.0.0.1:{args.port}/', flush=True)
     ThreadingHTTPServer(('127.0.0.1', args.port), Preview).serve_forever()

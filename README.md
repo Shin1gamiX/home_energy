@@ -214,7 +214,10 @@ Start with this README and [ARCHITECTURE.md](docs/ARCHITECTURE.md), then inspect
 ## All-time energy
 
 History's **All time** option shows recorded Solar generated, Grid consumed,
-House usage, Battery supplied, Battery charged and Solar to house in kWh. It includes the recording
+House usage, Battery supplied, Battery charged and Solar to house in kWh.
+Grid → House and Grid → Battery show the two destinations included in Grid consumed.
+Each destination has its own recording duration, beginning when that reading
+became available. Earlier dates have no destination breakdown. The view includes the recording
 date span, coverage for each reading, monthly totals and a grand total. Select a
 month to open its existing graphs; Today returns to the current day.
 Recorded duration uses days plus remaining hours (for example, `5 d - 21.2 h`),
@@ -265,8 +268,9 @@ at the first observed report; precision is limited by polling. A report remains
 valid for at most 90 seconds, then the timeline shows No data. Older history is
 labelled Mode not recorded rather than reconstructed as exact transitions.
 
-Classification assumes grid charging is disabled: solar-to-house is the smaller
-of PV power and house demand minus grid and battery discharge. Sources count as
-active above the larger of 20 W and 2% of house load. Multiple active sources mean
-Mixed. Missing required readings mean Unknown supply; zero demand means Standby.
-These are estimates, not independently metered source allocations.
+New timeline intervals use Grid → House to identify grid supply to the house.
+For example, a grid charger drawing 1,000 W while solar supplies an 800 W
+house appears as Solar. House usage still comes from the inverter's load reading.
+Sources count as active above the larger of 20 W and 2% of house load.
+Multiple active sources mean Mixed. A missing house grid reading makes the
+source unknown. Previously recorded intervals retain their original labels.

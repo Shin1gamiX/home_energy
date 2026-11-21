@@ -289,3 +289,16 @@ html[data-theme="dark"] .history-page :is(.chart-area, .averaging-control select
 .series-key { display: flex; flex-wrap: wrap; gap: 8px 16px; }
 .series-key span { display: inline-flex; align-items: center; gap: 6px; }
 .series-key span::before { content: ''; width: 16px; height: 3px; background: var(--series-color); border-radius: 2px; }
+/* Dashed branches stay distinguishable when one overlaps total grid import. */
+.chart-area [data-series="grid_house"] path { stroke-dasharray: 7 3; }
+.chart-area [data-series="grid_battery"] path { stroke-dasharray: 3 3; }
+.series-key .grid_house::before { background: repeating-linear-gradient(90deg, var(--series-color) 0 7px, transparent 7px 10px); }
+.series-key .grid_battery::before { background: repeating-linear-gradient(90deg, var(--series-color) 0 3px, transparent 3px 6px); }
+
+#energy-summary .summary-cards { grid-template-columns: repeat(4, minmax(0, 1fr)); row-gap: 18px; }
+#energy-summary .summary-card + .summary-card { border-left: 1px solid var(--theme-border); }
+#energy-summary .summary-card:nth-child(4n + 1) { border-left: 0; }
+@media (max-width: 700px) {
+  #energy-summary .summary-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #energy-summary .summary-card:nth-child(odd) { border-left: 0; }
+}

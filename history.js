@@ -15,6 +15,8 @@ const metrics = {
   pv1_current: { get label() { return t('PV1 current'); }, get color() { return historyColor('#b56610'); }, unit: 'A', group: 'current' },
   pv2_current: { get label() { return t('PV2 current'); }, get color() { return historyColor('#365dc1'); }, unit: 'A', group: 'current' },
   grid: { get label() { return t('Grid (est.)'); }, get color() { return historyColor('#8861ba'); }, unit: 'W', group: 'power' },
+  grid_house: { get label() { return t('Grid → House'); }, get color() { return historyColor('#24678a'); }, unit: 'W', group: 'power', gridDestination: true },
+  grid_battery: { get label() { return t('Grid → Battery'); }, get color() { return historyColor('#aa4e91'); }, unit: 'W', group: 'power', gridDestination: true },
   load: { get label() { return t('House'); }, get color() { return historyColor('#168b8a'); }, unit: 'W', group: 'power' },
   battery: { get label() { return t('Battery power'); }, get color() { return historyColor('#d65c66'); }, unit: 'W', group: 'power' },
   soc: { get label() { return t('Battery %'); }, get color() { return historyColor('#80a57c'); }, unit: '%', group: 'soc' },
@@ -28,6 +30,7 @@ const metrics = {
 const historyDarkPalette = {
   '#c39232': '#e9b65d', '#b56610': '#f4a65a', '#365dc1': '#91adff',
   '#337eb9': '#79baff', '#c27019': '#f3ad65', '#8861ba': '#b893ed',
+  '#24678a': '#81cce8',
   '#168b8a': '#5fd4bb', '#d65c66': '#ff939d', '#80a57c': '#a3ce95',
   '#577d50': '#a3ce95',
   '#aa4e91': '#e49ccb', '#596cb0': '#a5b6ed', '#869b98': '#a9beb4',
@@ -50,7 +53,8 @@ let rangeRequest;
 let indexPromise;
 let allTimeSummary = null;
 let summaryUnavailable = false;
-const summaryLabels = { pv: 'Solar generated', grid: 'Grid consumed', load: 'House usage', battery: 'Battery supplied', battery_charged: 'Battery charged', solar_to_house: 'Solar to house' };
+const summaryLabels = { pv: 'Solar generated', grid: 'Grid consumed', grid_house: 'Grid → House', grid_battery: 'Grid → Battery',
+  load: 'House usage', battery: 'Battery supplied', battery_charged: 'Battery charged', solar_to_house: 'Solar to house' };
 const summaryMetricKeys = { solar_to_house: 'pv', battery_charged: 'soc' };
 const historyData = createHistoryDataCache();
 let aggregationCache = { rows: null, from: null, to: null, steps: new Map() };
@@ -105,6 +109,7 @@ function seriesLegend(keys) {
   legend.className = 'series-key';
   for (const key of keys) {
     const label = document.createElement('span');
+    label.className = key;
     label.style.setProperty('--series-color', metrics[key].color);
     label.textContent = metrics[key].label;
     legend.append(label);
@@ -545,7 +550,9 @@ function renderView() {
       const label = !linkedContext && !zoom && period === 'day' && i === 4 ? '24:00' : new Intl.DateTimeFormat('en-GB', span <= 86400 ? { timeZone: timezone, hour: '2-digit', minute: '2-digit' } : { timeZone: timezone, day: '2-digit', month: '2-digit' }).format(t * 1000);
       svg.append(svgElement('text', { x: x(t), y: 234, 'text-anchor': i === 0 ? 'start' : i === 4 ? 'end' : 'middle', class: 'axis-label' }, label));
     }
-    for (const key of keys) {
+    // Paint the dashed destinations last so matching solid traces remain visible through the gaps.
+    const drawOrder = [...keys.filter(key => !metrics[key].gridDestination), ...keys.filter(key => metrics[key].gridDestination)];
+    for (const key of drawOrder) {
       const series = svgElement('g', { 'data-series': key });
       let path = '', previous = null;
       for (const [index, p] of points.entries()) {
@@ -650,7 +657,7 @@ function renderView() {
 // Integrate the original minute averages, never the zoomed or smoothed graph.
 // A recorded minute represents up to 60 seconds; missing minutes contribute nothing.
 function energyTotals(rows, from, to, cutoff) {
-  const totals = Object.fromEntries(['pv', 'grid', 'load', 'battery', 'battery_charged'].map(key => [key, { kwh: 0, seconds: 0 }]));
+  const totals = Object.fromEntries(['pv', 'grid', 'grid_house', 'grid_battery', 'load', 'battery', 'battery_charged'].map(key => [key, { kwh: 0, seconds: 0 }]));
   const solarToHouse = { kwh: 0, seconds: 0 };
   const minutes = new Map(rows.filter(row => Number.isFinite(row.t)).map(row => [row.t, row]));
   for (const row of minutes.values()) {
@@ -666,15 +673,19 @@ function energyTotals(rows, from, to, cutoff) {
       totals[key].kwh += watts * seconds / 3600000;
       totals[key].seconds += seconds;
     }
-    const { load, grid, battery, pv } = row.values || {};
-    // Compare matching intervals only. This assumes grid charging is disabled.
-    if ([load, grid, battery, pv].every(Number.isFinite) && load >= 0 && grid >= 0 && pv >= 0) {
-      // A residual is not independent solar metering. Bound every matching
-      // interval by reported PV so estimator noise cannot invent night energy.
-      const watts = Math.min(pv, Math.max(0, load - grid - Math.max(0, -battery)));
-      solarToHouse.kwh += watts * seconds / 3600000;
-      solarToHouse.seconds += seconds;
-    }
+    const values = row.values || {};
+    const { load, battery, pv, grid_house, grid_battery } = values;
+    if (![load, battery, pv].every(Number.isFinite) || load < 0 || pv < 0) continue;
+    const split = Object.hasOwn(values, 'grid_house') || Object.hasOwn(values, 'grid_battery');
+    // The old estimate used total grid import. Keep it for legacy minutes only.
+    const gridToHouse = split ? grid_house : values.grid;
+    if (!Number.isFinite(gridToHouse) || gridToHouse < 0) continue;
+    const charging = split && battery >= 0.5 && Number.isFinite(grid_battery) && grid_battery >= 0;
+    const solarToBattery = charging ? Math.min(pv, Math.max(0, battery - grid_battery)) : 0;
+    const discharge = !split || battery <= -0.5 ? Math.max(0, -battery) : 0;
+    const watts = Math.min(pv - solarToBattery, Math.max(0, load - gridToHouse - discharge));
+    solarToHouse.kwh += watts * seconds / 3600000;
+    solarToHouse.seconds += seconds;
   }
   totals.solar_to_house = solarToHouse;
   return totals;
@@ -709,7 +720,7 @@ function renderSummary() {
     card.append(label, value, coverage); cards.append(card);
   }
   const note = document.createElement('p'); note.className = 'summary-note';
-  note.textContent = `${t('Estimated from recorded readings only; missing periods are excluded.')} ${t('Battery charged: energy into the battery (solar or grid), not remaining capacity.')}`;
+  note.textContent = `${t('Estimated from recorded readings only; missing periods are excluded.')} ${t('Grid consumed includes both destinations. Earlier readings have no grid breakdown.')} ${t('Battery charged: energy into the battery (solar or grid), not remaining capacity.')}`;
   section.append(cards, note);
 }
 // An older exporter can still serve day/week/month while awaiting this feature.
@@ -718,9 +729,13 @@ function validateEnergySummary(summary, cutoff) {
   const keys = ['pv', 'grid', 'load', 'battery', 'solar_to_house'];
   if (!summary || ![1, 2].includes(summary.version) || !Array.isArray(summary.months)) throw new Error('Invalid energy summary');
   if (summary.version === 2) keys.push('battery_charged');
+  const branches = ['grid_house', 'grid_battery'];
+  const hasSplit = summary.version === 2 && branches.some(key => Object.hasOwn(summary.totals || {}, key));
+  if (hasSplit) keys.push(...branches);
   const empty = summary.from === null && summary.to === null && summary.months.length === 0;
   if (!empty && (!Number.isFinite(summary.from) || !Number.isFinite(summary.to) || summary.to < summary.from || summary.to !== cutoff)) throw new Error('Invalid summary range');
   function validTotals(totals, span) {
+    if (summary.version === 2 && !hasSplit && branches.some(key => Object.hasOwn(totals || {}, key))) return false;
     return keys.every(key => Number.isFinite(totals?.[key]?.kwh) && totals[key].kwh >= 0
       && Number.isFinite(totals[key].seconds) && totals[key].seconds >= 0 && totals[key].seconds <= span + .001
       && (totals[key].seconds > 0 || totals[key].kwh === 0));
@@ -739,8 +754,9 @@ function validateEnergySummary(summary, cutoff) {
   if (end !== summary.to || keys.some(key => ['kwh', 'seconds'].some(field => Math.abs(sums[key][field] - summary.totals[key][field]) > Math.max(1, summary.totals[key][field]) * 1e-9))) throw new Error('Summary does not reconcile');
   if (summary.version === 1) {
     // A legacy cache never proves zero charging. Ignore any unvalidated extra field.
-    return { ...summary, totals: { ...summary.totals, battery_charged: null },
-      months: summary.months.map(row => ({ ...row, totals: { ...row.totals, battery_charged: null } })) };
+    const unavailable = { battery_charged: null, grid_house: null, grid_battery: null };
+    return { ...summary, totals: { ...summary.totals, ...unavailable },
+      months: summary.months.map(row => ({ ...row, totals: { ...row.totals, ...unavailable } })) };
   }
   return summary;
 }
@@ -774,7 +790,7 @@ function renderAllTime() {
     card.append(label, reading, coverage); cards.append(card);
   }
   const note = document.createElement('p'); note.className = 'summary-note';
-  note.textContent = `${t('Totals since recording began, not inverter lifetime totals. Missing periods are excluded; coverage is shown for each reading.')} ${t('Battery charged: energy into the battery (solar or grid), not remaining capacity.')}`;
+  note.textContent = `${t('Totals since recording began, not inverter lifetime totals. Missing periods are excluded; coverage is shown for each reading.')} ${t('Grid consumed includes both destinations. Earlier readings have no grid breakdown.')} ${t('Battery charged: energy into the battery (solar or grid), not remaining capacity.')}`;
   section.append(cards, note);
   statusElement.textContent = loading ? t('Loading history…') : hasError ? error : hasData ? t('Recorded energy · kWh') : t('No recorded energy yet.');
   if (!hasData) return;
@@ -1056,7 +1072,7 @@ function renderChartViews() {
   host.replaceChildren();
   const keys = activeChartView === 'all' ? [] : Object.keys(metrics).filter(key =>
     metrics[key].group === activeChartView && !metrics[key].legacy &&
-    (activeChartView !== 'power' || selected.has(key) || chartViewDefaults.power.includes(key)));
+    (activeChartView !== 'power' || selected.has(key) || chartViewDefaults.power.includes(key) || metrics[key].gridDestination));
   for (const key of keys) {
     const button = document.createElement('button'); button.type = 'button';
     button.dataset.quickMetric = key; button.textContent = metrics[key].label;
@@ -1117,7 +1133,7 @@ for (const [key, metric] of Object.entries(metrics)) {
     grid_voltage: 'M8 22l4-20 4 20M6 8h12M5 13h14M9 18h6M9 8l6 5m-6 0 6 5',
   };
   const iconKey = /^pv[12]_/.test(key) ? (key.endsWith('_voltage') ? 'pv_voltage' : 'pv')
-    : { pv_current: 'pv', battery_current: 'battery', battery_voltage: 'battery', load_current: 'load' }[key] || key;
+    : { pv_current: 'pv', battery_current: 'battery', battery_voltage: 'battery', load_current: 'load', grid_house: 'load', grid_battery: 'battery' }[key] || key;
   icon.append(svgElement('path', { d: paths[iconKey] }));
   const label = document.createElement('span'); label.textContent = metric.label;
   button.append(icon, label);
@@ -1188,6 +1204,10 @@ if (linkedContext) {
   showMode = linkedContext.metric === 'mode';
   activeChartView = showMode ? 'supply' : metrics[linkedContext.metric].group;
   if (!showMode) selected.add(linkedContext.metric);
+  if (linkedContext.metric === 'grid') {
+    selected.add('grid_house');
+    selected.add('grid_battery');
+  }
 }
 dateInput.addEventListener('change', () => { if (dateInput.validity.valid && dateInput.value) load(); });
 function applyDisplayedDate() {

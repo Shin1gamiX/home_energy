@@ -1,12 +1,11 @@
 """Record fresh reports once, retaining minute aggregates and public daily files."""
 import json
-import math
 import sqlite3
 from contextlib import closing
 from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
-from energy_summary import update_summary
+from energy_summary import GRID_BRANCHES, finite, split_house_sources, update_summary
 
 # Generic PV voltage remains in old rows, but only channel voltages are recorded now.
 KEYS = ('grid', 'pv', 'battery', 'soc', 'load', 'grid_voltage', 'battery_voltage',
@@ -15,18 +14,23 @@ KEYS = ('grid', 'pv', 'battery', 'soc', 'load', 'grid_voltage', 'battery_voltage
 ATHENS = ZoneInfo('Europe/Athens')
 
 
-def supply_mode(values):
-    """Estimate house supply; grid charging is disabled in this installation."""
-    if not all(isinstance(values.get(k), (int, float)) and math.isfinite(values[k])
-               for k in ('grid', 'pv', 'battery', 'load')):
-        return 'unknown'
-    load = max(0, values['load'])
+def supply_mode(values, split=False):
+    """Classify a fresh observation, retaining support for aggregate-only exporters."""
+    if split or any(key in values for key in GRID_BRANCHES):
+        sources = split_house_sources(values)
+        if sources is None:
+            return 'unknown'
+    else:
+        if not all(finite(values.get(key)) for key in ('grid', 'pv', 'battery', 'load')):
+            return 'unknown'
+        load = max(0, values['load'])
+        grid = min(load, max(0, values['grid']))
+        battery = min(load, max(0, -values['battery']))
+        solar = min(max(0, values['pv']), max(0, load - grid - battery))
+        sources = {'grid': grid, 'solar': solar, 'battery': battery}
+    load = values['load']
     if load <= 0:
         return 'standby'
-    grid = min(load, max(0, values['grid']))
-    battery = min(load, max(0, -values['battery']))
-    solar = min(max(0, values['pv']), max(0, load - grid - battery))
-    sources = {'grid': grid, 'solar': solar, 'battery': battery}
     threshold = max(20, load * .02)
     active = [name for name, watts in sources.items() if watts > threshold]
     if len(active) > 1:
@@ -34,6 +38,18 @@ def supply_mode(values):
     if active:
         return active[0]
     return max(sources, key=sources.get) if max(sources.values()) > 0 else 'unknown'
+
+
+def grid_split_start(db, minute, previous_stamp, values):
+    """Start on a clean minute so pre-upgrade samples never acquire a destination."""
+    existing = db.execute("SELECT value FROM metadata WHERE key='grid_split_from'").fetchone()
+    if existing:
+        return existing[0]
+    if any(key in values for key in GRID_BRANCHES):
+        start = minute + 60 if previous_stamp is not None and previous_stamp >= minute else minute
+        db.execute("INSERT INTO metadata VALUES ('grid_split_from',?)", (start,))
+        return start
+    return None
 
 
 def record(payload, runtime):
@@ -51,7 +67,10 @@ def record(payload, runtime):
         previous = db.execute("SELECT value FROM metadata WHERE key='last_report'").fetchone()
         if previous and stamp <= previous[0]:
             return
-        state = supply_mode(payload['values'])
+        values = payload['values']
+        previous_stamp = previous[0] if previous else None
+        split_from = grid_split_start(db, minute, previous_stamp, values)
+        state = supply_mode(values, split=split_from is not None)
         last = db.execute('SELECT start,end,state FROM supply_intervals ORDER BY start DESC LIMIT 1').fetchone()
         # Each fresh observation remains valid for at most 90 seconds. A state
         # change truncates the previous interval at its observed timestamp.
@@ -61,8 +80,11 @@ def record(payload, runtime):
             if last and stamp <= last[1]:
                 db.execute('UPDATE supply_intervals SET end=? WHERE start=?', (stamp, last[0]))
             db.execute('INSERT INTO supply_intervals VALUES (?,?,?)', (stamp, stamp + 90, state))
-        for key in KEYS:
-            value = payload['values'].get(key)
+        keys = (*KEYS, *GRID_BRANCHES) if split_from is not None and minute >= split_from else KEYS
+        for key in keys:
+            value = values.get(key)
+            if key in GRID_BRANCHES and (not finite(value) or value < 0):
+                continue
             if value is not None:
                 db.execute('INSERT INTO readings VALUES (?,?,?,?,1) ON CONFLICT(minute,metric) DO UPDATE SET total=total+excluded.total,count=count+1', (minute, day, key, value))
         db.execute("INSERT OR REPLACE INTO metadata VALUES ('last_report',?)", (stamp,))
@@ -73,10 +95,15 @@ def record(payload, runtime):
         intervals = [{'start': max(a, start.timestamp()), 'end': min(b, end.timestamp()), 'state': s}
                      for a, b, s in db.execute('SELECT start,end,state FROM supply_intervals WHERE end>? AND start<? ORDER BY start', (start.timestamp(), end.timestamp()))]
         recorded_from = db.execute('SELECT MIN(start) FROM supply_intervals').fetchone()[0]
-        energy_summary = update_summary(db, days, day, stamp, previous[0] if previous else None)
+        energy_summary = update_summary(db, days, day, stamp, previous_stamp, split_from)
     points = {}
     for timestamp, key, total, count in rows:
-        point = points.setdefault(timestamp, {'t': timestamp, 'values': {}, 'counts': {}})
+        if timestamp not in points:
+            # A missing house branch on new data is explicitly unknown; old clients
+            # and old records can still omit the two branches entirely.
+            initial = {'grid_house': None} if split_from is not None and timestamp >= split_from else {}
+            points[timestamp] = {'t': timestamp, 'values': initial, 'counts': {}}
+        point = points[timestamp]
         point['values'][key] = total / count
         point['counts'][key] = count
     destination = runtime / 'history'

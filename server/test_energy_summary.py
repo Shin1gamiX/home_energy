@@ -23,6 +23,11 @@ class EnergySummaryTests(unittest.TestCase):
                                        'grid': 0 if i % 3 else 75,
                                        'load': 997.314159, 'battery': -300 if i % 2 else 500}}
                 for i in range(200) if i % 7]
+        for i, row in enumerate(rows[60:]):
+            row['values']['grid_house'] = 0 if i % 3 else 75
+            row['values']['grid_battery'] = None if i % 4 else 450
+            if i % 5 == 0:
+                row['values']['grid_house'] = None
         cutoff = 199 * 60 + 37
         # Extract only pure calculation functions, never execute browser/network code.
         script = """
@@ -71,6 +76,46 @@ process.stdout.write(JSON.stringify(context.energyTotals(input.rows, 0, input.cu
         self.assertEqual(result['solar_to_house'], {'kwh': 0, 'seconds': 60})
         self.assertEqual(result['load']['seconds'], 120)
         self.assertEqual(summarize_points([], 0)['from'], None)
+
+    def test_same_load_different_grid_destination_and_solar_cap(self):
+        base = dict(pv=800, grid=1000, load=800, battery=1000)
+        cases = [
+            (base, 0),
+            (dict(base, grid_house=0, grid_battery=1000), 800),
+            (dict(base, grid_house=0, grid_battery=600), 400),
+            (dict(base, grid_house=200, grid_battery=0, battery=-300), 300),
+            (dict(base, grid_house=0, grid_battery=None, grid=None), 800),
+            (dict(base, grid_house=None, grid_battery=1000), None),
+            (dict(base, grid_house=None, grid_battery=None), None),
+        ]
+        for values, expected in cases:
+            with self.subTest(values=values):
+                total = summarize_points([dict(t=0, values=values)], 60)['totals']['solar_to_house']
+                self.assertEqual(total['seconds'], 0 if expected is None else 60)
+                self.assertAlmostEqual(total['kwh'], (expected or 0) / 60000)
+
+    def test_existing_v2_cache_without_directional_totals_is_reused(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runtime = Path(directory)
+            old = stamp(2026, 9, 1)
+            new = stamp(2026, 9, 2)
+            old_data = dict(grid=1000, load=800, pv=800, battery=1000)
+            record(dict(status='live', updated_at=old, values=old_data), runtime)
+            record(dict(status='live', updated_at=new, values=old_data), runtime)
+            with closing(sqlite3.connect(runtime / 'history.sqlite3')) as db, db:
+                old_totals = json.loads(db.execute("SELECT totals FROM energy_daily_summary WHERE day='2026-09-01'").fetchone()[0])
+                old_totals.pop('grid_house')
+                old_totals.pop('grid_battery')
+                legacy_json = json.dumps(old_totals)
+                db.execute("UPDATE energy_daily_summary SET totals=? WHERE day='2026-09-01'", (legacy_json,))
+            values = dict(old_data, grid_house=0, grid_battery=1000)
+            for seconds in (60, 120):
+                record(dict(status='live', updated_at=new + seconds, values=values), runtime)
+            with closing(sqlite3.connect(runtime / 'history.sqlite3')) as db:
+                self.assertEqual(db.execute("SELECT totals FROM energy_daily_summary WHERE day='2026-09-01'").fetchone()[0], legacy_json)
+            total = json.loads((runtime / 'history/index.json').read_text())['energy_summary']['totals']
+            self.assertEqual(total['grid_battery'], {'kwh': 1000 / 60000, 'seconds': 60})
+            self.assertEqual(total['grid_house'], {'kwh': 0, 'seconds': 60})
 
     def test_charging_is_separate_from_discharge_and_source(self):
         rows = [{'t': 0, 'values': {'pv': 0, 'grid': 1000, 'battery': 600}},

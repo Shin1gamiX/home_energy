@@ -10,7 +10,9 @@ from zoneinfo import ZoneInfo
 
 ATHENS = ZoneInfo('Europe/Athens')
 SUMMARY_VERSION = 2
-ENERGY_KEYS = ('pv', 'grid', 'load', 'battery', 'battery_charged', 'solar_to_house')
+GRID_BRANCHES = ('grid_house', 'grid_battery')
+METER_KEYS = ('pv', 'grid', 'load', 'battery', 'battery_charged', *GRID_BRANCHES)
+ENERGY_KEYS = (*METER_KEYS, 'solar_to_house')
 
 
 def empty_totals():
@@ -21,7 +23,23 @@ def finite(value):
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
-def summarize_points(points, cutoff):
+def split_house_sources(values):
+    """House-side estimates when the exporter provides directional grid readings."""
+    grid_house, pv, load, battery = (values.get(key) for key in ('grid_house', 'pv', 'load', 'battery'))
+    if not all(finite(value) for value in (grid_house, pv, load, battery)) or min(grid_house, pv, load) < 0:
+        return None
+    grid = min(grid_house, load)
+    discharge = min(-battery, load - grid) if battery <= -0.5 else 0
+    grid_battery = values.get('grid_battery')
+    # The house-side residual remains available if the charging branch is missing.
+    # A known charging split also bounds the solar power available to the house.
+    solar_charging = 0
+    if battery >= 0.5 and finite(grid_battery) and grid_battery >= 0:
+        solar_charging = min(pv, max(0, battery - grid_battery))
+    return {'grid': grid, 'solar': min(pv - solar_charging, load - grid - discharge), 'battery': discharge}
+
+
+def summarize_points(points, cutoff, split_from=None):
     """Integrate each distinct minute once, clipping the newest minute at cutoff."""
     totals = empty_totals()
     minutes = {row['t']: row for row in points if finite(row.get('t'))}
@@ -31,7 +49,7 @@ def summarize_points(points, cutoff):
         if not seconds:
             continue
         values = row.get('values', {})
-        for key in ENERGY_KEYS[:-1]:
+        for key in METER_KEYS:
             reading = values.get('battery' if key == 'battery_charged' else key)
             if not finite(reading):
                 continue
@@ -46,11 +64,19 @@ def summarize_points(points, cutoff):
                 continue
             totals[key]['kwh'] += watts * seconds / 3_600_000
             totals[key]['seconds'] += seconds
-        load, grid, battery, pv = (values.get(key) for key in ('load', 'grid', 'battery', 'pv'))
-        if all(finite(value) for value in (load, grid, battery, pv)) and min(load, grid, pv) >= 0:
+        if (split_from is not None and stamp >= split_from) or any(key in values for key in GRID_BRANCHES):
+            sources = split_house_sources(values)
+            if sources is None:
+                continue
+            watts = sources['solar']
+        else:
+            # Keep the original aggregate-only calculation for pre-split minutes.
+            load, grid, battery, pv = (values.get(key) for key in ('load', 'grid', 'battery', 'pv'))
+            if not all(finite(value) for value in (load, grid, battery, pv)) or min(load, grid, pv) < 0:
+                continue
             watts = min(pv, max(0, load - grid - max(0, -battery)))
-            totals['solar_to_house']['kwh'] += watts * seconds / 3_600_000
-            totals['solar_to_house']['seconds'] += seconds
+        totals['solar_to_house']['kwh'] += watts * seconds / 3_600_000
+        totals['solar_to_house']['seconds'] += seconds
     return {'from': first, 'totals': totals}
 
 
@@ -63,6 +89,9 @@ def combine_days(days, cutoff):
     for day in days:
         totals = monthly.setdefault(day['day'][:7], empty_totals())
         for key in ENERGY_KEYS:
+            if key in GRID_BRANCHES and key not in day['totals']:
+                # Version 2 days already cached before split recording have no coverage here.
+                continue
             for field in ('kwh', 'seconds'):
                 totals[key][field] += day['totals'][key][field]
     cursor = datetime.fromtimestamp(first, ATHENS).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -82,7 +111,7 @@ def combine_days(days, cutoff):
     return {'version': SUMMARY_VERSION, 'from': first, 'to': cutoff, 'totals': totals, 'months': rows}
 
 
-def update_summary(db, days, day, cutoff, previous_stamp=None):
+def update_summary(db, days, day, cutoff, previous_stamp=None, split_from=None):
     """Backfill derived caches once; subsequently recalculate only affected days.
 
     On a day rollover the last observed day's final minute becomes complete,
@@ -103,7 +132,7 @@ def update_summary(db, days, day, cutoff, previous_stamp=None):
             point = points.setdefault(minute, {'t': minute, 'values': {}})
             if finite(total) and finite(count) and count > 0:
                 point['values'][metric] = total / count
-        summary = summarize_points(points.values(), cutoff)
+        summary = summarize_points(points.values(), cutoff, split_from)
         db.execute('INSERT OR REPLACE INTO energy_daily_summary VALUES (?,?,?,?)',
                    (value, SUMMARY_VERSION, summary['from'], json.dumps(summary['totals'], allow_nan=False)))
     available = set(days)

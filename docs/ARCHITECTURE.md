@@ -79,8 +79,8 @@ this series. The live API/HA sensor is unchanged; PV1/PV2 voltage recording cont
 | JSON key | Suffix | Required unit |
 | --- | --- | --- |
 | `grid` | `grid_to_home_power` + `grid_to_battery_power` | W |
-| `grid_house` (live only) | `grid_to_home_power` | W |
-| `grid_battery` (live only) | `grid_to_battery_power` | W |
+| `grid_house` | `grid_to_home_power` | W |
+| `grid_battery` | `grid_to_battery_power` | W |
 | `pv` | `pv_power` | W |
 | `battery` | `battery_power` | W |
 | `soc` | `battery_percent` | % |
@@ -141,6 +141,13 @@ Only fresh `live`/`partial` reports with a newer heartbeat than the last recorde
 - Public `runtime/history/index.json`: available day strings, latest recorded timestamp and compact `energy_summary` totals.
 - Public `runtime/history/YYYY-MM-DD.json`: `day` and `points`; each point has Unix timestamp `t`, per-metric `values` averages and `counts`.
 
+The recorder saves the first full split-recording minute in `metadata.grid_split_from`.
+If the current bucket already contains older samples, its energy totals keep the
+original calculation. The new timeline classification applies at the first split
+observation. From the first full minute, an unavailable house branch is exported
+as `grid_house: null` with no count, so it can be distinguished from a legacy
+minute with no branch fields.
+
 Missing values are excluded from each metric's denominator. Daily files and the index are atomically replaced individually, not as one multi-file transaction. The private store has no automatic pruning. Monitor disk growth and back it up using a SQLite-consistent method.
 
 Outages do not count stale readings as new energy. Recording resumes after fresh reports return, leaving gaps. There is no historical backfill/replay path. Restarting does not duplicate already recorded heartbeat timestamps. A badly future-dated checkpoint can suppress later reports until timestamps catch up; inspect clock synchronization if recording unexpectedly stops.
@@ -166,11 +173,11 @@ Dragging selects a zoomed time window; Reset zoom restores the period. Hover/tap
 Energy summaries integrate minute-average watts over represented time, dividing watt-seconds by 3,600,000 for kWh. They summarize the selected calendar period; missing intervals are excluded rather than filled. They are estimates, not raw high-frequency meter totals, and incomplete recording means incomplete totals.
 
 - Solar generated: integrated PV power.
-- Grid consumed: integrated estimated grid import.
+- Grid consumed: integrated total estimated import. Grid → House and Grid → Battery integrate the two destination readings separately with coverage for each. A recorded zero contributes coverage. A missing destination contributes none.
 - House usage: integrated load power.
 - Battery supplied: integrated `max(0, -battery_power)`; charging is not subtracted from discharge energy.
 - Battery charged: integrated `max(0, battery_power)`, using the same signed readings and coverage as Battery supplied. It includes charging from any source, not just solar, and is not remaining capacity or an estimate of losses. Zero battery power is recorded coverage; missing/nonfinite power is not. Because each direction is split after minute averaging, charge/discharge reversals within one minute can undercount both directions.
-- Solar to house: matching intervals of `min(pv, max(0, load - grid - max(0, -battery_power)))`. All four readings must be available. Each interval is bounded by reported PV generation, preventing nighttime measurement residuals from being counted as solar. This remains an estimate and assumes grid charging is disabled; conversion losses, timing differences and estimated entities affect accuracy. Existing recorded data is unchanged; summaries are recalculated when viewed.
+- Solar to house: start with house demand after Grid → House and battery discharge. Cap that demand by available PV. During charging, deduct the estimated solar contribution to the battery from available PV when Grid → Battery is known. A missing Grid → House reading in a split minute leaves the estimate unavailable. Legacy minutes use their original estimate based on total grid import. Conversion losses and differences in sensor timing can affect both estimates.
 
 ### Cumulative energy cache
 
@@ -181,6 +188,11 @@ rows with `month` (`YYYY-MM`), `from`, `to` and the same totals. Every metric st
 unrounded `kwh` and represented `seconds`. Empty history uses null boundaries and
 no month rows. The browser validates bounds and verifies that monthly totals
 reconcile with the grand total before displaying them.
+
+The two destination totals, `grid_house` and `grid_battery`, extend version 2.
+Readers can open old summaries that lack them. Existing version-2 daily caches
+continue to supply their recorded totals without assigning historic grid import
+to either destination.
 
 The frontend also accepts version 1 during an upgrade: its five existing totals
 remain visible, while Battery charged displays an em dash and "Not available".
@@ -201,8 +213,9 @@ The existing raw day/metric rows and heartbeat deduplication remain unchanged.
 
 Integration matches `energyTotals` in `history.js`: each recorded minute contributes
 at most 60 seconds, clipped at the latest report timestamp. Missing minutes and
-invalid metric values contribute no represented time. Solar-to-house requires all
-four matching readings and is bounded by PV power. No imputation or rounding is
+invalid metric values contribute no represented time. Solar-to-house uses matching
+PV, load, battery and house grid readings (aggregate grid for legacy minutes).
+PV power bounds the estimate. No imputation or rounding is
 applied before aggregation. Coverage is represented seconds divided by elapsed
 recording span, not a guarantee of individual-sample completeness or meter accuracy.
 Calendar months use Athens time, including daylight-saving changes. Entirely missing
