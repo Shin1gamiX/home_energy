@@ -36,7 +36,7 @@ assert.equal(context.window.energySupplyLabel({...base, pv: 200, battery: -300})
 assert.equal(context.window.energySupplyLabel(gridToHouse(420)), 'Grid');
 assert.equal(context.window.energySupplyLabel({...base, pv: null}), 'Unknown supply');
 
-// In this observed combination grid is charging only; the house runs on solar.
+// Preserve the routes supplied by earlier snapshots.
 const mixedCharge = { ...base, grid: 1750, grid_battery: 1750, pv: 2971, load: 1723, battery: 2835 };
 assert.deepEqual(state(mixedCharge).routeWatts,
   { gridHouse: 0, gridBattery: 1750, solarHouse: 1723, batteryHouse: 0, solarBattery: 1085 });
@@ -51,4 +51,23 @@ assert.equal(state({ ...mixedCharge, grid_battery: null }).routes.solarBattery, 
 const legacy = { grid: 1000, pv: 1000, load: 1000, battery: 1000 };
 assert.deepEqual(active(legacy), []);
 assert.equal(context.window.energySupplyLabel(legacy), 'Unknown supply');
+const solarCharge = { grid: 720, grid_house: 652, grid_battery: 0, bridge: -68,
+  pv: 3125, battery: 2964, load: 662, solar_house: 0, battery_house: 0, solar_battery: 2964 };
+assert.deepEqual(state(solarCharge).routeWatts,
+  { gridHouse: 652, gridBattery: 0, solarHouse: 0, batteryHouse: 0, solarBattery: 2964 });
+assert.equal(context.window.energySupplyLabel(solarCharge), 'Grid');
+const jointCharge = { grid: 2000, grid_house: 400, grid_battery: 1600, bridge: -1600,
+  pv: 2400, battery: 4000, load: 400, solar_house: 0, battery_house: 0, solar_battery: 2400 };
+assert.deepEqual(state(jointCharge).routeWatts,
+  { gridHouse: 400, gridBattery: 1600, solarHouse: 0, batteryHouse: 0, solarBattery: 2400 });
+const missingSplit = { ...solarCharge, grid_house: null, grid_battery: null, bridge: null,
+  solar_house: null, battery_house: null, solar_battery: null };
+assert.deepEqual(active(missingSplit), []);
+assert.equal(context.window.energySupplyLabel(missingSplit), 'Unknown supply');
+assert.deepEqual(active({ ...missingSplit, battery: -200 }), []);
+assert.deepEqual(active({ ...solarCharge, solar_battery: null }), ['gridHouse'], 'Ignore stale display watts on unknown routes');
+const inverterSupply = { pv: 1000, battery: -400, load: 800, grid: 120, grid_house: 100,
+  grid_battery: 0, bridge: 700, solar_house: 330, battery_house: 370 };
+assert.deepEqual(state(inverterSupply).routeWatts,
+  { gridHouse: 100, gridBattery: 0, solarHouse: 330, batteryHouse: 370, solarBattery: 0 });
 console.log('Overview routing, split charging, legacy snapshots, battery states and supply labels passed.');

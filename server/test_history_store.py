@@ -86,6 +86,68 @@ class HistoryTests(unittest.TestCase):
             self.assertEqual(len(data['modes']), 3)
             self.assertEqual(index['mode_recorded_from'], 1790100000)
 
+    def test_bridge_upgrade_preserves_old_estimates_and_records_observed_house_flows(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runtime = Path(directory)
+            minute = 1790100000
+            def send(stamp, values):
+                record(dict(status='partial', updated_at=stamp, values=values), runtime)
+
+            old = dict(grid=720, grid_house=0, grid_battery=720, pv=3125, load=662, battery=2964)
+            charging = dict(old, bridge=-68, grid_house=652, grid_battery=0,
+                            solar_house=0, battery_house=0)
+            mixed = dict(grid=300, bridge=300, grid_house=300, grid_battery=0, pv=200, load=600,
+                         battery=-100, solar_house=200, battery_house=100)
+            missing = dict(charging, bridge=None, grid_house=None, grid_battery=None,
+                           solar_house=None, battery_house=None)
+            send(minute - 86400, old)
+            send(minute + 5, old)
+            old_path, current_path = sorted((runtime / 'history').glob('????-??-??.json'))
+            old_bytes = old_path.read_bytes()
+            first = json.loads(current_path.read_text())['points'][0]
+            with closing(sqlite3.connect(runtime / 'history.sqlite3')) as db:
+                closed_cache = db.execute('SELECT * FROM energy_daily_summary WHERE day=?',
+                                          (old_path.stem,)).fetchone()
+
+            # This minute already has old grid flows. Even a new house reading
+            # cannot be mixed into it without changing its old solar estimate.
+            send(minute + 30, dict(mixed, soc=75))
+            send(minute + 60, charging)
+            send(minute + 65, mixed)
+            send(minute + 120, missing)
+            send(minute + 180, charging)
+
+            day = json.loads(current_path.read_text())
+            transition, measured, gap, resumed = day['points']
+            for key in old:
+                self.assertEqual(transition['values'][key], first['values'][key])
+                self.assertEqual(transition['counts'][key], 1)
+            self.assertNotIn('solar_house', transition['values'])
+            self.assertEqual(transition['values']['soc'], 75)
+            self.assertEqual(measured['values']['grid_house'], 476)
+            self.assertEqual(measured['values']['grid_battery'], 0)
+            self.assertEqual(measured['values']['solar_house'], 100)
+            self.assertEqual(measured['counts']['solar_house'], 2)
+            self.assertEqual(gap['values']['grid'], 720)
+            self.assertIsNone(gap['values']['grid_house'])
+            self.assertIsNone(gap['values']['solar_house'])
+            self.assertNotIn('grid_battery', gap['counts'])
+            self.assertNotIn('solar_house', gap['counts'])
+            self.assertEqual(resumed['values']['solar_house'], 0)
+            self.assertEqual([item['state'] for item in day['modes']],
+                             ['solar', 'mixed', 'grid', 'mixed', 'unknown', 'grid'])
+            totals = json.loads((runtime / 'history/index.json').read_text())['energy_summary']['totals']
+            self.assertEqual(totals['grid_battery'], {'kwh': 2 * 720 / 60000, 'seconds': 180})
+            self.assertAlmostEqual(totals['solar_to_house']['kwh'], (2 * 662 + 100) / 60000)
+            self.assertEqual(totals['solar_to_house']['seconds'], 180)
+            self.assertEqual(totals['grid']['seconds'], 240)
+            self.assertEqual(old_path.read_bytes(), old_bytes)
+            with closing(sqlite3.connect(runtime / 'history.sqlite3')) as db:
+                self.assertEqual(db.execute("SELECT value FROM metadata WHERE key='grid_bridge_from'").fetchone(),
+                                 (minute + 60,))
+                self.assertEqual(db.execute('SELECT * FROM energy_daily_summary WHERE day=?',
+                                            (old_path.stem,)).fetchone(), closed_cache)
+
     def test_supply_interval_crosses_athens_midnight(self):
         from datetime import datetime
         from history_store import ATHENS

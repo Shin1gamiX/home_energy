@@ -11,6 +11,8 @@ import sqlite3
 import stat
 import tempfile
 import time
+import sys
+from typing import NamedTuple
 from zoneinfo import ZoneInfo
 
 SOURCE = Path(__file__).resolve().parent
@@ -19,6 +21,23 @@ BACKEND = ('server/energy_summary.py', 'server/history_store.py')
 PUBLIC = ('public/app.js', 'public/history.css', 'public/history.js',
           'public/index.html', 'public/history.html')
 FILES = BACKEND + PUBLIC
+
+
+class Release(NamedTuple):
+    tag: str
+    backend: tuple
+    public: tuple
+
+    @property
+    def files(self):
+        return self.backend + self.public
+
+
+SPLIT = Release('homeenergy-history-grid-split', BACKEND, PUBLIC)
+BRIDGE = Release('homeenergy-grid-bridge',
+                 (*BACKEND, 'server/export_energy.py'),
+                 ('public/app.js', 'public/history.js', 'public/power-history.js',
+                  'public/index.html', 'public/history.html'))
 BRANCHES = ('grid_house', 'grid_battery')
 INSTALLER = SOURCE / 'activate-battery-voltage.py'
 SPEC = importlib.util.spec_from_file_location('history_split_installer', INSTALLER)
@@ -29,17 +48,17 @@ BASE = INSTALL.BASE
 require = BASE.require
 
 
-def bundle():
-    require(SOURCE.parent == ARCHIVE and SOURCE.name.startswith('homeenergy-history-grid-split-release.'),
+def bundle(release=SPLIT):
+    require(SOURCE.parent == ARCHIVE and SOURCE.name.startswith(release.tag + '-release.'),
             'Unexpected release directory')
     manifest = json.loads(BASE.read(SOURCE / 'manifest.json'))
-    require(set(manifest['files']) == set(FILES), 'Release allowlist differs')
+    require(set(manifest['files']) == set(release.files), 'Release allowlist differs')
     for path, key in ((Path(__file__), 'helper_sha256'), (INSTALLER, 'installer_sha256'),
                       (INSTALL.BASE_PATH, 'verifier_sha256'), (BASE.NGINX, 'nginx_sha256'),
                       (INSTALL.UNIT, 'unit_sha256')):
         require(BASE.digest(BASE.read(path)) == manifest[key], 'Baseline changed: ' + path.name)
     bodies, originals = {}, {}
-    for name in FILES:
+    for name in release.files:
         bodies[name] = BASE.read(SOURCE / name)
         require(BASE.digest(bodies[name]) == manifest['files'][name]['after'], 'Staged bytes changed: ' + name)
         originals[name] = BASE.fingerprint(INSTALL.ROOT / name)
@@ -48,7 +67,49 @@ def bundle():
     require(all('ActiveState=active' in state for state in services.values()), 'Required service inactive')
     feed_hash = BASE.digest(BASE.read(BASE.FEED))
     BASE.verify_http({}, feed_hash)
+    if release == BRIDGE:
+        history_db = INSTALL.ROOT / 'runtime/history.sqlite3'
+        with closing(sqlite3.connect(history_db.as_uri() + '?mode=ro', uri=True)) as connection:
+            prior = connection.execute("SELECT value FROM metadata WHERE key='grid_bridge_from'").fetchone()
+        require(prior is None, 'Previously recorded bridge cutover detected; inspect the existing history first')
+        check_recorder()
     return bodies, originals, services, feed_hash
+
+
+def usable_bridge(payload, since, now):
+    stamp = payload.get('updated_at')
+    if (payload.get('status') not in ('live', 'partial') or not isinstance(stamp, (int, float))
+            or not max(since, now - 90) <= stamp <= now + 30):
+        return False
+    values = payload.get('values', {})
+    inputs = ('grid', 'bridge', 'load', 'battery', 'pv', 'grid_house', 'grid_battery')
+    if not all(type(values.get(key)) in (float, int) and math.isfinite(values[key]) for key in inputs):
+        return False
+    grid, bridge, load, battery, pv, house, charging = (values[key] for key in inputs)
+    require(grid >= 0 and 0 <= house <= load and charging >= 0 and house + charging <= grid + 1e-6
+            and charging <= min(max(0, -bridge), max(0, battery - pv)) + 1e-6,
+            'Grid routes exceed the simultaneous source/destination power')
+    return True
+
+
+def check_recorder():
+    # Isolated -I/-B interpreter. Candidate reads the actual Recorder in one
+    # read-only transaction. No candidate main loop or recording call runs.
+    sys.path[:0] = [str(SOURCE / 'server'), str(INSTALL.ROOT / 'server')]
+    try:
+        import export_energy
+    finally:
+        del sys.path[:2]
+    require(Path(export_energy.__file__).resolve() == SOURCE / 'server/export_energy.py', 'Unexpected exporter')
+    with closing(sqlite3.connect(export_energy.DATABASE.as_uri() + '?mode=ro', uri=True, timeout=3)) as db:
+        db.execute('PRAGMA query_only=ON')
+        db.execute('BEGIN')
+        now = time.time()
+        snapshot = export_energy.snapshot(db, now)
+    require(usable_bridge(snapshot, now - 90, now), 'Awaiting simultaneous fresh signed inverter power and grid readings')
+    values = snapshot['values']
+    print(f"Read-only Recorder: signed inverter={values['bridge']:g} W, grid={values['grid']:g} W, "
+          f"grid to house={values['grid_house']:g} W, grid to battery={values['grid_battery']:g} W.", flush=True)
 
 
 def local_day(stamp):
@@ -94,7 +155,7 @@ def recorded_split(day, minute):
     return None
 
 
-def verify_recording(since):
+def verify_recording(since, bridge=False):
     first_minute = (int(since) // 60 + 1) * 60
     deadline = time.monotonic() + 160
     pending = set(BASE.HOSTS)
@@ -116,6 +177,15 @@ def verify_recording(since):
             require(document['day'] == day, 'Unexpected daily history')
             split = recorded_split(document, minute)
             totals = index['energy_summary']['totals']
+            if split and bridge:
+                point = next(point for point in document['points'] if point['t'] == minute)
+                status, live_headers, live_body = BASE.origin(host, '/api/energy')
+                require(status == 200, 'Live power unavailable: ' + host)
+                BASE.check_headers(live_headers)
+                live = json.loads(live_body)
+                if 'solar_house' not in point['values'] or not usable_bridge(live, since, time.time()):
+                    continue
+                print(f"{host}: signed inverter power={live['values']['bridge']:g} W.", flush=True)
             if split and all(totals.get(key, {}).get('seconds', 0) > 0 for key in BRANCHES):
                 print(f"{host}: recorded grid_house={split['grid_house'][0]:g} W "
                       f"({split['grid_house'][1]} samples), grid_battery={split['grid_battery'][0]:g} W "
@@ -126,15 +196,15 @@ def verify_recording(since):
     require(not pending, 'New minute with both grid destinations not verified on ' + ', '.join(sorted(pending)))
 
 
-def restore(directory):
+def restore(directory, release=SPLIT):
     require(directory.resolve() == directory and directory.parent == ARCHIVE
-            and directory.name.startswith('homeenergy-history-grid-split-backup.')
+            and directory.name.startswith(release.tag + '-backup.')
             and directory.stat().st_uid == 0 and stat.S_IMODE(directory.stat().st_mode) == 0o700,
             'Invalid backup directory')
     record = json.loads(BASE.read(directory / 'record.json'))
-    require(set(record['files']) == set(record['installed']) == set(FILES), 'Backup allowlist differs')
+    require(set(record['files']) == set(record['installed']) == set(release.files), 'Backup allowlist differs')
     changed = {}
-    for name in FILES:
+    for name in release.files:
         old = BASE.read(directory / name)
         require(BASE.digest(old) == record['files'][name]['sha256'], 'Backup changed: ' + name)
         current = BASE.digest(BASE.read(INSTALL.ROOT / name))
@@ -143,16 +213,16 @@ def restore(directory):
             changed[name] = old
     for name in reversed(changed):
         INSTALL.write(name, changed[name], record['files'][name])
-    if changed.keys() & set(BACKEND):
+    if changed.keys() & set(release.backend):
         INSTALL.restart_exporter()
     BASE.verify_http({}, BASE.digest(BASE.read(BASE.FEED)))
     print('Previous code restored. All history collected since activation was retained.', flush=True)
 
 
-def activate(bodies, originals, services, feed_hash):
-    directory = Path(tempfile.mkdtemp(prefix='homeenergy-history-grid-split-backup.', dir=ARCHIVE))
+def activate(bodies, originals, services, feed_hash, release=SPLIT):
+    directory = Path(tempfile.mkdtemp(prefix=release.tag + '-backup.', dir=ARCHIVE))
     print('Private rollback backup: ' + str(directory), flush=True)
-    for name in FILES:
+    for name in release.files:
         dest = directory / name
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(BASE.read(INSTALL.ROOT / name))
@@ -167,14 +237,17 @@ def activate(bodies, originals, services, feed_hash):
                                                        preserved=saved), sort_keys=True), encoding='utf-8')
     require(INSTALL.service_state() == services, 'Service state changed before activation')
     try:
-        for name in FILES:
+        for name in release.files:
             require(BASE.fingerprint(INSTALL.ROOT / name) == originals[name], 'Target changed: ' + name)
             INSTALL.write(name, bodies[name], originals[name])
-            if name == BACKEND[-1]:
+            if name == release.backend[-1]:
                 since = time.time()
                 INSTALL.restart_exporter()
-                verify_recording(since)
-        BASE.verify_http({name.removeprefix('public/'): hashes[name] for name in PUBLIC}, feed_hash)
+                if release == BRIDGE:
+                    verify_recording(since, bridge=True)
+                else:
+                    verify_recording(since)
+        BASE.verify_http({name.removeprefix('public/'): hashes[name] for name in release.public}, feed_hash)
         for path, meta in saved.items():
             require(BASE.fingerprint(Path(path)) == meta, 'Protected file changed: ' + path)
         check_existing_day(json.loads(BASE.read(directory / 'history-day.json')),
@@ -184,7 +257,7 @@ def activate(bodies, originals, services, feed_hash):
         require(all(after[name] == services[name] for name in ('nginx', 'homeenergy-control')),
                 'Unrelated service state changed')
     except BaseException:
-        restore(directory)
+        restore(directory, release)
         raise
     print('History grid split active. Closed history, earlier minutes and reports verified. Only the exporter restarted.', flush=True)
 
@@ -195,14 +268,17 @@ if __name__ == '__main__':
     actions.add_argument('--check', action='store_true')
     actions.add_argument('--activate', action='store_true')
     actions.add_argument('--rollback', type=Path)
+    parser.add_argument('--bridge', action='store_true', help='Deploy signed inverter power routing')
     args = parser.parse_args()
+    release = BRIDGE if args.bridge else SPLIT
+    INSTALL.FILES = release.files
     if args.check:
-        bundle()
+        bundle(release)
         print('Read-only History grid split preflight passed.', flush=True)
     else:
         require(os.geteuid() == 0, 'Administrator privileges required')
         os.umask(0o077)
         if args.activate:
-            activate(*bundle())
+            activate(*bundle(release), release)
         else:
-            restore(args.rollback)
+            restore(args.rollback, release)

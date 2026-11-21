@@ -14,7 +14,7 @@ const metrics = {
   pv2_voltage: { get label() { return t('PV2 voltage'); }, get color() { return historyColor('#c27019'); }, unit: 'V', group: 'voltage' },
   pv1_current: { get label() { return t('PV1 current'); }, get color() { return historyColor('#b56610'); }, unit: 'A', group: 'current' },
   pv2_current: { get label() { return t('PV2 current'); }, get color() { return historyColor('#365dc1'); }, unit: 'A', group: 'current' },
-  grid: { get label() { return t('Grid (est.)'); }, get color() { return historyColor('#8861ba'); }, unit: 'W', group: 'power' },
+  grid: { get label() { return t('Grid import'); }, get color() { return historyColor('#8861ba'); }, unit: 'W', group: 'power' },
   grid_house: { get label() { return t('Grid → House'); }, get color() { return historyColor('#24678a'); }, unit: 'W', group: 'power', gridDestination: true },
   grid_battery: { get label() { return t('Grid → Battery'); }, get color() { return historyColor('#aa4e91'); }, unit: 'W', group: 'power', gridDestination: true },
   load: { get label() { return t('House'); }, get color() { return historyColor('#168b8a'); }, unit: 'W', group: 'power' },
@@ -674,6 +674,14 @@ function energyTotals(rows, from, to, cutoff) {
       totals[key].seconds += seconds;
     }
     const values = row.values || {};
+    // New minutes keep the estimate from simultaneous readings before averaging.
+    if (Object.hasOwn(values, 'solar_house')) {
+      if (Number.isFinite(values.solar_house) && values.solar_house >= 0) {
+        solarToHouse.kwh += values.solar_house * seconds / 3600000;
+        solarToHouse.seconds += seconds;
+      }
+      continue;
+    }
     const { load, battery, pv, grid_house, grid_battery } = values;
     if (![load, battery, pv].every(Number.isFinite) || load < 0 || pv < 0) continue;
     const split = Object.hasOwn(values, 'grid_house') || Object.hasOwn(values, 'grid_battery');
@@ -720,7 +728,7 @@ function renderSummary() {
     card.append(label, value, coverage); cards.append(card);
   }
   const note = document.createElement('p'); note.className = 'summary-note';
-  note.textContent = `${t('Estimated from recorded readings only; missing periods are excluded.')} ${t('Grid consumed includes both destinations. Earlier readings have no grid breakdown.')} ${t('Battery charged: energy into the battery (solar or grid), not remaining capacity.')}`;
+  note.textContent = `${t('Estimated from recorded readings only; missing periods are excluded.')} ${t('Grid destinations are estimates. Total import can include inverter losses. Earlier readings retain their original estimates.')} ${t('Battery charged: energy into the battery (solar or grid), not remaining capacity.')}`;
   section.append(cards, note);
 }
 // An older exporter can still serve day/week/month while awaiting this feature.
@@ -790,7 +798,7 @@ function renderAllTime() {
     card.append(label, reading, coverage); cards.append(card);
   }
   const note = document.createElement('p'); note.className = 'summary-note';
-  note.textContent = `${t('Totals since recording began, not inverter lifetime totals. Missing periods are excluded; coverage is shown for each reading.')} ${t('Grid consumed includes both destinations. Earlier readings have no grid breakdown.')} ${t('Battery charged: energy into the battery (solar or grid), not remaining capacity.')}`;
+  note.textContent = `${t('Totals since recording began, not inverter lifetime totals. Missing periods are excluded; coverage is shown for each reading.')} ${t('Grid destinations are estimates. Total import can include inverter losses. Earlier readings retain their original estimates.')} ${t('Battery charged: energy into the battery (solar or grid), not remaining capacity.')}`;
   section.append(cards, note);
   statusElement.textContent = loading ? t('Loading history…') : hasError ? error : hasData ? t('Recorded energy · kWh') : t('No recorded energy yet.');
   if (!hasData) return;

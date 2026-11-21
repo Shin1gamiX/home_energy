@@ -29,7 +29,7 @@
     <div class="scene-heading"><span><i class="status-dot"></i><span id="scene-status">Waiting for readings</span></span><span>POWER OVERVIEW</span></div>
     <img class="house" src="assets/solar-home.webp?v=20261018-overview-b" width="1254" height="1254" alt="" aria-hidden="true" decoding="async">
     <div class="scene-label solar-label"><span class="mini-icon">☀</span><div>Solar<span><b data-value="pv">—</b> <small>kW</small></span><span><b data-value="pv_voltage">—</b> <small>V</small></span></div></div>
-    <div class="scene-label grid-label"><span class="mini-icon">↯</span><div>Grid (est.)<span><b data-value="grid">—</b> <small>W</small></span><span><b data-value="grid_voltage">—</b> <small>V</small></span></div></div>
+    <div class="scene-label grid-label"><span class="mini-icon">↯</span><div>Grid import<span><b data-value="grid">—</b> <small>W</small></span><span><b data-value="grid_voltage">—</b> <small>V</small></span></div></div>
     <div class="scene-label battery-label" aria-describedby="battery-state-description"><span class="mini-icon">▰</span><div>Battery<span><b data-value="soc">—</b><small>%</small></span><span class="battery-watts"><b data-value="battery">—</b> <small>W</small></span><span class="battery-status" id="battery-state-description" hidden></span><div class="meter"><span class="scene-charge-bar"></span></div></div></div>
     <div class="scene-label load-label"><span class="mini-icon">⌂</span><div>House<span><b data-value="load">—</b> <small>W</small></span></div></div>
     <div class="scene-caption">A connected view of your home.</div>
@@ -45,7 +45,14 @@
   <details class="reading-details">
   <summary><span data-i18n="Electrical details">Electrical details</span><span data-i18n="PV channels, voltage and current">PV channels, voltage and current</span></summary>
   <section class="metrics" aria-label="Energy readings">
-    <article class="metric grid"><div class="metric-top"><span>Grid power</span><span class="symbol">↯</span></div><div class="reading"><b data-value="grid">—</b><span>W</span></div><p><span data-value="grid_voltage">—</span> V</p><p id="grid-state">Waiting for readings</p><div class="meter" hidden><span style="width:0%"></span></div></article>
+    <article class="metric grid">
+      <div class="metric-top"><span>Grid import</span><span class="symbol">↯</span></div>
+      <div class="reading"><b data-value="grid">—</b><span>W</span></div>
+      <p><span data-value="grid_voltage">—</span> V</p>
+      <p><span data-i18n="Grid → House">Grid → House</span> <strong><span data-value="grid_house">—</span> <small>W</small></strong></p>
+      <p><span data-i18n="Grid → Battery">Grid → Battery</span> <strong><span data-value="grid_battery">—</span> <small>W</small></strong></p>
+      <p id="grid-state">Waiting for readings</p>
+    </article>
     <article class="metric solar"><div class="metric-top"><span>Solar production</span><span class="symbol">☀</span></div><div class="reading"><b data-value="pv">—</b><span>kW</span></div><p><span data-value="pv_voltage">—</span> V</p><div class="meter" hidden><span style="width:65%"></span></div></article>
     <article class="metric battery" aria-describedby="battery-detail-state"><div class="metric-top"><span>Battery</span><span class="symbol">▰</span></div><div class="reading"><b data-value="soc">—</b><span>%</span></div><p class="battery-watts"><strong><span data-value="battery">—</span> <span>W</span></strong></p><p class="battery-status" id="battery-detail-state" hidden></p><div class="meter"><span id="charge-bar" style="width:0%"></span></div></article>
     <article class="metric load"><div class="metric-top"><span>House consumption</span><span class="symbol">⌂</span></div><div class="reading"><b data-value="load">—</b><span>W</span></div><p>Total house load</p><div class="meter" hidden><span style="width:42%"></span></div></article>
@@ -66,9 +73,9 @@
   </form>
 </dialog>
 <script src="connection-status.js?v=20261116-connection"></script>
-<script src="app.js?v=20261121-grid-history"></script>
+<script src="app.js?v=20261121-grid-bridge"></script>
 <script src="history-cache.js?v=20261018-queue-8"></script>
-<script src="power-history.js?v=20261020-metric-icons"></script>
+<script src="power-history.js?v=20261121-grid-bridge"></script>
 <script src="insights.js?v=20261018-concepts"></script>
 <script src="collector-control.js?v=20261004-private-status"></script>
 <script src="trends-data.js?v=20261104-trends-day"></script>

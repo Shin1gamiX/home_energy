@@ -28,6 +28,8 @@ class EnergySummaryTests(unittest.TestCase):
             row['values']['grid_battery'] = None if i % 4 else 450
             if i % 5 == 0:
                 row['values']['grid_house'] = None
+        for i, row in enumerate(rows[120:]):
+            row['values']['solar_house'] = [0, 136.5, None][i % 3]
         cutoff = 199 * 60 + 37
         # Extract only pure calculation functions, never execute browser/network code.
         script = """

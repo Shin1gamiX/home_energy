@@ -78,9 +78,9 @@ this series. The live API/HA sensor is unchanged; PV1/PV2 voltage recording cont
 
 | JSON key | Suffix | Required unit |
 | --- | --- | --- |
-| `grid` | `grid_to_home_power` + `grid_to_battery_power` | W |
-| `grid_house` | `grid_to_home_power` | W |
-| `grid_battery` | `grid_to_battery_power` | W |
+| `grid` | `grid_power`, clipped to import | W |
+| `bridge` | `inverter_power`, signed net inverter power | W |
+| `grid_house`, `grid_battery` | Estimated from import, signed inverter power, load, PV and battery power | W |
 | `pv` | `pv_power` | W |
 | `battery` | `battery_power` | W |
 | `soc` | `battery_percent` | % |
@@ -93,7 +93,9 @@ this series. The live API/HA sensor is unchanged; PV1/PV2 voltage recording cont
 
 `inverter_time` supplies the report heartbeat through its Recorder update timestamp. `operating_mode` supplies an allowlisted mode string. The exporter does not derive current from watts divided by volts; it reads integration entities. In particular, do not infer AC current from watts/volts without accounting for power factor.
 
-Finite numeric values and matching units are required; SOC must be 0-100. Missing/invalid readings become `null`, not zero. Both grid components must be valid and nonnegative; grid is an import estimate, not an export meter.
+Finite numeric values and matching units are required. SOC must be 0–100. Grid import is read independently of its destinations. On the ANENJI 11 kW model, EyeBond's `inverter_power` prefers register 344 and can fall back to register 228 when the auxiliary reading is absent. Recorder exposes the resulting entity value, without the source register address. A positive value means DC → AC and a negative value means AC → DC. Confirm the sign and entity availability before enabling this method on other models.
+
+The exporter subtracts AC → DC power from import when estimating grid supply to the house. Both house load and DC → AC supply constrain that estimate. A grid charging estimate requires AC → DC flow and battery charging demand in excess of total available PV. It is capped by each of those quantities and remaining import. This solar-first attribution can understate an actual grid contribution when both sources are available. Unallocated import can include conversion consumption or timing differences. A destination without enough evidence is null unless an independent reading establishes zero.
 
 ## Live data lifecycle
 
@@ -148,6 +150,8 @@ observation. From the first full minute, an unavailable house branch is exported
 as `grid_house: null` with no count, so it can be distinguished from a legacy
 minute with no branch fields.
 
+The next change in method has its own private boundary, `metadata.grid_bridge_from`. The presence of the `bridge` key identifies the newer exporter, even if its sensor is unavailable. For new full minutes the recorder averages the estimated destinations and `solar_house` from individual samples. A minute already containing older readings retains its previous routing inputs and calculation. Previously recorded minutes, daily totals and supply labels keep their original interpretation.
+
 Missing values are excluded from each metric's denominator. Daily files and the index are atomically replaced individually, not as one multi-file transaction. The private store has no automatic pruning. Monitor disk growth and back it up using a SQLite-consistent method.
 
 Outages do not count stale readings as new energy. Recording resumes after fresh reports return, leaving gaps. There is no historical backfill/replay path. Restarting does not duplicate already recorded heartbeat timestamps. A badly future-dated checkpoint can suppress later reports until timestamps catch up; inspect clock synchronization if recording unexpectedly stops.
@@ -177,7 +181,7 @@ Energy summaries integrate minute-average watts over represented time, dividing 
 - House usage: integrated load power.
 - Battery supplied: integrated `max(0, -battery_power)`; charging is not subtracted from discharge energy.
 - Battery charged: integrated `max(0, battery_power)`, using the same signed readings and coverage as Battery supplied. It includes charging from any source, not just solar, and is not remaining capacity or an estimate of losses. Zero battery power is recorded coverage; missing/nonfinite power is not. Because each direction is split after minute averaging, charge/discharge reversals within one minute can undercount both directions.
-- Solar to house: start with house demand after Grid → House and battery discharge. Cap that demand by available PV. During charging, deduct the estimated solar contribution to the battery from available PV when Grid → Battery is known. A missing Grid → House reading in a split minute leaves the estimate unavailable. Legacy minutes use their original estimate based on total grid import. Conversion losses and differences in sensor timing can affect both estimates.
+- Solar to house: integrate the recorded `solar_house` estimate for minutes using signed inverter power. House demand and available DC → AC power constrain the allocation. Earlier split minutes use their original PV/load/battery and EyeBond destination calculation. Aggregate-only minutes retain their original total-grid calculation.
 
 ### Cumulative energy cache
 
@@ -213,9 +217,9 @@ The existing raw day/metric rows and heartbeat deduplication remain unchanged.
 
 Integration matches `energyTotals` in `history.js`: each recorded minute contributes
 at most 60 seconds, clipped at the latest report timestamp. Missing minutes and
-invalid metric values contribute no represented time. Solar-to-house uses matching
-PV, load, battery and house grid readings (aggregate grid for legacy minutes).
-PV power bounds the estimate. No imputation or rounding is
+invalid metric values contribute no represented time. Solar-to-house uses the
+recorded sample estimate when present and the corresponding older calculation for
+earlier minutes. PV power bounds the estimate. No imputation or rounding is
 applied before aggregation. Coverage is represented seconds divided by elapsed
 recording span, not a guarantee of individual-sample completeness or meter accuracy.
 Calendar months use Athens time, including daylight-saving changes. Entirely missing
@@ -233,7 +237,7 @@ Peaks refer to displayed averaged values in the visible range, not guaranteed in
 
 ## Display conventions and decisions to preserve
 
-Overview animates the grid-to-house and grid-to-battery estimates separately. Battery charging above the grid contribution is attributed to solar, capped by PV output. The remaining PV can supply house demand after subtracting grid-to-house and battery discharge. Both charging paths can run together. The Grid card still displays total estimated import. Older snapshots with positive import and no split do not identify its destination. History continues to use the recorded totals described above.
+Overview animates the estimated grid destinations separately. Both charging paths can run together. The Grid card displays total estimated import, including any watts that cannot be assigned confidently to either destination. Electrical details shows the destination estimates. History uses the same estimates for new minutes.
 
 Secondary values that round to zero (current below 0.05 A, battery power below 0.5 W in magnitude) are hidden. Main power readings and SOC remain. Battery amperage is omitted from the lower summary, but remains in the scene while battery power is active. In Mains mode, idle battery power with reported SOC below 40% displays Waiting to charge, based on the owner's configured return threshold, not a BMS status. Unknown battery power shows No report. EN/RU/EL translations cover the new labels. These presentation rules do not change recorded readings or history.
 

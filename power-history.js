@@ -2,7 +2,7 @@
 
 // A small overview drill-down using the same recorded minute averages as History.
 (() => {
-  const sources = { grid: 'Grid (est.)', pv: 'Solar total', load: 'House', battery: 'Battery power' };
+  const sources = { grid: 'Grid import', pv: 'Solar total', load: 'House', battery: 'Battery power' };
   const timezone = 'Europe/Athens';
   const date = new Intl.DateTimeFormat('en-GB', { timeZone: timezone, day: '2-digit', month: '2-digit', year: 'numeric' });
   const time = new Intl.DateTimeFormat('en-GB', { timeZone: timezone, hour: '2-digit', minute: '2-digit' });

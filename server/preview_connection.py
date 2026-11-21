@@ -9,7 +9,7 @@ from tempfile import TemporaryDirectory
 from urllib.parse import parse_qs, urlsplit
 
 from connection_health import HealthMonitor
-from export_energy import SNAPSHOT_KEYS
+from export_energy import SNAPSHOT_KEYS, estimate_grid_split, estimate_house_sources, estimate_solar_charging
 from history_store import record
 from preview_history import ATHENS, preview_days, preview_day, preview_reports, preview_summary, preview_trends, combine_days
 
@@ -22,6 +22,54 @@ FLOW_SCENARIOS = {
     'grid-only': dict(grid_house=1570, pv_house=0, grid_battery=2100, pv_battery=0),
     'solar-only': dict(grid_house=0, pv_house=910, grid_battery=0, pv_battery=670),
 }
+
+# Watts. The first case replays a representative PV-only reading. The other
+# cases are synthetic; all destinations come from the same estimator as live.
+BRIDGE_SCENARIOS = {
+    'pv-priority': dict(grid=720, bridge=-68, load=662, battery=2964, pv=3125),
+    'combined-charge': dict(grid=4650, bridge=-2900, load=1675, battery=5480, pv=2960),
+    'inverting': dict(grid=400, bridge=900, load=1280, battery=-180, pv=800),
+    'bridge-missing': dict(grid=720, bridge=None, load=662, battery=2964, pv=3125),
+}
+
+
+def bridge_readings(scenario):
+    values = BRIDGE_SCENARIOS[scenario].copy()
+    grid, bridge, load, battery, pv = (values[key] for key in ('grid', 'bridge', 'load', 'battery', 'pv'))
+    house, charging = estimate_grid_split(grid, bridge, load, battery, pv)
+    solar_house, battery_house = estimate_house_sources(house, charging, bridge, load, battery, pv)
+    values.update(grid_house=house, grid_battery=charging, solar_house=solar_house, battery_house=battery_house,
+                  solar_battery=estimate_solar_charging(charging, battery, pv))
+    return values
+
+
+def bridge_history_preview(today):
+    """Exercise the recorder and its cutover in an isolated temporary database."""
+    start = (today - timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
+    first = int(start.timestamp())
+    previous = int((start - timedelta(days=1)).timestamp())
+    block = 30 * 60
+    end = first + len(BRIDGE_SCENARIOS) * block
+    links = {'/bridge-history': f'/history.html?from={first}&to={end}&metric=grid',
+             '/previous-method': f'/history.html?from={previous}&to={previous + block}&metric=grid'}
+    with TemporaryDirectory(prefix='bridge-history-preview-') as temporary:
+        runtime = Path(temporary)
+        legacy = dict(grid=720, grid_house=0, grid_battery=720, load=662, battery=2964, pv=3125)
+        for stamp in range(previous, previous + block, 60):
+            record(dict(status='live', updated_at=stamp, values=legacy), runtime)
+        for index, scenario in enumerate(BRIDGE_SCENARIOS):
+            values = bridge_readings(scenario)
+            begin = first + index * block
+            for stamp in range(begin, begin + block, 60):
+                record(dict(status='partial' if values['bridge'] is None else 'live',
+                            updated_at=stamp, values=values), runtime)
+        # A final heartbeat closes the last minute for the two-hour selection.
+        record(dict(status='partial', updated_at=end, values=values), runtime)
+        # The Overview trends index uses today's Athens date. Feed it the same
+        # current synthetic observation shown when the preview opens.
+        record(dict(status='live', updated_at=today.timestamp(), values=bridge_readings('pv-priority')), runtime)
+        bodies = {'/history/' + path.name: path.read_bytes() for path in (runtime / 'history').glob('*.json')}
+    return bodies, links
 
 
 def grid_history_preview(today):
@@ -59,26 +107,31 @@ def energy(scenario, now):
                   pv_voltage=382.9, grid_voltage=232, pv_current=4.1, battery_current=12.7, load_current=4.5)
     for channel, power, voltage, current in ((1, 948, 382.9, 2.5), (2, 632, 237.2, 2.7)):
         values.update({f'pv{channel}_power': power, f'pv{channel}_voltage': voltage, f'pv{channel}_current': current})
-    if scenario in FLOW_SCENARIOS:
+    if scenario in BRIDGE_SCENARIOS:
+        values.update(bridge_readings(scenario))
+    elif scenario in FLOW_SCENARIOS:
         flow = FLOW_SCENARIOS[scenario]
         pv = flow['pv_house'] + flow['pv_battery']
         battery = flow['grid_battery'] + flow['pv_battery']
         load = flow['grid_house'] + flow['pv_house']
         values.update(grid=flow['grid_house'] + flow['grid_battery'], grid_house=flow['grid_house'],
-                      grid_battery=flow['grid_battery'], pv=pv, battery=battery, load=load, soc=56,
-                      battery_voltage=54.4, battery_current=battery / 54.4, load_current=load / 232,
-                      pv_voltage=225.5 if pv else 24.5, pv_current=pv / 225.5)
+                      grid_battery=flow['grid_battery'], pv=pv, battery=battery, load=load)
+    flow_preview = scenario in FLOW_SCENARIOS or scenario in BRIDGE_SCENARIOS
+    if flow_preview:
+        pv = values['pv']
+        values.update(soc=56, battery_voltage=54.4, battery_current=values['battery'] / 54.4,
+                      load_current=values['load'] / 232, pv_voltage=225.5 if pv else 24.5, pv_current=pv / 225.5)
         for channel, share in ((1, .6), (2, .4)):
             power = pv * share
             values.update({f'pv{channel}_power': power, f'pv{channel}_voltage': values['pv_voltage'],
                            f'pv{channel}_current': power / values['pv_voltage']})
-    fresh = scenario in ('live', 'partial') or scenario in FLOW_SCENARIOS
+    fresh = scenario in ('live', 'partial') or flow_preview
     if scenario == 'partial':
         values['battery_voltage'] = None
     if scenario == 'empty':
         values = dict.fromkeys(SNAPSHOT_KEYS)
     payload = dict(values=values, mode='Mains' if values['grid'] else 'Off-Grid', updated_at=now - 3 if fresh else None if scenario == 'empty' else now - 900,
-                   generated_at=now, status='partial' if scenario == 'partial' else 'live' if fresh else 'stale')
+                   generated_at=now, status='partial' if scenario in ('partial', 'bridge-missing') else 'live' if fresh else 'stale')
     observation = dict(vpn='up', dongle='up', collector='up')
     if scenario == 'vpn':
         observation = dict(vpn='down', dongle='unknown', collector='unknown')
@@ -123,13 +176,18 @@ CONTROLS = r"""(() => {
       el: ['Ροή ενέργειας', 'Δίκτυο και ηλιακά φορτίζουν την μπαταρία · δίκτυο προς σπίτι', 'Δίκτυο προς μπαταρία · ηλιακά προς σπίτι', 'Μόνο δίκτυο για σπίτι και μπαταρία', 'Μόνο ηλιακά για σπίτι και μπαταρία'],
       ru: ['Потоки энергии', 'Сеть и солнце заряжают батарею · дом питается от сети', 'Сеть заряжает батарею · дом питается от солнца', 'Только сеть питает дом и заряжает батарею', 'Только солнце питает дом и заряжает батарею'],
     };
+    const bridgeLabels = {
+      en: ['Power flow', 'PV charges the battery', 'Grid and solar charge together', 'Solar and battery supply the house', 'Inverter power unavailable'],
+      el: ['Ροή ενέργειας', 'Φόρτιση από τα φωτοβολταϊκά', 'Φόρτιση από δίκτυο και φωτοβολταϊκά', 'Τροφοδοσία σπιτιού από φωτοβολταϊκά και μπαταρία', 'Χωρίς μέτρηση ισχύος αντιστροφέα'],
+      ru: ['Поток энергии', 'Батарея заряжается от солнца', 'Зарядка от сети и солнца', 'Дом питается от солнца и батареи', 'Нет показаний мощности инвертора'],
+    };
     select.value = scenario;
     function translate() {
       const l = labels[document.documentElement.lang] || labels.en;
       document.querySelector('#preview-caption').textContent = l[0];
-      const choices = defaultState === 'shared-charge'
-        ? flowLabels[document.documentElement.lang] || flowLabels.en
-        : l.slice(1);
+      const scenarioLabels = defaultState === 'pv-priority' ? bridgeLabels : flowLabels;
+      const choices = ['pv-priority', 'shared-charge'].includes(defaultState)
+        ? scenarioLabels[document.documentElement.lang] || scenarioLabels.en : l.slice(1);
       document.querySelector('label[for=preview-state]').textContent = choices[0];
       [...select.options].forEach((option, i) => { option.textContent = choices[i + 1]; });
     }
@@ -212,6 +270,8 @@ class Preview(BaseHTTPRequestHandler):
             options = ''.join(f'<option value="{state}">{state}</option>' for state in self.scenarios)
             toolbar = '<aside id="connection-preview"><strong id="preview-caption"></strong><label for="preview-state"></label><select id="preview-state">' + options + '</select></aside>'
             html = html.replace('<body class="overview">', '<body class="overview">' + toolbar)
+            if '/bridge-history' in self.history_links:
+                html = html.replace('href="history.html"', 'href="/bridge-history"')
             html = re.sub(r'<script src="collector-control\.js[^>]+></script>', '', html)
             html = html.replace('<button id="restart-dongle"', '<button hidden disabled id="restart-dongle"')
             body = html.encode('utf-8')
@@ -228,11 +288,16 @@ if __name__ == '__main__':
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument('--flows', action='store_true', help='Show live power-flow scenarios')
     modes.add_argument('--grid-history', action='store_true', help='Compare aggregate-only and split grid history')
+    modes.add_argument('--bridge', action='store_true', help='Show signed inverter power estimates on Overview and History')
     args = parser.parse_args()
     if args.flows:
         Preview.scenarios = tuple(FLOW_SCENARIOS)
         Preview.default_state = 'shared-charge'
     if args.grid_history:
         Preview.history_fixtures, Preview.history_links = grid_history_preview(datetime.now(ATHENS))
+    if args.bridge:
+        Preview.scenarios = tuple(BRIDGE_SCENARIOS)
+        Preview.default_state = 'pv-priority'
+        Preview.history_fixtures, Preview.history_links = bridge_history_preview(datetime.now(ATHENS))
     print(f'Local synthetic preview: http://127.0.0.1:{args.port}/', flush=True)
     ThreadingHTTPServer(('127.0.0.1', args.port), Preview).serve_forever()

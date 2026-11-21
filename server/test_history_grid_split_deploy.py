@@ -34,6 +34,46 @@ def initialize_history(root):
 
 
 class HistoryGridReleaseTests(unittest.TestCase):
+    def test_bridge_release_limits_and_live_evidence(self):
+        self.assertEqual(set(RELEASE.BRIDGE.files), {
+            'server/export_energy.py', 'server/history_store.py', 'server/energy_summary.py',
+            'public/app.js', 'public/history.js', 'public/power-history.js', 'public/index.html', 'public/history.html'})
+        def readings(**changes):
+            values = dict(grid=720, bridge=-68, load=662, battery=2964, pv=3125, grid_house=652, grid_battery=0)
+            values.update(changes)
+            return dict(status='partial', updated_at=125, values=values)
+        self.assertTrue(RELEASE.usable_bridge(readings(), 120, 140))
+        self.assertTrue(RELEASE.usable_bridge(readings(grid=4650, bridge=-2900, load=1675, battery=5480,
+                                                     pv=2960, grid_house=1675, grid_battery=2520), 120, 140))
+        self.assertFalse(RELEASE.usable_bridge(readings(bridge=None), 120, 140))
+        self.assertFalse(RELEASE.usable_bridge(readings(), 130, 140))
+        with self.assertRaisesRegex(RuntimeError, 'exceed'):
+            RELEASE.usable_bridge(readings(grid_battery=68), 120, 140)
+
+    def test_bridge_verifier_requires_new_method_minute_and_fresh_live_split(self):
+        seen = []
+        def origin(host, route):
+            nth = seen.count((host, route))
+            seen.append((host, route))
+            if route == '/history/index.json':
+                doc = {'updated_at': 183, 'energy_summary': {'totals': {
+                    branch: {'seconds': 10} for branch in RELEASE.BRANCHES}}}
+            elif route == '/api/energy':
+                doc = dict(updated_at=183, status='live', values=dict(
+                    grid=720, bridge=-68 if nth >= 2 else None, load=662, battery=2964, pv=3125,
+                    grid_house=652, grid_battery=0))
+            else:
+                p = point(180, 652, 0)
+                if nth >= 1:
+                    p['values']['solar_house'] = 0
+                doc = dict(day='1970-01-01', points=[p])
+            return 200, {'etag':'x', 'content-type':'application/json'}, json.dumps(doc)
+        with patch.object(RELEASE.BASE, 'origin', origin), patch.object(RELEASE.BASE, 'check_headers'), \
+                patch.object(RELEASE.time, 'time', return_value=184), patch.object(RELEASE.time, 'sleep'):
+            RELEASE.verify_recording(121, bridge=True)
+        for host in RELEASE.BASE.HOSTS:
+            self.assertEqual(seen.count((host, '/api/energy')), 3)
+
     def test_only_recorded_finite_watts_qualify(self):
         for house, battery in ((0, 0), (15, 0), (0, 24), (8.5, 12.5)):
             day = {'points': [point(60, house, battery)]}

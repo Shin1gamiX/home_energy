@@ -39,7 +39,7 @@ def split_house_sources(values):
     return {'grid': grid, 'solar': min(pv - solar_charging, load - grid - discharge), 'battery': discharge}
 
 
-def summarize_points(points, cutoff, split_from=None):
+def summarize_points(points, cutoff, split_from=None, bridge_from=None):
     """Integrate each distinct minute once, clipping the newest minute at cutoff."""
     totals = empty_totals()
     minutes = {row['t']: row for row in points if finite(row.get('t'))}
@@ -64,7 +64,13 @@ def summarize_points(points, cutoff, split_from=None):
                 continue
             totals[key]['kwh'] += watts * seconds / 3_600_000
             totals[key]['seconds'] += seconds
-        if (split_from is not None and stamp >= split_from) or any(key in values for key in GRID_BRANCHES):
+        if 'solar_house' in values or (bridge_from is not None and stamp >= bridge_from):
+            # The exporter calculated this from simultaneous source readings.
+            # Reconstructing it from independently averaged fields can invent a flow.
+            watts = values.get('solar_house')
+            if not finite(watts) or watts < 0:
+                continue
+        elif (split_from is not None and stamp >= split_from) or any(key in values for key in GRID_BRANCHES):
             sources = split_house_sources(values)
             if sources is None:
                 continue
@@ -111,7 +117,7 @@ def combine_days(days, cutoff):
     return {'version': SUMMARY_VERSION, 'from': first, 'to': cutoff, 'totals': totals, 'months': rows}
 
 
-def update_summary(db, days, day, cutoff, previous_stamp=None, split_from=None):
+def update_summary(db, days, day, cutoff, previous_stamp=None, split_from=None, bridge_from=None):
     """Backfill derived caches once; subsequently recalculate only affected days.
 
     On a day rollover the last observed day's final minute becomes complete,
@@ -132,7 +138,7 @@ def update_summary(db, days, day, cutoff, previous_stamp=None, split_from=None):
             point = points.setdefault(minute, {'t': minute, 'values': {}})
             if finite(total) and finite(count) and count > 0:
                 point['values'][metric] = total / count
-        summary = summarize_points(points.values(), cutoff, split_from)
+        summary = summarize_points(points.values(), cutoff, split_from, bridge_from)
         db.execute('INSERT OR REPLACE INTO energy_daily_summary VALUES (?,?,?,?)',
                    (value, SUMMARY_VERSION, summary['from'], json.dumps(summary['totals'], allow_nan=False)))
     available = set(days)

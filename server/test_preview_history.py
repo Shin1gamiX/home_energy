@@ -11,7 +11,24 @@ from datetime import datetime, timedelta
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
+from preview_connection import bridge_history_preview
 from preview_history import ATHENS, CACHEABLE_ASSETS, Preview, preview_reports
+
+
+class BridgePreviewTests(unittest.TestCase):
+    def test_grid_destinations_and_missing_half_hour_in_local_preview(self):
+        today = datetime(2026, 11, 21, 12, tzinfo=ATHENS)
+        bodies, links = bridge_history_preview(today)
+        index = json.loads(bodies['/history/index.json'])
+        self.assertEqual(index['energy_summary']['trends']['completed_before'], '2026-11-21')
+        self.assertIn('metric=grid', links['/bridge-history'])
+        points = json.loads(bodies['/history/2026-11-20.json'])['points']
+        observed = [(points[i]['values']['grid'], points[i]['values'].get('grid_house'),
+                     points[i]['values'].get('grid_battery')) for i in (0, 30, 60, 90)]
+        self.assertEqual(observed, [(720, 652, 0), (4650, 1675, 2520), (400, 380, 0), (720, None, None)])
+        earlier = json.loads(bodies['/history/2026-11-19.json'])['points'][0]['values']
+        self.assertNotIn('solar_house', earlier)
+        self.assertEqual((earlier['grid_house'], earlier['grid_battery']), (0, 720))
 
 
 class QuietPreview(Preview):

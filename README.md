@@ -82,6 +82,12 @@ Open `http://127.0.0.1:8766/history.html` and select **All time**. Run only one 
 The same helper provides synthetic Energy insights on Overview. These are design
 fixtures, not real observations or a running AI service.
 
+To preview grid routing from signed inverter power, run
+`python3 -B server/preview_connection.py --bridge --port 8777`. Open
+`http://127.0.0.1:8777/` to switch between power-flow scenarios.
+`/bridge-history` shows the same scenarios as four consecutive half-hours.
+`/previous-method` shows an older sample recorded using EyeBond's destination estimates.
+
 ## Checks
 
 ```sh
@@ -117,7 +123,7 @@ These are manual preparation steps, not an automated installer. Review examples 
 1. Place `index.html`, `styles.css`, `app.js`, `history.html`, `history.css`, `history.js`, `history-cache.js`, `history-calendar.js`, `404.html`, `404.css`, `404.js`, `theme.js` and `theme.css` in `/var/www/homeenergy/public/`. The optional restart dialog has separate [deployment instructions](docs/CONTROL.md).
 2. Place `server/export_energy.py`, `server/history_store.py` and `server/energy_summary.py` in `/var/www/homeenergy/server/`.
 3. Create `/var/www/homeenergy/runtime/`, writable by a dedicated exporter account, e.g. `homeenergy`. Keep scripts and public source non-writable by that account where practical.
-4. Set the environment values below and verify every entity suffix in `FIELDS`, plus `grid_to_battery_power`, `inverter_time` and `operating_mode`.
+4. Set the environment values below and verify the entity suffixes in `FIELDS`, plus `inverter_time` and `operating_mode`. For grid destinations, check that Home Assistant Recorder receives signed `grid_power` and **Inverter Power** (`inverter_power`) in watts. On this ANENJI model EyeBond prefers register 344 for Inverter Power. The separate Inverter Charging Power entity serves a different purpose.
 5. Give the exporter read/traverse access to the Recorder database and required SQLite WAL/shared-memory files and directories. Keep the source database private. Read-only WAL access can require existing readable sidecar files; test under the service account rather than granting broad write access or copying only a live `.db` file.
 6. Adapt [the systemd example](deploy/homeenergy.service.example), install it as `homeenergy.service`, reload systemd and start it. Inspect service logs and generated JSON before enabling public access.
 7. Adapt [the Nginx example](deploy/nginx.conf.example) for your hostname and existing certificate. Validate with `nginx -t` before reloading. If using a CDN/proxy, ensure HTTPS to the origin and bypass caching for live/history JSON.
@@ -215,7 +221,7 @@ Start with this README and [ARCHITECTURE.md](docs/ARCHITECTURE.md), then inspect
 
 History's **All time** option shows recorded Solar generated, Grid consumed,
 House usage, Battery supplied, Battery charged and Solar to house in kWh.
-Grid → House and Grid → Battery show the two destinations included in Grid consumed.
+Grid → House and Grid → Battery show the portions of import that can be attributed to each destination. Their sum can be smaller than Grid consumed. Signed inverter power indicates the direction of net conversion. During charging, the estimator attributes power to grid charging only to the extent that measured solar generation falls short of battery charging demand.
 Each destination has its own recording duration, beginning when that reading
 became available. Earlier dates have no destination breakdown. The view includes the recording
 date span, coverage for each reading, monthly totals and a grand total. Select a
@@ -268,9 +274,10 @@ at the first observed report; precision is limited by polling. A report remains
 valid for at most 90 seconds, then the timeline shows No data. Older history is
 labelled Mode not recorded rather than reconstructed as exact transitions.
 
-New timeline intervals use Grid → House to identify grid supply to the house.
-For example, a grid charger drawing 1,000 W while solar supplies an 800 W
-house appears as Solar. House usage still comes from the inverter's load reading.
+New timeline intervals use the signed inverter power and estimated house-bound
+flows. For example, when the grid supplies the house and the available PV can
+cover the battery charging demand, grid import alone does not start a Grid → Battery
+animation or mark the house as solar-powered. House usage comes from the inverter's load reading.
 Sources count as active above the larger of 20 W and 2% of house load.
 Multiple active sources mean Mixed. A missing house grid reading makes the
 source unknown. Previously recorded intervals retain their original labels.

@@ -12,14 +12,20 @@ window.energyFlowState = (values, mode) => {
     : !(key in values) && values.grid === 0 ? 0 : null;
   const houseImport = gridBranch('grid_house');
   const chargingImport = gridBranch('grid_battery');
+  const bridgeRouting = Object.hasOwn(values, 'bridge');
   const load = valid('load') ? Math.max(0, values.load) : 0;
   const pv = valid('pv') ? Math.max(0, values.pv) : 0;
   const gridHouse = Math.min(houseImport ?? 0, load);
-  const batteryHouse = discharging ? Math.min(-values.battery, load - gridHouse) : 0;
+  const routeValue = key => valid(key) ? Math.max(0, values[key]) : 0;
+  const batteryHouse = bridgeRouting ? routeValue('battery_house')
+    : discharging ? Math.min(-values.battery, load - gridHouse) : 0;
   const gridBattery = charging ? Math.min(chargingImport ?? 0, values.battery) : 0;
-  const solarBattery = charging && chargingImport !== null ? Math.min(pv, values.battery - gridBattery) : 0;
-  const houseSourcesKnown = houseImport !== null && valid('load') && valid('pv') && valid('battery');
-  const solarHouse = houseSourcesKnown ? Math.min(pv - solarBattery, load - gridHouse - batteryHouse) : 0;
+  const solarBattery = bridgeRouting ? routeValue('solar_battery')
+    : charging && chargingImport !== null ? Math.min(pv, values.battery - gridBattery) : 0;
+  const houseSourcesKnown = houseImport !== null && valid('load') && (bridgeRouting
+    ? valid('battery_house') && valid('solar_house') : valid('pv') && valid('battery'));
+  const solarHouse = bridgeRouting ? routeValue('solar_house')
+    : houseSourcesKnown ? Math.min(pv - solarBattery, load - gridHouse - batteryHouse) : 0;
   const routeWatts = { gridHouse, gridBattery, solarHouse, batteryHouse, solarBattery };
   return { batteryState, batteryLabel: !valid('battery') ? 'No report' : charging ? 'Charging' : discharging ? 'Discharging' : waiting ? 'Waiting to charge' : 'Standby',
     houseSourcesKnown, routeWatts,
@@ -537,7 +543,10 @@ window.energyI18n = (() => {
       'Daily summary': 'Итоги дня', 'Weekly summary': 'Итоги недели', 'Monthly summary': 'Итоги месяца',
       'Solar generated': 'Солнечная генерация', 'Grid consumed': 'Энергия из сети', 'House usage': 'Потребление дома', 'Battery supplied': 'Энергия от батареи', 'Solar to house': 'Солнечная энергия для дома',
       'Grid → House': 'Сеть → Дом', 'Grid → Battery': 'Сеть → Батарея',
-      'Grid consumed includes both destinations. Earlier readings have no grid breakdown.': 'Общий расход из сети включает питание дома и зарядку батареи. В более ранних записях эти потоки не разделены.',
+      'Grid destinations are estimates. Total import can include inverter losses. Earlier readings retain their original estimates.': 'Распределение энергии из сети рассчитано приблизительно. Общее потребление из сети может включать потери инвертора. Для прежних записей сохранены исходные оценки.',
+      'Grid import': 'Из сети',
+      'Flows estimated from inverter and solar power. Total import may include losses.': 'Потоки рассчитаны по мощности инвертора и солнечных панелей. Общее потребление из сети может включать потери.',
+      'Grid flow breakdown incomplete.': 'Недостаточно данных для полного расчёта потоков из сети.',
       'Battery charged': 'Энергия в батарею', 'Not available': 'Недоступно',
       'Battery charged: energy into the battery (solar or grid), not remaining capacity.': 'Энергия в батарею — поступившая от солнца или сети энергия, а не оставшийся заряд.',
       '{duration} recorded': 'Записано {duration}', 'Estimated from recorded readings only; missing periods are excluded.': 'Оценка по записанным показаниям; периоды без данных не учитываются.',
@@ -647,7 +656,10 @@ window.energyI18n = (() => {
       'Daily summary': 'Ημερήσια σύνοψη', 'Weekly summary': 'Εβδομαδιαία σύνοψη', 'Monthly summary': 'Μηνιαία σύνοψη',
       'Solar generated': 'Ηλιακή παραγωγή', 'Grid consumed': 'Ενέργεια από το δίκτυο', 'House usage': 'Κατανάλωση σπιτιού', 'Battery supplied': 'Ενέργεια από μπαταρία', 'Solar to house': 'Ηλιακή ενέργεια στο σπίτι',
       'Grid → House': 'Δίκτυο → Σπίτι', 'Grid → Battery': 'Δίκτυο → Μπαταρία',
-      'Grid consumed includes both destinations. Earlier readings have no grid breakdown.': 'Η συνολική ενέργεια από το δίκτυο περιλαμβάνει την τροφοδοσία του σπιτιού και τη φόρτιση της μπαταρίας. Στις παλαιότερες μετρήσεις δεν υπάρχει διαχωρισμός.',
+      'Grid destinations are estimates. Total import can include inverter losses. Earlier readings retain their original estimates.': 'Η κατανομή της ενέργειας από το δίκτυο είναι εκτίμηση. Η συνολική απορρόφηση μπορεί να περιλαμβάνει απώλειες του αντιστροφέα. Οι παλαιότερες καταγραφές διατηρούν τις αρχικές τους εκτιμήσεις.',
+      'Grid import': 'Από το δίκτυο',
+      'Flows estimated from inverter and solar power. Total import may include losses.': 'Οι ροές εκτιμώνται από την ισχύ του αντιστροφέα και των φωτοβολταϊκών. Η συνολική απορρόφηση μπορεί να περιλαμβάνει απώλειες.',
+      'Grid flow breakdown incomplete.': 'Ανεπαρκή δεδομένα για την πλήρη κατανομή της ισχύος από το δίκτυο.',
       'Battery charged': 'Ενέργεια προς μπαταρία', 'Not available': 'Μη διαθέσιμο',
       'Battery charged: energy into the battery (solar or grid), not remaining capacity.': 'Ενέργεια προς μπαταρία: ενέργεια φόρτισης από τον ήλιο ή το δίκτυο, όχι η υπολειπόμενη χωρητικότητα.',
       '{duration} recorded': '{duration} καταγραφής', 'Estimated from recorded readings only; missing periods are excluded.': 'Εκτίμηση από τις καταγεγραμμένες μετρήσεις· τα διαστήματα χωρίς δεδομένα εξαιρούνται.',
@@ -1016,7 +1028,9 @@ function render(sample) {
     current.title = t(`PV${channel} current`);
   }
   document.querySelectorAll('#charge-bar, .scene-charge-bar').forEach(element => { element.style.width = `${Math.max(0, Math.min(100, sample.soc ?? 0))}%`; });
-  document.querySelector('#grid-state').textContent = t(Number.isFinite(values.grid) ? 'Estimated' : 'Estimate unavailable');
+  const gridDetailsKnown = Number.isFinite(values.grid_house) && Number.isFinite(values.grid_battery);
+  document.querySelector('#grid-state').textContent = t(!gridDetailsKnown ? 'Grid flow breakdown incomplete.'
+    : Object.hasOwn(values, 'bridge') ? 'Flows estimated from inverter and solar power. Total import may include losses.' : 'Estimated flow');
   document.querySelectorAll('.metric:not(.battery) .meter').forEach(element => { element.hidden = true; });
   flowAnimation.setState(state);
   if (demo) {
@@ -1058,8 +1072,10 @@ function updateStatus() {
     });
   }
   document.body.dataset.connection = status;
-  document.body.classList.toggle('paused', status !== 'live');
-  flowAnimation.setEnabled(status === 'live');
+  // A fresh bridge-era snapshot identifies each supported route even if another is unknown.
+  const animate = model.fresh && displayed === latest && (status === 'live' || Object.hasOwn(latest.values, 'bridge'));
+  document.body.classList.toggle('paused', !animate);
+  flowAnimation.setEnabled(animate);
   document.querySelector('.demo').lastChild.textContent = ` ${t(labels[status])}`;
   document.querySelector('#scene-status').textContent = t(labels[status]);
   document.querySelector('.demo').style.display = 'none';

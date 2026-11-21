@@ -65,6 +65,21 @@ assert.equal(total({ ...gridCharge, grid_house: null }).seconds, 0, 'Unknown spl
 assert.equal(total({ ...legacyCharge, grid_house: null }).seconds, 0, 'A marked new minute never gets the old assumption');
 assert.equal(total({ ...gridCharge, grid_house: 200, battery: -300 }).kwh, 300 / 60000);
 assert.equal(energyTotals([row(0, legacyCharge)], 0, 60, 60).grid_battery.seconds, 0);
+const bridgeCharge = { ...gridCharge, solar_house: 0 };
+assert.equal(total(bridgeCharge).kwh, 0, 'A real zero from the inverter bridge remains zero');
+assert.equal(total(bridgeCharge).seconds, 60);
+assert.equal(total({ solar_house: 150 }).kwh, 150 / 60000, 'Use the estimate made before minute averaging');
+for (const unknown of [null, NaN, -1]) {
+  assert.equal(total({ ...gridCharge, solar_house: unknown }).seconds, 0, 'Missing route has no coverage');
+}
+const samples = [row(0, gridCharge), row(60, bridgeCharge),
+  row(120, { ...gridCharge, grid_house: null, grid_battery: null, solar_house: null })];
+const mixedMethods = energyTotals(samples, 0, 180, 180);
+assert.equal(mixedMethods.solar_to_house.kwh, 800 / 60000);
+assert.equal(mixedMethods.solar_to_house.seconds, 120);
+assert.equal(mixedMethods.grid.seconds, 180);
+assert.equal(mixedMethods.grid_house.seconds, 120);
+assert.equal(mixedMethods.grid_battery.seconds, 120);
 console.log('History energy regression checks passed.');
 const historyCutoffs = readFunction('historyCutoffs');
 const view = {from: 0, to: 86400};
