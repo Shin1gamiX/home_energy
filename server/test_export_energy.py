@@ -4,7 +4,7 @@ import sqlite3
 from tempfile import TemporaryDirectory
 import unittest
 from export_energy import (FIELDS, CHANNEL_FIELDS, FLOW_OBSERVATIONS_ENTITY, SNAPSHOT_KEYS, PREFIX, PV_PREFIX,
-                           estimate_grid_split, estimate_house_sources, snapshot)
+                           ChargingDiscrepancy, estimate_charging, estimate_grid_house, estimate_house_sources, snapshot)
 from history_store import record
 
 
@@ -23,6 +23,8 @@ class SnapshotTests(unittest.TestCase):
             self.db.execute('INSERT INTO states VALUES(?,?,?,?)', (index, value, 990, index))
         self.db.execute('INSERT INTO states_meta VALUES(101,?)', (PREFIX + 'inverter_time',))
         self.db.execute("INSERT INTO states VALUES(101,'17:00:00',990,NULL)")
+        self.db.execute('INSERT INTO states_meta VALUES(301,?)', (PREFIX + 'power_flow_status',))
+        self.db.execute("INSERT INTO states VALUES(301,'853',990,NULL)")
 
     def field_id(self, key):
         return list(FIELDS).index(key) + 1
@@ -99,6 +101,7 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual(snapshot(self.db, 1000)['values']['battery_house'], 37)
 
     def test_reference_cycle_records_split_and_independent_import(self):
+        self.db.execute("UPDATE states SET state='597' WHERE metadata_id=301")
         self.set_readings(grid=720, bridge=-68, load=662, battery=2964, pv=3125)
         payload = snapshot(self.db, 1000)
         values = payload['values']
@@ -129,12 +132,135 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual((values['solar_house'], values['battery_house']), (412, 250))
 
     def test_independent_zeros_and_missing_inputs(self):
-        self.assertEqual(estimate_grid_split(990, None, 0, 1000, 0), (0, None))
-        self.assertEqual(estimate_grid_split(990, None, 800, -155, 0), (None, 0))
-        self.assertEqual(estimate_grid_split(100, -300, 0, 900, 0), (0, 100))
-        self.assertEqual(estimate_grid_split(800, -300, 600, None, None), (500, None))
-        self.assertEqual(estimate_grid_split(None, 900, 600, None, None), (0, 0))
+        for grid, bridge, load, battery, pv, result in (
+            (990, None, 0, 1000, 0, (0, None)), (990, None, 800, -155, 0, (None, 0)),
+            (100, -300, 0, 900, 0, (0, 100)), (800, -300, 600, None, None, (500, None)),
+            (None, 900, 600, None, None, (0, 0)),
+        ):
+            with self.subTest(grid=grid, battery=battery):
+                self.assertEqual((estimate_grid_house(grid, bridge, load),
+                                  estimate_charging(grid, bridge, battery, pv, True, True)[0]), result)
         self.assertEqual(estimate_house_sources(None, None, None, 710, None, None), (None, None))
+
+    def test_pv_only_uses_actual_status_despite_grid_import_and_inward_bridge(self):
+        self.set_readings(grid=1037, bridge=-72, load=992, battery=1046, pv=996)
+        self.db.execute("UPDATE states SET state='597' WHERE metadata_id=301")
+        payload = snapshot(self.db, 1000)
+        self.assertEqual(payload['charging_routing'], {'mains_active': False, 'solar_active': True,
+                                                       'discrepancy_w': 50, 'persistent': False})
+        values = payload['values']
+        self.assertEqual((values['grid'], values['grid_house'], values['grid_battery'], values['solar_battery']),
+                         (1037, 965, 0, 996))
+        self.assertEqual((values['solar_house'], values['battery_house']), (0, 0))
+
+    def test_charging_modes_and_bounds(self):
+        cases = [
+            # Both flags, independently reported charger watts, enough PV to cover all demand.
+            (1000, -600, 700, 900, True, True, 200, (200, 500, 0)),
+            (1000, -600, 700, 900, True, True, None, (None, None, 0)),
+            (1000, -600, 700, 900, True, True, 2000, (600, 100, 0)),
+            (1500, -1200, 1300, 500, True, True, 100, (100, 500, 700)),
+            (1000, -600, 700, 120, True, True, None, (580, 120, 0)),
+            (1000, -600, 700, 900, True, False, None, (600, 0, 100)),
+            (1000, -600, 700, 900, False, False, None, (0, 0, 700)),
+            (1000, -600, 700, 900, None, None, None, (None, None, None)),
+            (0, None, 700, 900, None, None, None, (0, 700, None)),
+            (None, 150, 700, 900, None, None, None, (0, 700, None)),
+            (1000, -600, 700, 0, None, None, None, (None, 0, None)),
+            (1000, -600, -25, 900, None, None, None, (0, 0, None)),
+            (1000, None, 700, 900, False, True, None, (0, 700, 0)),
+            (1000, -600, 700, None, True, False, None, (600, 0, 100)),
+        ]
+        for *inputs, result in cases:
+            with self.subTest(inputs=inputs):
+                self.assertEqual(estimate_charging(*inputs), result)
+
+    def test_unavailable_or_invalid_charging_status_cannot_attribute_grid_watts(self):
+        self.set_readings(grid=1000, bridge=-600, load=400, battery=700, pv=100)
+        for raw in ('unknown', 'unavailable', '-1', '65536', '597.5', 'NaN', 'Infinity'):
+            with self.subTest(raw=raw):
+                self.db.execute("UPDATE states SET state=? WHERE metadata_id=301", (raw,))
+                payload = snapshot(self.db, 1000)
+                self.assertEqual(payload['charging_routing'], dict(mains_active=None, solar_active=None,
+                                                                    discrepancy_w=None, persistent=False))
+                self.assertEqual(payload['values']['grid_house'], 400)
+                self.assertIsNone(payload['values']['grid_battery'])
+        self.db.execute("UPDATE states SET state='597',attributes_id=? WHERE metadata_id=301", (self.field_id('pv'),))
+        self.assertIsNone(snapshot(self.db, 1000)['charging_routing']['mains_active'])
+
+    def test_charging_status_and_charger_watts_have_their_own_freshness_evidence(self):
+        self.set_readings(grid=1000, bridge=-600, load=400, battery=700, pv=900)
+        self.db.execute("UPDATE states SET last_updated_ts=400 WHERE metadata_id=301")
+        self.db.execute('INSERT INTO states_meta VALUES(302,?)', (PREFIX + 'inverter_charging_power',))
+        self.db.execute("INSERT INTO states VALUES(302,'200',420,?)", (self.field_id('grid'),))
+        self.assertIsNone(snapshot(self.db, 1000)['values']['grid_battery'])
+        status = {PREFIX + 'power_flow_status': ['853', 400, 990]}
+        self.add_flow_helper({'charging_reports': status})
+        self.assertIsNone(snapshot(self.db, 1000)['values']['grid_battery'])
+        status[PREFIX + 'inverter_charging_power'] = ['200', 420, 992]
+        self.db.execute('UPDATE state_attributes SET shared_attrs=? WHERE attributes_id=201',
+                        (json.dumps({'charging_reports': status}),))
+        result = snapshot(self.db, 1000)
+        self.assertEqual((result['values']['grid_battery'], result['values']['solar_battery']), (200, 500))
+        self.db.execute("UPDATE states SET state='unavailable',last_updated_ts=995 WHERE metadata_id=301")
+        self.assertIsNone(snapshot(self.db, 1000)['values']['grid_battery'])
+
+    def test_discrepancy_requires_continuous_independent_reports_for_two_minutes(self):
+        self.set_readings(grid=1100, bridge=-900, load=200, battery=1500, pv=1350)
+        self.db.execute("UPDATE states SET state='597' WHERE metadata_id=301")
+        tracker = ChargingDiscrepancy()
+
+        def sample(now, advance=True):
+            if advance:
+                self.db.execute("UPDATE states SET last_updated_ts=?", (now,))
+            return snapshot(self.db, now, tracker)['charging_routing']
+
+        for stamp in (1000, 1030, 1060, 1090, 1119):
+            self.assertFalse(sample(stamp)['persistent'])
+        self.assertFalse(sample(1120, advance=False)['persistent'])
+        self.assertTrue(sample(1120)['persistent'])
+        self.assertTrue(sample(1125, advance=False)['persistent'])
+        self.set_readings(battery=2000, pv=1801)  # Above 150 W, just below 10%.
+        self.assertFalse(sample(1130)['persistent'])
+        self.set_readings(battery=2000, pv=1800)
+        for stamp in (1140, 1180, 1220):
+            self.assertFalse(sample(stamp)['persistent'])
+        self.assertFalse(sample(1270)['persistent'])  # 50 s gap
+        self.db.execute("UPDATE states SET state='85' WHERE metadata_id=301")  # source regime changed
+        self.assertFalse(sample(1310)['persistent'])
+        self.assertFalse(sample(1350)['persistent'])
+        self.db.execute("UPDATE states SET state='unavailable' WHERE metadata_id=301")
+        self.assertIsNone(sample(1390)['discrepancy_w'])
+        self.db.execute("UPDATE states SET state='85' WHERE metadata_id=301")
+        for stamp in (1400, 1440, 1480):
+            self.assertFalse(sample(stamp)['persistent'])
+        self.assertTrue(sample(1520)['persistent'])
+        self.assertFalse(snapshot(self.db, 1520, ChargingDiscrepancy())['charging_routing']['persistent'])
+        self.assertFalse(sample(1620, advance=False)['persistent'])
+
+    def test_heartbeat_alone_cannot_extend_discrepancy(self):
+        self.set_readings(grid=1100, bridge=-900, load=200, battery=1500, pv=1000)
+        self.db.execute("UPDATE states SET state='597' WHERE metadata_id=301")
+        tracker = ChargingDiscrepancy()
+        for stamp in range(990, 1200, 10):
+            self.db.execute("UPDATE states SET last_updated_ts=? WHERE metadata_id=101", (stamp,))
+            self.assertFalse(snapshot(self.db, stamp, tracker)['charging_routing']['persistent'])
+
+    def test_persistent_dual_source_discrepancy_requires_repeated_charger_observations(self):
+        self.set_readings(grid=1500, bridge=-1200, load=300, battery=1300, pv=500)
+        self.db.execute('INSERT INTO states_meta VALUES(302,?)', (PREFIX + 'inverter_charging_power',))
+        self.db.execute("INSERT INTO states VALUES(302,'100',990,?)", (self.field_id('grid'),))
+        tracker = ChargingDiscrepancy()
+        for stamp in range(990, 1111, 30):
+            self.db.execute('UPDATE states SET last_updated_ts=? WHERE metadata_id<>302', (stamp,))
+            state = snapshot(self.db, stamp, tracker)['charging_routing']
+            self.assertEqual(state['discrepancy_w'], 700 if stamp <= 1080 else 0)
+            self.assertFalse(state['persistent'])
+        for stamp in range(1140, 1261, 30):
+            self.db.execute('UPDATE states SET last_updated_ts=?', (stamp,))
+            state = snapshot(self.db, stamp, tracker)['charging_routing']
+            self.assertEqual(state['discrepancy_w'], 700)
+            self.assertEqual(state['persistent'], stamp == 1260)
 
     def test_channels_do_not_double_count_total(self):
         for key, value in [('pv', 3000), ('pv1_power', 1800), ('pv2_power', 1200)]:

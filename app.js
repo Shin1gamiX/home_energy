@@ -1,5 +1,5 @@
 // Pure presentation logic. Routing is estimated, not independently metered.
-window.energyFlowState = (values, mode) => {
+window.energyFlowState = (values, mode, chargingRouting) => {
   const positive = value => Number.isFinite(value) && value >= 0.5;
   const valid = key => Number.isFinite(values[key]);
   const charging = positive(values.battery);
@@ -11,8 +11,14 @@ window.energyFlowState = (values, mode) => {
   const gridBranch = key => valid(key) && values[key] >= 0 ? values[key]
     : !(key in values) && values.grid === 0 ? 0 : null;
   const houseImport = gridBranch('grid_house');
-  const chargingImport = gridBranch('grid_battery');
-  const bridgeRouting = Object.hasOwn(values, 'bridge');
+  // Status-aware packets already carry the collector's estimates. Unknown status
+  // cannot support a positive charging path. A measured zero remains usable.
+  const confirmedCharge = (watts, active) => {
+    if (chargingRouting === undefined || watts === null || watts === 0 || active === true) return watts;
+    return active === false ? 0 : null;
+  };
+  const chargingImport = confirmedCharge(gridBranch('grid_battery'), chargingRouting?.mains_active);
+  const bridgeRouting = chargingRouting !== undefined || Object.hasOwn(values, 'bridge');
   const load = valid('load') ? Math.max(0, values.load) : 0;
   const pv = valid('pv') ? Math.max(0, values.pv) : 0;
   const gridHouse = Math.min(houseImport ?? 0, load);
@@ -20,7 +26,10 @@ window.energyFlowState = (values, mode) => {
   const batteryHouse = bridgeRouting ? routeValue('battery_house')
     : discharging ? Math.min(-values.battery, load - gridHouse) : 0;
   const gridBattery = charging ? Math.min(chargingImport ?? 0, values.battery) : 0;
-  const solarBattery = bridgeRouting ? routeValue('solar_battery')
+  // Even without flags, zero import or a non-importing bridge independently rules
+  // out AC charging. Preserve the collector's positively attributed PV watts.
+  const solarSupported = chargingRouting?.solar_active ?? (charging && values.grid_battery === 0);
+  const solarBattery = bridgeRouting ? confirmedCharge(routeValue('solar_battery'), solarSupported) ?? 0
     : charging && chargingImport !== null ? Math.min(pv, values.battery - gridBattery) : 0;
   const houseSourcesKnown = houseImport !== null && valid('load') && (bridgeRouting
     ? valid('battery_house') && valid('solar_house') : valid('pv') && valid('battery'));
@@ -28,7 +37,7 @@ window.energyFlowState = (values, mode) => {
     : houseSourcesKnown ? Math.min(pv - solarBattery, load - gridHouse - batteryHouse) : 0;
   const routeWatts = { gridHouse, gridBattery, solarHouse, batteryHouse, solarBattery };
   return { batteryState, batteryLabel: !valid('battery') ? 'No report' : charging ? 'Charging' : discharging ? 'Discharging' : waiting ? 'Waiting to charge' : 'Standby',
-    houseSourcesKnown, routeWatts,
+    houseSourcesKnown, routeWatts, gridBatteryEstimate: chargingImport,
     routes: Object.fromEntries(Object.entries(routeWatts).map(([key, watts]) => [key, positive(watts)])) };
 };
 
@@ -545,6 +554,10 @@ window.energyI18n = (() => {
       'Grid → House': 'Сеть → Дом', 'Grid → Battery': 'Сеть → Батарея',
       'Grid destinations are estimates. Total import can include inverter losses. Earlier readings retain their original estimates.': 'Распределение энергии из сети рассчитано приблизительно. Общее потребление из сети может включать потери инвертора. Для прежних записей сохранены исходные оценки.',
       'Grid import': 'Из сети',
+      'Charging sources follow the inverter status. Power on each path is estimated.': 'Источники зарядки определяются по состоянию инвертора. Мощность каждого потока рассчитана приблизительно.',
+      'Charging readings disagree': 'Расхождение в показаниях зарядки',
+      'The reported sources leave about {power} of battery charging unexplained.': 'По показаниям источников не удаётся объяснить примерно {power} мощности зарядки батареи.',
+      'Flagged minutes: {count}. Largest average difference: {power} on {date} at {time} (Athens time).': 'Количество минут с расхождением: {count}. Наибольшее среднее расхождение: {power} ({date}, {time} по афинскому времени).',
       'Flows estimated from inverter and solar power. Total import may include losses.': 'Потоки рассчитаны по мощности инвертора и солнечных панелей. Общее потребление из сети может включать потери.',
       'Grid flow breakdown incomplete.': 'Недостаточно данных для полного расчёта потоков из сети.',
       'Battery charged': 'Энергия в батарею', 'Not available': 'Недоступно',
@@ -658,6 +671,10 @@ window.energyI18n = (() => {
       'Grid → House': 'Δίκτυο → Σπίτι', 'Grid → Battery': 'Δίκτυο → Μπαταρία',
       'Grid destinations are estimates. Total import can include inverter losses. Earlier readings retain their original estimates.': 'Η κατανομή της ενέργειας από το δίκτυο είναι εκτίμηση. Η συνολική απορρόφηση μπορεί να περιλαμβάνει απώλειες του αντιστροφέα. Οι παλαιότερες καταγραφές διατηρούν τις αρχικές τους εκτιμήσεις.',
       'Grid import': 'Από το δίκτυο',
+      'Charging sources follow the inverter status. Power on each path is estimated.': 'Οι πηγές φόρτισης προκύπτουν από την κατάσταση του αντιστροφέα. Η ισχύς κάθε ροής εκτιμάται.',
+      'Charging readings disagree': 'Απόκλιση στις μετρήσεις φόρτισης',
+      'The reported sources leave about {power} of battery charging unexplained.': 'Οι ενδείξεις των πηγών φόρτισης δεν εξηγούν περίπου {power} από την ισχύ φόρτισης της μπαταρίας.',
+      'Flagged minutes: {count}. Largest average difference: {power} on {date} at {time} (Athens time).': 'Λεπτά με απόκλιση: {count}. Μεγαλύτερη μέση απόκλιση: {power} στις {date}, ώρα {time} (ώρα Αθήνας).',
       'Flows estimated from inverter and solar power. Total import may include losses.': 'Οι ροές εκτιμώνται από την ισχύ του αντιστροφέα και των φωτοβολταϊκών. Η συνολική απορρόφηση μπορεί να περιλαμβάνει απώλειες.',
       'Grid flow breakdown incomplete.': 'Ανεπαρκή δεδομένα για την πλήρη κατανομή της ισχύος από το δίκτυο.',
       'Battery charged': 'Ενέργεια προς μπαταρία', 'Not available': 'Μη διαθέσιμο',
@@ -985,7 +1002,7 @@ function formatPower(watts) {
   const kilo = Math.abs(watts) >= 1000;
   return { value: new Intl.NumberFormat(window.energyI18n.locale, { maximumFractionDigits: kilo ? 2 : 0, useGrouping: false }).format(kilo ? watts / 1000 : watts), unit: kilo ? 'kW' : 'W' };
 }
-function render(sample) {
+function render(sample, chargingRouting) {
   batteryVoltageReadings.forEach(line => {
     line.title = t('Battery voltage');
     const value = Number.isFinite(sample.battery_voltage)
@@ -999,7 +1016,7 @@ function render(sample) {
   });
   // Dashboard convention: positive = charging, negative = discharging.
   const mode = demo ? sample.mode : latest?.mode;
-  const state = window.energyFlowState(sample, mode);
+  const state = window.energyFlowState(sample, mode, chargingRouting);
   const supply = window.energySupplyLabel(sample, state);
   document.querySelector('#supply-status').textContent = t('House supply · {source}', { source: t(supply) });
   document.body.dataset.activeSource = { Grid: 'grid', Solar: 'solar', Battery: 'battery' }[supply] || '';
@@ -1017,7 +1034,7 @@ function render(sample) {
     } else if (key.endsWith('_voltage') || key.endsWith('_current')) {
       element.textContent = Number.isFinite(values[key]) ? new Intl.NumberFormat(window.energyI18n.locale, { maximumFractionDigits: 1 }).format(values[key]) : '—';
     } else {
-      const power = formatPower(values[key]);
+      const power = formatPower(key === 'grid_battery' && chargingRouting !== undefined ? state.gridBatteryEstimate : values[key]);
       element.textContent = power.value;
       element.nextElementSibling.textContent = power.unit;
     }
@@ -1028,9 +1045,15 @@ function render(sample) {
     current.title = t(`PV${channel} current`);
   }
   document.querySelectorAll('#charge-bar, .scene-charge-bar').forEach(element => { element.style.width = `${Math.max(0, Math.min(100, sample.soc ?? 0))}%`; });
-  const gridDetailsKnown = Number.isFinite(values.grid_house) && Number.isFinite(values.grid_battery);
-  document.querySelector('#grid-state').textContent = t(!gridDetailsKnown ? 'Grid flow breakdown incomplete.'
-    : Object.hasOwn(values, 'bridge') ? 'Flows estimated from inverter and solar power. Total import may include losses.' : 'Estimated flow');
+  let gridDescription = 'Estimated flow';
+  if (!Number.isFinite(values.grid_house) || !Number.isFinite(values.grid_battery) || !Number.isFinite(state.gridBatteryEstimate)) {
+    gridDescription = 'Grid flow breakdown incomplete.';
+  } else if (chargingRouting !== undefined) {
+    gridDescription = 'Charging sources follow the inverter status. Power on each path is estimated.';
+  } else if (Object.hasOwn(values, 'bridge')) {
+    gridDescription = 'Flows estimated from inverter and solar power. Total import may include losses.';
+  }
+  document.querySelector('#grid-state').textContent = t(gridDescription);
   document.querySelectorAll('.metric:not(.battery) .meter').forEach(element => { element.hidden = true; });
   flowAnimation.setState(state);
   if (demo) {
@@ -1056,6 +1079,16 @@ let requestFailed = false;
 let pending = false;
 const connection = window.energyConnectionStatus;
 const connectionView = connection.create({ scene, retry: () => refresh() });
+const chargingNotice = document.querySelector('#charging-discrepancy');
+function updateChargingNotice(routing) {
+  const watts = routing?.discrepancy_w;
+  chargingNotice.hidden = routing?.persistent !== true || !Number.isFinite(watts) || watts <= 0;
+  if (chargingNotice.hidden) return;
+  const { value, unit } = formatPower(watts);
+  const detail = t('The reported sources leave about {power} of battery charging unexplained.', { power: `${value} ${unit}` });
+  const message = chargingNotice.querySelector('span');
+  if (message.textContent !== detail) message.textContent = detail;
+}
 function updateStatus() {
   const now = Date.now() / 1000;
   const model = connection.assess({ latest, requestFailed, online: navigator.onLine, now });
@@ -1064,6 +1097,7 @@ function updateStatus() {
   const communicationLost = model.lost;
   document.body.classList.toggle('communication-lost', communicationLost);
   connectionView.update(model, { now, readings: displayed, pending });
+  updateChargingNotice(model.fresh && displayed === latest ? latest?.charging_routing : null);
   if (communicationLost) {
     document.body.dataset.batteryState = 'unknown';
     document.querySelectorAll('.battery-status').forEach(element => {
@@ -1117,7 +1151,7 @@ async function refresh() {
     latest = data;
     requestFailed = false;
     displayed = connection.selectReadings(displayed, data, Date.now() / 1000);
-    render(displayed?.values || { grid: null, pv: null, soc: null, battery: null, load: null });
+    render(displayed?.values || { grid: null, pv: null, soc: null, battery: null, load: null }, displayed?.charging_routing);
   } catch {
     requestFailed = true;
   } finally {
@@ -1154,7 +1188,7 @@ if (demo) {
 }
 window.addEventListener('languagechange', () => {
   updateDate();
-  if (displayed) render(displayed.values);
+  if (displayed) render(displayed.values, displayed.charging_routing);
   else if (demo) render(samples[sampleIndex]);
   // Other Overview modules translate captions synchronously in this same event.
   if (!demo) queueMicrotask(updateStatus);

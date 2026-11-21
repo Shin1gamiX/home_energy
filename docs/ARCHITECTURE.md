@@ -80,7 +80,7 @@ this series. The live API/HA sensor is unchanged; PV1/PV2 voltage recording cont
 | --- | --- | --- |
 | `grid` | `grid_power`, clipped to import | W |
 | `bridge` | `inverter_power`, signed net inverter power | W |
-| `grid_house`, `grid_battery` | Estimated from import, signed inverter power, load, PV and battery power | W |
+| `grid_house`, `grid_battery` | Import and signed inverter power, with load and charging-source evidence as applicable | W |
 | `pv` | `pv_power` | W |
 | `battery` | `battery_power` | W |
 | `soc` | `battery_percent` | % |
@@ -95,7 +95,13 @@ this series. The live API/HA sensor is unchanged; PV1/PV2 voltage recording cont
 
 Finite numeric values and matching units are required. SOC must be 0–100. Grid import is read independently of its destinations. On the ANENJI 11 kW model, EyeBond's `inverter_power` prefers register 344 and can fall back to register 228 when the auxiliary reading is absent. Recorder exposes the resulting entity value, without the source register address. A positive value means DC → AC and a negative value means AC → DC. Confirm the sign and entity availability before enabling this method on other models.
 
-The exporter subtracts AC → DC power from import when estimating grid supply to the house. Both house load and DC → AC supply constrain that estimate. A grid charging estimate requires AC → DC flow and battery charging demand in excess of total available PV. It is capped by each of those quantities and remaining import. This solar-first attribution can understate an actual grid contribution when both sources are available. Unallocated import can include conversion consumption or timing differences. A destination without enough evidence is null unless an independent reading establishes zero.
+### Charging source estimates
+
+The exporter subtracts AC → DC power from grid import when estimating grid supply to the house. House load and DC → AC supply also constrain that estimate. Charging uses the inverter's observed `power_flow_status` bitmask. Bit 8 indicates mains charging and bit 9 indicates PV charging, counting from bit 0. When a source is off its charging branch is zero. Unavailable status leaves the split unknown unless independent readings establish zero.
+
+When both chargers are active, fresh `inverter_charging_power` helps estimate the AC share. Import, signed AC → DC flow and battery charging power cap it. PV generation and remaining battery demand cap the solar estimate. Without the AC charger reading, a shortfall in PV can establish a minimum grid contribution. If PV could cover everything and the split cannot be resolved, the collector leaves it unknown.
+
+`charging_routing` carries the two source flags, `discrepancy_w` and `persistent`. A discrepancy measures battery charging power above what the active sources can explain. The collector flags it at or above **both 150 W and 10%** of battery charging power for **120 seconds**. It uses distinct source reports, tracks the oldest contributing timestamp and resets on a source change, a subthreshold reading or an evidence gap over 45 seconds. Unallocated grid import, including converter consumption, does not by itself indicate battery charging.
 
 ## Live data lifecycle
 
@@ -113,11 +119,11 @@ When EyeBond reports the same wattage repeatedly, Home Assistant advances the en
 
 To install the template on a compatible Home Assistant version with `State.last_reported` and `default_entity_id`:
 
-1. Match the two entity prefixes in the YAML to the exporter's `ENERGY_ENTITY_PREFIX` and `ENERGY_PV_ENTITY_PREFIX`. Confirm that the seven entity IDs refer to this inverter.
+1. Match the two entity prefixes in the YAML to the exporter's `ENERGY_ENTITY_PREFIX` and `ENERGY_PV_ENTITY_PREFIX`. Confirm the seven original wattage entities and both charging entities refer to this inverter.
 2. The file is a **list of template blocks**. If there is no top-level `template:` yet, place the file at `/config/flow_observations.yaml` and add `template: !include flow_observations.yaml` to `configuration.yaml`. With an existing inline or included template list, append the block to that list. With an existing `template: !include_dir_merge_list …`, place the file once in that directory. Home Assistant searches these directories recursively, so keep backup copies outside the included tree.
 3. Validate the Home Assistant configuration and apply the template. Verify that `sensor.home_energy_flow_observations` appears, with a `reports` dictionary in Developer tools → States. If the registry assigns a different ID, resolve the conflict before enabling the collector. Check that Recorder includes this entity and its attributes. Compare two observations during steady power: the third item for the same entity should advance even while the wattage and second item stay the same.
 
-On this server, the [activation helper](../deploy/activate-flow-observations.py) validates the Home Assistant configuration and waits for two advancing report times for each sensor before switching the exporter. A first installation can use its explicit Home Assistant restart option to load the template. If the readings cannot be verified in time, the previous exporter keeps running and the helper prints the command to resume from the private backup.
+The template also captures the raw unitless `power_flow_status` and the wattage of `inverter_charging_power` in a separate `charging_reports` dictionary. Each has the same state, update-time and report-time checks. The original [activation helper](../deploy/activate-flow-observations.py) checks the seven wattage entries. A deployment of charging-status routing also needs to verify advancing entries for both charging entities.
 
 The collector continues to read Recorder through a read-only SQLite connection. The helper is private to Home Assistant and needs no API token. A change in the report times normally records one small attribute snapshot per 30-second interval in Home Assistant Recorder. Existing energy History and reports do not require migration.
 
@@ -168,6 +174,8 @@ as `grid_house: null` with no count, so it can be distinguished from a legacy
 minute with no branch fields.
 
 The next change in method has its own private boundary, `metadata.grid_bridge_from`. The presence of the `bridge` key identifies the newer exporter, even if its sensor is unavailable. For new full minutes the recorder averages the estimated destinations and `solar_house` from individual samples. A minute already containing older readings retains its previous routing inputs and calculation. Previously recorded minutes, daily totals and supply labels keep their original interpretation.
+
+`metadata.charging_routing_from` marks the first full minute using the charging flags. Any minute already started by the prior estimator keeps its recorded route averages. New full minutes distinguish measured zero from an unknown grid-to-battery estimate. Only flagged observations contribute to `values.charging_discrepancy_w` and its sample count. In the selected period, History reports the number of affected minutes and the largest flagged minute average, with its Athens time. The diagnostic contributes no energy to any total. Closed days are never backfilled.
 
 Missing values are excluded from each metric's denominator. Daily files and the index are atomically replaced individually, not as one multi-file transaction. The private store has no automatic pruning. Monitor disk growth and back it up using a SQLite-consistent method.
 

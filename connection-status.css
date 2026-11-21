@@ -1,6 +1,13 @@
 /* Overview only. Never fade measurement text to communicate a stale state. */
 .overview { --connection-amber: #80540c; --connection-tint: #faf7ef; --connection-line: #ded5bd; }
 [data-theme=dark] .overview { --connection-amber: #e6bd72; --connection-tint: #202c26; --connection-line: #53604b; }
+#charging-discrepancy:not([hidden]) {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px;
+  margin: 0 0 16px; padding: 12px 16px; background: var(--connection-tint);
+  border-inline-start: 3px solid var(--connection-amber); border-radius: 4px;
+  color: var(--theme-text); font-size: 14px; line-height: 1.5;
+}
+#charging-discrepancy strong { color: var(--connection-amber); }
 html .overview .connection-panel {
   display: block; min-width: 0; padding: 20px 24px 0; margin: 0;
   color: var(--theme-text); background: var(--connection-tint);

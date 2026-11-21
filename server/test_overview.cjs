@@ -5,7 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const context = { window: {} };
 vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../app.js'), 'utf8').split('// Shared localization')[0], context);
-const state = (values, mode = 'Off-Grid') => JSON.parse(JSON.stringify(context.window.energyFlowState(values, mode)));
+const state = (values, mode = 'Off-Grid', routing) => JSON.parse(JSON.stringify(context.window.energyFlowState(values, mode, routing)));
 const base = { grid: 0, grid_house: 0, grid_battery: 0, pv: 0, load: 500, battery: 0, soc: 20 };
 const gridToHouse = watts => ({ ...base, grid: watts, grid_house: watts });
 const active = sample => Object.entries(state(sample).routes).filter(([, on]) => on).map(([name]) => name).sort();
@@ -70,4 +70,19 @@ const inverterSupply = { pv: 1000, battery: -400, load: 800, grid: 120, grid_hou
   grid_battery: 0, bridge: 700, solar_house: 330, battery_house: 370 };
 assert.deepEqual(state(inverterSupply).routeWatts,
   { gridHouse: 100, gridBattery: 0, solarHouse: 330, batteryHouse: 370, solarBattery: 0 });
+const screenshot = { grid: 1037, grid_house: 965, grid_battery: 50, bridge: -72,
+  pv: 996, battery: 1046, load: 992, solar_house: 0, battery_house: 0, solar_battery: 996 };
+const routingState = (values, mains, solar) => state(values, 'Mains', { mains_active: mains, solar_active: solar });
+const pvOnly = routingState(screenshot, false, true);
+assert.deepEqual(pvOnly.routeWatts, { gridHouse: 965, gridBattery: 0, solarHouse: 0, batteryHouse: 0, solarBattery: 996 });
+assert.equal(pvOnly.gridBatteryEstimate, 0);
+assert.deepEqual(routingState(jointCharge, true, true).routeWatts, state(jointCharge).routeWatts);
+assert.equal(routingState(jointCharge, true, false).routes.solarBattery, false);
+const missingStatus = routingState(screenshot, null, null);
+assert.deepEqual(missingStatus.routeWatts, { gridHouse: 965, gridBattery: 0, solarHouse: 0, batteryHouse: 0, solarBattery: 0 });
+assert.equal(missingStatus.gridBatteryEstimate, null);
+assert.equal(routingState({ ...screenshot, grid_battery: 0 }, null, null).gridBatteryEstimate, 0);
+assert.equal(routingState({ ...screenshot, grid_battery: null }, null, null).routes.solarBattery, false);
+assert.equal(routingState({ ...screenshot, grid: 0, grid_battery: 0, bridge: null }, null, null).routeWatts.solarBattery, 996);
+assert.equal(routingState({ ...screenshot, grid: null, grid_battery: 0, bridge: 150 }, null, null).routeWatts.solarBattery, 996);
 console.log('Overview routing, split charging, legacy snapshots, battery states and supply labels passed.');

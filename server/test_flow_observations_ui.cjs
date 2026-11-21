@@ -87,6 +87,51 @@ async function run() {
       }
       console.log(scenario, status, motion, actual.watts);
     }
+    const snapshot = packets.recovered;
+    const notice = page.locator('#charging-discrepancy');
+    async function showCharging(routing, status = 'live') {
+      const timestamp = packet.generated_at + 1;
+      packet = { ...snapshot, updated_at: timestamp, generated_at: timestamp, status, charging_routing: routing,
+        values: { ...snapshot.values, grid: 1037, grid_house: 965, grid_battery: 50, bridge: -72,
+          pv: 996, battery: 1046, load: 992, solar_house: 0, battery_house: 0, solar_battery: 996 } };
+      await page.clock.setFixedTime(new Date(timestamp * 1000));
+      const response = page.waitForResponse(result => result.url() === origin + '/api/energy');
+      await page.evaluate(() => window.dispatchEvent(new Event('online')));
+      await (await response).finished();
+      await page.waitForFunction(time => document.querySelector('#freshness').textContent.includes(
+        new Date(time * 1000).toLocaleTimeString('en-GB', { timeZone: 'Europe/Athens' })), timestamp, { timeout: 5000 });
+    }
+    const pvOnly = { mains_active: false, solar_active: true, discrepancy_w: 50, persistent: false };
+    await showCharging(pvOnly);
+    await page.locator('[data-comet-route="solarBattery"]').waitFor({ state: 'attached' });
+    assert.equal(await notice.isVisible(), false);
+    assert.equal(await page.locator('[data-value="grid_battery"]').textContent(), '0');
+    assert.equal(await page.locator('[data-comet-route="gridBattery"]').count(), 0);
+    assert.equal(await page.locator('[data-comet-route="solarBattery"]').count(), 1);
+    assert.equal(await page.locator('[data-comet-route="gridHouse"]').count(), 1);
+    const sustained = { ...pvOnly, discrepancy_w: 420, persistent: true };
+    await showCharging({ ...sustained, persistent: false });
+    assert.equal(await notice.isVisible(), false, 'A transient mismatch leaves the notice hidden');
+    await showCharging(sustained);
+    await notice.waitFor({ state: 'visible' });
+    assert.match(await notice.textContent(), /sources leave about 420\sW/);
+    await page.setViewportSize({ width: 320, height: 720 });
+    for (const [lang, title] of [['el', 'Απόκλιση στις μετρήσεις φόρτισης'], ['ru', 'Расхождение в показаниях зарядки']]) {
+      await page.locator('#language').click();
+      await page.locator(`[data-language="${lang}"]`).click();
+      assert.match(await notice.textContent(), new RegExp(title));
+      assert.doesNotMatch(await notice.textContent(), /sources leave/);
+      assert.match(await notice.textContent(), /420\sW/);
+      assert.ok(await notice.evaluate(el => el.scrollWidth <= el.clientWidth), lang + ' notice fits a narrow screen');
+    }
+    await showCharging(sustained, 'stale');
+    assert.equal(await notice.isVisible(), false, 'Hide a saved disagreement during an outage');
+    await showCharging({ mains_active: true, solar_active: true, discrepancy_w: 0, persistent: false });
+    await page.locator('[data-comet-route="gridBattery"]').waitFor({ state: 'attached' });
+    assert.equal(await notice.isVisible(), false, 'A fresh resolved sample clears the notice');
+    assert.equal(await page.locator('[data-comet-route="gridBattery"]').count(), 1);
+    assert.equal(await page.locator('[data-comet-route="solarBattery"]').count(), 1);
+    console.log('Charging source gates, simultaneous charging, transient and persistent discrepancies, languages, narrow layout and recovery passed.');
     assert.deepEqual(pageErrors, [], 'Overview browser exceptions');
   } finally {
     await browser.close();

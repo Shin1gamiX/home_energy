@@ -11,11 +11,26 @@ from datetime import datetime, timedelta
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
-from preview_connection import bridge_history_preview
+from preview_connection import bridge_history_preview, charging_history_preview
 from preview_history import ATHENS, CACHEABLE_ASSETS, Preview, preview_reports
 
 
 class BridgePreviewTests(unittest.TestCase):
+    def test_charging_status_is_replayed_into_history_with_confirmed_and_unknown_branches(self):
+        today = datetime(2026, 11, 21, 12, tzinfo=ATHENS)
+        bodies, links = charging_history_preview(today)
+        self.assertIn('metric=grid', links['/charging-history'])
+        points = json.loads(bodies['/history/2026-11-20.json'])['points']
+        flagged = [point for point in points if 'charging_discrepancy_w' in point['values']]
+        first = points[0]['t']
+        self.assertEqual([(p['t'] - first) // 60 for p in flagged], [20, 21, 22, 23])
+        self.assertTrue(all(p['values']['charging_discrepancy_w'] == 500 for p in flagged))
+        self.assertTrue(all(p['counts']['charging_discrepancy_w'] == 2 for p in flagged))
+        observed = [(points[i]['values']['grid_house'], points[i]['values']['grid_battery'])
+                    for i in (0, 6, 12, 18, 24)]
+        self.assertEqual(observed, [(965, 0), (1679, 2800), (980, 0), (980, 0), (965, None)])
+        self.assertNotIn('grid_battery', points[24]['counts'])
+
     def test_grid_destinations_and_missing_half_hour_in_local_preview(self):
         today = datetime(2026, 11, 21, 12, tzinfo=ATHENS)
         bodies, links = bridge_history_preview(today)

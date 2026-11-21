@@ -8,6 +8,57 @@ from history_store import record, supply_mode
 
 
 class HistoryTests(unittest.TestCase):
+    def test_charging_status_cutover_records_only_new_routes_and_persistent_discrepancies(self):
+        minute = 1790100000
+        old = dict(grid=1037, bridge=-72, load=992, pv=996, battery=1046,
+                   grid_house=965, grid_battery=50, solar_house=0, battery_house=0)
+        revised = dict(old, grid_battery=0)
+        pv_only = dict(mains_active=False, solar_active=True, discrepancy_w=50, persistent=False)
+        flagged = dict(pv_only, persistent=True, discrepancy_w=500)
+        with tempfile.TemporaryDirectory() as directory:
+            runtime = Path(directory)
+
+            def send(stamp, values, routing=None):
+                sample = dict(status='live', updated_at=stamp, values=values)
+                if routing is not None:
+                    sample['charging_routing'] = routing
+                record(sample, runtime)
+
+            send(minute - 86400, old)
+            send(minute + 4, old)
+            closed, current = sorted((runtime / 'history').glob('????-??-??.json'))
+            closed_bytes = closed.read_bytes()
+            send(minute + 30, dict(revised, grid=1053, soc=37), flagged)
+            send(minute + 60, revised, pv_only)
+            send(minute + 120, revised, flagged)
+            send(minute + 120, revised, flagged)  # Duplicate observations never count twice.
+            send(minute + 130, revised, dict(flagged, discrepancy_w=300))
+            send(minute + 140, revised, pv_only)
+            send(minute + 180, dict(revised, grid_battery=None), dict(flagged, mains_active=None))
+            send(minute + 240, old)  # Rolling back a producer must not revive old estimates.
+            send(minute + 300, revised, dict(pv_only, discrepancy_w=600))  # Brief mismatch.
+
+            self.assertEqual(closed_bytes, closed.read_bytes())
+            first, clean, alert, gap, older_producer, brief = json.loads(current.read_text())['points']
+            # Independent measurements keep recording in this open minute; old route estimates stay intact.
+            self.assertEqual(first['values']['grid'], 1045)
+            self.assertEqual(first['counts']['grid'], 2)
+            self.assertEqual(first['values']['soc'], 37)
+            for key in ('grid_house', 'grid_battery', 'solar_house'):
+                self.assertEqual(first['values'][key], old[key])
+                self.assertEqual(first['counts'][key], 1)
+            for point in (first, clean, gap, older_producer, brief):
+                self.assertNotIn('charging_discrepancy_w', point['values'])
+            self.assertEqual(clean['values']['grid_battery'], 0)
+            self.assertEqual(alert['counts']['charging_discrepancy_w'], 2)
+            self.assertEqual(alert['values']['charging_discrepancy_w'], 400)
+            for point in (gap, older_producer):
+                self.assertIsNone(point['values']['grid_battery'])
+                self.assertNotIn('grid_battery', point['counts'])
+                self.assertEqual(point['values']['grid'], old['grid'])
+            self.assertIsNone(older_producer['values']['solar_house'])
+            self.assertEqual(brief['values']['grid_battery'], 0)
+
     def test_supply_classification(self):
         self.assertEqual(supply_mode({'grid': 5, 'pv': 1000, 'battery': 500, 'load': 500}), 'solar')
         self.assertEqual(supply_mode({'grid': 0, 'pv': 0, 'battery': -900, 'load': 900}), 'battery')

@@ -1,4 +1,5 @@
 """Loopback-only connection and power-flow previews with synthetic data."""
+from contextlib import closing
 from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import argparse
@@ -9,7 +10,8 @@ from tempfile import TemporaryDirectory
 from urllib.parse import parse_qs, urlsplit
 
 from connection_health import HealthMonitor
-from export_energy import SNAPSHOT_KEYS, estimate_grid_split, estimate_house_sources, estimate_solar_charging
+from export_energy import SNAPSHOT_KEYS, estimate_charging, estimate_grid_house, estimate_house_sources
+from flow_observations_fixture import SyntheticRecorder
 from history_store import record
 from preview_history import ATHENS, preview_days, preview_day, preview_reports, preview_summary, preview_trends, combine_days
 
@@ -32,14 +34,78 @@ BRIDGE_SCENARIOS = {
     'bridge-missing': dict(grid=720, bridge=None, load=662, battery=2964, pv=3125),
 }
 
+# The default case matches the rounded readings in the reported screenshot.
+# Flags 597 / 853 mean solar only / solar and mains active on this inverter.
+CHARGING_SCENARIOS = ('pv-only', 'mixed-charging', 'brief-mismatch', 'persistent-mismatch', 'status-unavailable')
+CHARGING_READINGS = {
+    'pv-only': dict(grid=1037, bridge=-72, load=992, load_current=5, battery=1046, pv=996,
+                    power_flow_status=597, inverter_charging_power=0),
+    'mixed-charging': dict(grid=4657, bridge=-2900, load=1679, load_current=8.3, battery=5483, pv=2958,
+                           power_flow_status=853, inverter_charging_power=2800),
+    'mismatch': dict(grid=1600, bridge=-620, load=992, load_current=5, battery=1496, pv=996,
+                     power_flow_status=597, inverter_charging_power=0),
+}
+
+
+def charging_sample(scenario):
+    source = {'brief-mismatch': 'mismatch', 'persistent-mismatch': 'mismatch', 'status-unavailable': 'pv-only'}
+    values = CHARGING_READINGS[source.get(scenario, scenario)].copy()
+    if scenario == 'status-unavailable':
+        values['power_flow_status'] = 'unavailable'
+    pv = values['pv']
+    pv1, pv2 = (941, 50) if pv == 996 else (round(pv * .6), pv - round(pv * .6))
+    values.update(soc=37, battery_voltage=53.4, battery_current=round(values['battery'] / 53.4, 1),
+                  grid_voltage=232,
+                  pv_voltage=173.5, pv_current=round(pv1 / 173.5 + pv2 / 156.1, 1),
+                  pv1_voltage=173.5, pv1_power=pv1, pv1_current=round(pv1 / 173.5, 1),
+                  pv2_voltage=156.1, pv2_power=pv2, pv2_current=round(pv2 / 156.1, 1))
+    return values
+
+
+def charging_snapshot(scenario, now):
+    # Replay independent fresh reports so the preview exercises the collector's
+    # actual persistence timer without making the reviewer wait two minutes.
+    duration = 30 if scenario == 'brief-mismatch' else 150
+    with closing(SyntheticRecorder()) as recorder:
+        for elapsed in range(0, duration + 1, 30):
+            packet = recorder.read(now - duration + elapsed, charging_sample(scenario))
+    monitor = HealthMonitor()
+    monitor.accept(dict(vpn='up', dongle='up', collector='up'), now)
+    packet['health'] = monitor.snapshot(now, packet)
+    return packet
+
+
+def charging_history_preview(today):
+    start = (today - timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
+    first = int(start.timestamp())
+    # Six-minute blocks. The brief discrepancy lasts one minute then clears.
+    block = 360
+    end = first + len(CHARGING_SCENARIOS) * block
+    links = {'/charging-history': f'/history.html?from={first}&to={end}&metric=grid'}
+    with TemporaryDirectory(prefix='charging-history-preview-') as temporary, closing(SyntheticRecorder()) as recorder:
+        runtime = Path(temporary)
+        for index, scenario in enumerate(CHARGING_SCENARIOS):
+            for elapsed in range(0, block, 30):
+                state = 'pv-only' if scenario == 'brief-mismatch' and elapsed >= 60 else scenario
+                stamp = first + index * block + elapsed
+                record(recorder.read(stamp, charging_sample(state)), runtime)
+        record(recorder.read(end, charging_sample('pv-only')), runtime)
+        record(recorder.read(today.timestamp(), charging_sample('pv-only')), runtime)
+        bodies = {'/history/' + path.name: path.read_bytes() for path in (runtime / 'history').glob('*.json')}
+    return bodies, links
+
 
 def bridge_readings(scenario):
     values = BRIDGE_SCENARIOS[scenario].copy()
     grid, bridge, load, battery, pv = (values[key] for key in ('grid', 'bridge', 'load', 'battery', 'pv'))
-    house, charging = estimate_grid_split(grid, bridge, load, battery, pv)
-    solar_house, battery_house = estimate_house_sources(house, charging, bridge, load, battery, pv)
+    mains, solar = {'pv-priority': (False, True), 'combined-charge': (True, True),
+                    'inverting': (False, False), 'bridge-missing': (None, None)}[scenario]
+    house = estimate_grid_house(grid, bridge, load)
+    charging, solar_battery, _ = estimate_charging(grid, bridge, battery, pv, mains, solar,
+                                                   2520 if scenario == 'combined-charge' else None)
+    solar_house, battery_house = estimate_house_sources(house, solar_battery, bridge, load, battery, pv)
     values.update(grid_house=house, grid_battery=charging, solar_house=solar_house, battery_house=battery_house,
-                  solar_battery=estimate_solar_charging(charging, battery, pv))
+                  solar_battery=solar_battery)
     return values
 
 
@@ -103,6 +169,8 @@ def grid_history_preview(today):
 
 
 def energy(scenario, now):
+    if scenario in CHARGING_SCENARIOS:
+        return charging_snapshot(scenario, now)
     values = dict(grid=0, grid_house=0, grid_battery=0, pv=1580, load=910, battery=670, soc=84, battery_voltage=53.2,
                   pv_voltage=382.9, grid_voltage=232, pv_current=4.1, battery_current=12.7, load_current=4.5)
     for channel, power, voltage, current in ((1, 948, 382.9, 2.5), (2, 632, 237.2, 2.7)):
@@ -181,13 +249,17 @@ CONTROLS = r"""(() => {
       el: ['Ροή ενέργειας', 'Φόρτιση από τα φωτοβολταϊκά', 'Φόρτιση από δίκτυο και φωτοβολταϊκά', 'Τροφοδοσία σπιτιού από φωτοβολταϊκά και μπαταρία', 'Χωρίς μέτρηση ισχύος αντιστροφέα'],
       ru: ['Поток энергии', 'Батарея заряжается от солнца', 'Зарядка от сети и солнца', 'Дом питается от солнца и батареи', 'Нет показаний мощности инвертора'],
     };
+    const chargingLabels = {
+      en: ['Charging scenario', 'PV only · screenshot readings', 'Grid and solar charging together', 'Brief 500 W difference', 'Persistent 500 W difference', 'Charging status unavailable'],
+      el: ['Σενάριο φόρτισης', 'Μόνο φωτοβολταϊκά · τιμές στιγμιότυπου', 'Ταυτόχρονη φόρτιση από δίκτυο και ήλιο', 'Στιγμιαία απόκλιση 500 W', 'Παρατεταμένη απόκλιση 500 W', 'Άγνωστη κατάσταση φόρτισης'],
+      ru: ['Сценарий зарядки', 'Только солнце · показания со снимка', 'Зарядка от сети и солнца', 'Краткое расхождение в 500 Вт', 'Длительное расхождение в 500 Вт', 'Статус зарядки недоступен'],
+    };
     select.value = scenario;
     function translate() {
       const l = labels[document.documentElement.lang] || labels.en;
       document.querySelector('#preview-caption').textContent = l[0];
-      const scenarioLabels = defaultState === 'pv-priority' ? bridgeLabels : flowLabels;
-      const choices = ['pv-priority', 'shared-charge'].includes(defaultState)
-        ? scenarioLabels[document.documentElement.lang] || scenarioLabels.en : l.slice(1);
+      const scenarioLabels = { 'pv-only': chargingLabels, 'pv-priority': bridgeLabels, 'shared-charge': flowLabels }[defaultState];
+      const choices = scenarioLabels ? scenarioLabels[document.documentElement.lang] || scenarioLabels.en : l.slice(1);
       document.querySelector('label[for=preview-state]').textContent = choices[0];
       [...select.options].forEach((option, i) => { option.textContent = choices[i + 1]; });
     }
@@ -272,6 +344,8 @@ class Preview(BaseHTTPRequestHandler):
             html = html.replace('<body class="overview">', '<body class="overview">' + toolbar)
             if '/bridge-history' in self.history_links:
                 html = html.replace('href="history.html"', 'href="/bridge-history"')
+            if '/charging-history' in self.history_links:
+                html = html.replace('href="history.html"', 'href="/charging-history"')
             html = re.sub(r'<script src="collector-control\.js[^>]+></script>', '', html)
             html = html.replace('<button id="restart-dongle"', '<button hidden disabled id="restart-dongle"')
             body = html.encode('utf-8')
@@ -289,6 +363,7 @@ if __name__ == '__main__':
     modes.add_argument('--flows', action='store_true', help='Show live power-flow scenarios')
     modes.add_argument('--grid-history', action='store_true', help='Compare aggregate-only and split grid history')
     modes.add_argument('--bridge', action='store_true', help='Show signed inverter power estimates on Overview and History')
+    modes.add_argument('--charging', action='store_true', help='Replay charging status and discrepancies on Overview and History')
     args = parser.parse_args()
     if args.flows:
         Preview.scenarios = tuple(FLOW_SCENARIOS)
@@ -299,5 +374,9 @@ if __name__ == '__main__':
         Preview.scenarios = tuple(BRIDGE_SCENARIOS)
         Preview.default_state = 'pv-priority'
         Preview.history_fixtures, Preview.history_links = bridge_history_preview(datetime.now(ATHENS))
+    if args.charging:
+        Preview.scenarios = CHARGING_SCENARIOS
+        Preview.default_state = 'pv-only'
+        Preview.history_fixtures, Preview.history_links = charging_history_preview(datetime.now(ATHENS))
     print(f'Local synthetic preview: http://127.0.0.1:{args.port}/', flush=True)
     ThreadingHTTPServer(('127.0.0.1', args.port), Preview).serve_forever()

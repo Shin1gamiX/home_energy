@@ -13,6 +13,7 @@ KEYS = ('grid', 'pv', 'battery', 'soc', 'load', 'grid_voltage', 'battery_voltage
         'pv1_power', 'pv1_voltage', 'pv1_current', 'pv2_power', 'pv2_voltage', 'pv2_current')
 ATHENS = ZoneInfo('Europe/Athens')
 BRIDGE_ROUTES = (*GRID_BRANCHES, 'solar_house')
+CHARGING_DISCREPANCY = 'charging_discrepancy_w'
 
 
 def supply_mode(values, split=False, bridge=False):
@@ -74,10 +75,19 @@ def record(payload, runtime):
             return
         values = payload['values']
         previous_stamp = previous[0] if previous else None
+        routing = payload.get('charging_routing')
+        has_routing = isinstance(routing, dict)
+        routing_from = recording_start(db, 'charging_routing_from', has_routing, minute, previous_stamp)
+        # Keep route averages in an already-started minute on their original method.
+        # Independent measurements can continue normally through that same minute.
+        record_routes = routing_from is None or (has_routing and minute >= routing_from)
         split_from = recording_start(db, 'grid_split_from', any(key in values for key in GRID_BRANCHES),
                                      minute, previous_stamp)
         has_bridge = 'bridge' in values
         bridge_from = recording_start(db, 'grid_bridge_from', has_bridge, minute, previous_stamp)
+        if routing_from is not None and not has_routing:
+            # An older producer arriving after cutover can still supply raw measurements.
+            values = {key: value for key, value in values.items() if key not in BRIDGE_ROUTES}
         state = supply_mode(values, split=split_from is not None, bridge=bridge_from is not None)
         last = db.execute('SELECT start,end,state FROM supply_intervals ORDER BY start DESC LIMIT 1').fetchone()
         # Each fresh observation remains valid for at most 90 seconds. A state
@@ -94,12 +104,19 @@ def record(payload, runtime):
                 # All four also feed the old solar-to-house calculation. Mixing in
                 # new observations would retroactively change the old estimate.
                 keys = tuple(key for key in KEYS if key not in ('grid', 'pv', 'load', 'battery'))
-            elif has_bridge:
+            elif has_bridge and record_routes:
                 keys += BRIDGE_ROUTES
-            else:  # An older producer cannot supply the new grid measurement or routes.
+            elif not has_bridge:  # An older producer cannot supply the new grid measurement or routes.
                 keys = tuple(key for key in KEYS if key != 'grid')
-        elif split_from is not None and minute >= split_from:
+        elif split_from is not None and minute >= split_from and record_routes:
             keys += GRID_BRANCHES
+        if (has_routing and record_routes and routing.get('persistent') is True
+                and all(isinstance(routing.get(key), bool) for key in ('mains_active', 'solar_active'))):
+            discrepancy = routing.get('discrepancy_w')
+            if finite(discrepancy) and discrepancy > 0:
+                # Average only flagged observations. An unflagged minute has no diagnostic metric.
+                values = {**values, CHARGING_DISCREPANCY: discrepancy}
+                keys += (CHARGING_DISCREPANCY,)
         for key in keys:
             value = values.get(key)
             if key in BRIDGE_ROUTES and (not finite(value) or value < 0):
@@ -123,6 +140,8 @@ def record(payload, runtime):
             initial = {'grid_house': None} if split_from is not None and timestamp >= split_from else {}
             if bridge_from is not None and timestamp >= bridge_from:
                 initial['solar_house'] = None
+            if routing_from is not None and timestamp >= routing_from:
+                initial['grid_battery'] = None
             points[timestamp] = {'t': timestamp, 'values': initial, 'counts': {}}
         point = points[timestamp]
         point['values'][key] = total / count

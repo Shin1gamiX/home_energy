@@ -24,3 +24,16 @@
             {%- endif -%}
           {%- endfor -%}
           {{ dict(found.pairs) }}
+        charging_reports: >-
+          {%- set main = 'sensor.anenji_anj_11kw_48v_wifi_p_' -%}
+          {%- set found = namespace(pairs=[]) -%}
+          {%- for suffix in ['power_flow_status', 'inverter_charging_power'] -%}
+            {%- set sensor = states[main ~ suffix] -%}
+            {%- if sensor is defined and sensor is not none
+                  and not sensor.attributes.get('restored', false) and is_number(sensor.state) -%}
+              {%- set reading = [sensor.state, as_timestamp(sensor.last_updated),
+                                 as_timestamp(sensor.last_reported)] -%}
+              {%- set found.pairs = found.pairs + [(main ~ suffix, reading)] -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ dict(found.pairs) }}

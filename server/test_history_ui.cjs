@@ -81,6 +81,17 @@ assert.equal(mixedMethods.grid.seconds, 180);
 assert.equal(mixedMethods.grid_house.seconds, 120);
 assert.equal(mixedMethods.grid_battery.seconds, 120);
 console.log('History energy regression checks passed.');
+const chargingDiscrepancySummary = readFunction('chargingDiscrepancySummary');
+const flagged = (t, watts, count = 1) => ({ t, values: { charging_discrepancy_w: watts }, counts: { charging_discrepancy_w: count } });
+const marked = [row(0, legacyCharge), flagged(60, 510), flagged(120, 400), flagged(60, 510),
+  flagged(180, 600, 0), flagged(240, 600, -1), flagged(300, null), flagged(360, -5), flagged(420, 550)];
+assert.equal(chargingDiscrepancySummary(marked.slice(0, 1), 0, 60, 59), null);
+assert.deepEqual({ ...chargingDiscrepancySummary(marked, 0, 480, 419) }, { minutes: 2, watts: 510, t: 60 });
+assert.deepEqual({ ...chargingDiscrepancySummary(marked, 120, 480, 450) }, { minutes: 2, watts: 550, t: 420 });
+assert.equal(chargingDiscrepancySummary(marked, 180, 420, 480), null);
+assert.equal(energyTotals([flagged(60, 510)], 0, 120, 120).grid_battery.seconds, 0,
+  'An unexplained difference is never counted as imported battery energy');
+console.log('Historical charging warnings respect range, snapshot, coverage, and missing or old readings.');
 const historyCutoffs = readFunction('historyCutoffs');
 const view = {from: 0, to: 86400};
 assert.equal(historyCutoffs(view, 300, 300).observed, 300);

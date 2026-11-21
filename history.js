@@ -401,13 +401,27 @@ function aggregatedRows(step) {
   if (!aggregationCache.steps.has(step)) aggregationCache.steps.set(step, aggregate(rawRows, step));
   return aggregationCache.steps.get(step);
 }
-function summaryTotals() {
+function periodSummary() {
   if (!summaryCache || summaryCache.rows !== rawRows || summaryCache.from !== range.from
       || summaryCache.to !== range.to || summaryCache.cutoff !== snapshotTime) {
     summaryCache = { rows: rawRows, from: range.from, to: range.to, cutoff: snapshotTime,
-      totals: energyTotals(rawRows, range.from, range.to, snapshotTime) };
+      totals: energyTotals(rawRows, range.from, range.to, snapshotTime),
+      chargingDiscrepancy: chargingDiscrepancySummary(rawRows, range.from, range.to, snapshotTime) };
   }
-  return summaryCache.totals;
+  return summaryCache;
+}
+function chargingDiscrepancySummary(rows, from, to, cutoff) {
+  let peak = null;
+  const flagged = new Set();
+  for (const row of rows) {
+    const watts = row.values?.charging_discrepancy_w;
+    const observations = row.counts?.charging_discrepancy_w;
+    if (!Number.isFinite(watts) || watts <= 0 || !Number.isInteger(observations) || observations < 1) continue;
+    if (!Number.isFinite(row.t) || row.t < from || row.t >= to || row.t > cutoff) continue;
+    flagged.add(row.t);
+    if (!peak || watts > peak.watts || (watts === peak.watts && row.t < peak.t)) peak = { watts, t: row.t };
+  }
+  return peak && { minutes: flagged.size, ...peak };
 }
 // Dense series already have a path through every sample. Keep a dot for sparse
 // views and isolated readings, which an SVG move command alone cannot show.
@@ -714,7 +728,7 @@ function renderSummary() {
   heading.textContent = t(linkedContext || period === 'custom' ? 'Selected period summary' : period === 'day' ? 'Daily summary' : period === 'week' ? 'Weekly summary' : 'Monthly summary');
   section.append(heading);
   const cards = document.createElement('div'); cards.className = 'summary-cards';
-  const totals = summaryTotals();
+  const { totals, chargingDiscrepancy } = periodSummary();
   const format = value => new Intl.NumberFormat(window.energyI18n.locale, { maximumFractionDigits: 2 }).format(value);
   for (const [key, name] of Object.entries(summaryLabels)) {
     const card = document.createElement('article'); card.className = 'summary-card'; card.style.setProperty('--summary-color', metrics[summaryMetricKeys[key] || key].color);
@@ -730,6 +744,16 @@ function renderSummary() {
   const note = document.createElement('p'); note.className = 'summary-note';
   note.textContent = `${t('Estimated from recorded readings only; missing periods are excluded.')} ${t('Grid destinations are estimates. Total import can include inverter losses. Earlier readings retain their original estimates.')} ${t('Battery charged: energy into the battery (solar or grid), not remaining capacity.')}`;
   section.append(cards, note);
+  if (chargingDiscrepancy && !loading && !hasError) {
+    const warning = document.createElement('p'); warning.className = 'charging-discrepancy';
+    const label = document.createElement('strong'); label.textContent = t('Charging readings disagree');
+    const detail = t('Flagged minutes: {count}. Largest average difference: {power} on {date} at {time} (Athens time).', {
+      count: format(chargingDiscrepancy.minutes), power: display(chargingDiscrepancy.watts, 'battery'),
+      date: dateFormat.format(chargingDiscrepancy.t * 1000), time: timeFormat.format(chargingDiscrepancy.t * 1000),
+    });
+    warning.append(label, ' ', detail);
+    section.append(warning);
+  }
 }
 // An older exporter can still serve day/week/month while awaiting this feature.
 // Reject inconsistent totals instead of presenting partial results as complete.

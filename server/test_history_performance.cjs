@@ -12,7 +12,7 @@ function functionSource(name) {
 const context = { range: { from: 0, to: 86400 }, rawRows: [], snapshotTime: 86400,
   aggregationCache: { rows: null, steps: new Map() }, summaryCache: null, metrics: { pv: {}, load: {} } };
 vm.createContext(context);
-for (const name of ['needsSampleMarker', 'aggregate', 'energyTotals', 'aggregatedRows', 'summaryTotals']) vm.runInContext(functionSource(name), context);
+for (const name of ['needsSampleMarker', 'aggregate', 'energyTotals', 'aggregatedRows', 'chargingDiscrepancySummary', 'periodSummary']) vm.runInContext(functionSource(name), context);
 const rows = Array.from({ length: 1440 }, (_, i) => ({ t: i * 60, values: { pv: i }, counts: { pv: 1 } }));
 assert.equal(rows.filter((row, i) => context.needsSampleMarker(rows, i, 'pv', 60)).length, 0);
 assert.ok(rows.slice(0, 8).every((row, i, sparse) => context.needsSampleMarker(sparse, i, 'pv', 60)));
@@ -32,15 +32,15 @@ assert.equal(context.aggregatedRows(900), first, 'Averaging selections reuse the
 assert.equal(first[0].values.pv, 7);
 context.rawRows = [{ t: 0, values: { pv: 100 }, counts: { pv: 3 } }, { t: 60, values: { pv: 500 }, counts: { pv: 1 } }];
 assert.equal(context.aggregatedRows(900)[0].values.pv, 200, 'Weights and raw precision are unchanged');
-const summary = context.summaryTotals();
-assert.equal(context.summaryTotals(), summary);
+const summary = context.periodSummary();
+assert.equal(context.periodSummary(), summary);
 context.snapshotTime = 30;
-assert.notEqual(context.summaryTotals(), summary, 'A new snapshot invalidates totals');
-assert.equal(context.summaryTotals().pv.kwh, 100 / 120000);
+assert.notEqual(context.periodSummary(), summary, 'A new snapshot invalidates totals');
+assert.equal(context.periodSummary().totals.pv.kwh, 100 / 120000);
 context.range = { from: 60, to: 120 };
 assert.equal(context.aggregatedRows(60).length, 1);
 assert.equal(context.aggregatedRows(60)[0].values.pv, 500);
-assert.equal(context.summaryTotals().pv.seconds, 0, 'Range and cutoff remain independent');
+assert.equal(context.periodSummary().totals.pv.seconds, 0, 'Range and cutoff remain independent');
 console.log('History rendering: dense/sparse/isolated markers, weighted aggregation reuse and summary invalidation passed.');
 
 const fallback = { window: {}, json: url => url };

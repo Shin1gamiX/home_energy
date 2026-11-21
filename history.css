@@ -302,3 +302,12 @@ html[data-theme="dark"] .history-page :is(.chart-area, .averaging-control select
   #energy-summary .summary-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   #energy-summary .summary-card:nth-child(odd) { border-left: 0; }
 }
+.history-page .charging-discrepancy {
+  margin: 14px clamp(12px, 3vw, 20px) 0;
+  padding: 8px 12px;
+  border-inline-start: 3px solid var(--theme-solar);
+  color: var(--theme-text);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.charging-discrepancy strong { display: block; }

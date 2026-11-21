@@ -28,6 +28,10 @@ SNAPSHOT_KEYS = (*FIELDS, 'grid_house', 'grid_battery', 'solar_house', 'battery_
 ROUTING_INPUTS = ('grid', 'bridge', 'load', 'battery', 'pv')
 FLOW_OBSERVATIONS_ENTITY = 'sensor.home_energy_flow_observations'
 FRESH_SECONDS = 90
+MAINS_CHARGING_BIT = 1 << 8
+PV_CHARGING_BIT = 1 << 9
+DISCREPANCY_SECONDS = 120
+MAX_EVIDENCE_GAP = 45  # The observation helper samples every 30 seconds.
 
 
 def latest(connection, suffix, prefix=PREFIX, *, reported_time=False):
@@ -61,57 +65,98 @@ def flow_observations(connection, now):
     if attributes is None or row[0] != '1' or now - row[1] > FRESH_SECONDS:
         return {}, None
     reports = attributes.get('reports')
-    return (reports, row[1]) if isinstance(reports, dict) else ({}, None)
+    observations = dict(reports) if isinstance(reports, dict) else {}
+    charging = attributes.get('charging_reports')
+    for suffix in ('power_flow_status', 'inverter_charging_power'):
+        entity = PREFIX + suffix
+        observations[entity] = charging.get(entity) if isinstance(charging, dict) else None
+    return observations, row[1]
 
 
-def flow_reading_is_fresh(row, observation, sampled_at, now):
-    if now - row[1] <= FRESH_SECONDS:
-        return True
+def flow_report_time(row, observation, sampled_at, now):
+    """Latest fresh report of this specific Recorder state and revision."""
+    direct = row[1] if now - row[1] <= FRESH_SECONDS else None
     # Recorder may leave the open row untouched when EyeBond repeats a value.
     # Only reuse it with a live report for the same entity, state and revision.
     if sampled_at is None or not isinstance(observation, list) or len(observation) != 3:
-        return False
+        return direct
     state, updated, reported = observation
     if state != row[0] or type(updated) not in (int, float) or type(reported) not in (int, float):
-        return False
-    return (0 <= updated <= reported <= sampled_at + 0.000001
+        return direct
+    if (0 <= updated <= reported <= sampled_at + 0.000001
             and now - reported <= FRESH_SECONDS
-            and isinstance(row[3], (int, float)) and abs(updated - row[3]) <= 0.000001)
+            and isinstance(row[3], (int, float)) and abs(updated - row[3]) <= 0.000001):
+        return reported if direct is None else max(direct, reported)
+    return direct
 
 
-def estimate_grid_split(grid_import, bridge_w, load, battery, pv):
-    """Estimate destinations of imported watts from net AC/DC flow, leaving losses unassigned."""
-    if grid_import is not None and grid_import <= 0:
-        return 0, 0
-    house = 0 if load == 0 else None
-    charge = 0 if battery is not None and battery <= 0 else None
-    if bridge_w is None:
-        return house, charge
-    to_dc = max(0, -bridge_w)
-    to_ac = max(0, bridge_w)
-    if to_dc == 0:
-        charge = 0
-    if load is not None and 0 <= load <= to_ac:
-        house = 0
-    if grid_import is None:
-        return house, charge
-    if load is not None and load >= 0:
-        house = min(max(0, grid_import - to_dc), max(0, load - to_ac))
-    if to_dc and battery is not None and battery > 0 and pv is not None and pv >= 0:
-        # Only the charging demand that PV cannot cover supports a grid contribution.
-        charge = min(to_dc, max(0, battery - pv), grid_import - (house or 0))
-    return house, charge
+def charging_observation(connection, suffix, unit, reported_time, observations, sampled_at, now):
+    row = latest(connection, suffix, reported_time=reported_time)
+    attrs = recorded_attributes(row, now)
+    if attrs is None or attrs.get('unit_of_measurement') != unit:
+        return None, None
+    stamp = flow_report_time(row, observations.get(PREFIX + suffix), sampled_at, now)
+    if stamp is None:
+        return None, None
+    try:
+        value = float(row[0])
+    except (TypeError, ValueError):
+        return None, None
+    if not math.isfinite(value) or value < 0:
+        return None, None
+    if suffix == 'power_flow_status':
+        if not value.is_integer() or value > 0xffff:
+            return None, None
+        value = int(value)
+    return value, stamp
 
 
-def estimate_solar_charging(grid_battery, battery, pv):
-    if pv == 0 or (battery is not None and battery <= 0):
+def estimate_grid_house(grid_import, bridge_w, load):
+    """Bound grid-to-house independently of battery charging and converter losses."""
+    if grid_import == 0 or load == 0:
         return 0
-    if grid_battery is None or battery is None or pv is None or pv < 0:
+    if bridge_w is None or load is None or load < 0:
         return None
-    return min(pv, max(0, battery - grid_battery))
+    if load <= max(0, bridge_w):
+        return 0
+    if grid_import is None:
+        return None
+    return min(max(0, grid_import - max(0, -bridge_w)), load - max(0, bridge_w))
 
 
-def estimate_house_sources(grid_house, grid_battery, bridge_w, load, battery, pv):
+def estimate_charging(grid, bridge, battery, pv, mains, solar, ac_charger_w=None):
+    """Return grid/PV charge estimates and battery watts unexplained by the active sources."""
+    pv_limit = 0 if solar is False else pv if pv is not None and pv >= 0 else None
+    ac_limit = None
+    if mains is False or grid == 0 or (bridge is not None and bridge >= 0):
+        ac_limit = 0
+    elif grid is not None and bridge is not None:
+        ac_limit = min(grid, -bridge)
+    if mains and solar and ac_charger_w is not None and ac_limit is not None:
+        # The charger reads converter power. Losses can reduce what reaches the battery.
+        ac_limit = min(ac_limit, ac_charger_w)
+    flags_known = mains is not None and solar is not None
+    if battery is not None and battery <= 0:
+        return 0, 0, 0 if flags_known else None
+    grid_charge = 0 if ac_limit == 0 else None
+    solar_charge = 0 if pv_limit == 0 else None
+    if battery is None:
+        return grid_charge, solar_charge, None
+    if mains and ac_limit is not None and ac_limit > 0:
+        if solar is False or pv_limit == 0 or ac_charger_w is not None:
+            grid_charge = min(ac_limit, battery)
+        elif pv_limit is not None and battery > pv_limit:
+            grid_charge = min(ac_limit, battery - pv_limit)
+        # With both sources active and enough PV, watts alone cannot establish their share.
+    if solar is not False and pv_limit is not None and grid_charge is not None:
+        solar_charge = min(pv_limit, battery - grid_charge)
+    discrepancy = None
+    if flags_known and ac_limit is not None and pv_limit is not None:
+        discrepancy = max(0, battery - pv_limit - ac_limit)
+    return grid_charge, solar_charge, discrepancy
+
+
+def estimate_house_sources(grid_house, solar_charging, bridge_w, load, battery, pv):
     """Allocate the remaining house load within the measured DC-to-AC output."""
     if load == 0 or (bridge_w is not None and bridge_w <= 0):
         return 0, 0
@@ -133,15 +178,35 @@ def estimate_house_sources(grid_house, grid_battery, bridge_w, load, battery, pv
     discharge = min(max(0, -battery), budget)
     if discharge == budget:
         return 0, discharge
-    solar_charging = estimate_solar_charging(grid_battery, battery, pv)
     if pv is not None and pv >= 0 and solar_charging is not None:
         solar = min(max(0, pv - solar_charging), budget - discharge)
     return solar, discharge
 
 
-def snapshot(connection, now):
+class ChargingDiscrepancy:
+    """Track consecutive credible source conflicts, independently of the exporter polling rate."""
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.since = self.last_report = self.flags = None
+
+    def observe(self, *, stamp, now, flags, watts, battery):
+        if (stamp is None or now - stamp > MAX_EVIDENCE_GAP or stamp > now
+                or watts is None or battery is None or watts < max(150, 0.1 * battery)):
+            self.reset()
+            return False
+        if (flags != self.flags or self.last_report is None
+                or not 0 <= stamp - self.last_report <= MAX_EVIDENCE_GAP):
+            self.since = stamp
+        self.flags, self.last_report = flags, stamp
+        return stamp - self.since >= DISCREPANCY_SECONDS
+
+
+def snapshot(connection, now, tracker=None):
     values = {}
     route_inputs = {}
+    stamps = {}
     observations, sampled_at = flow_observations(connection, now)
     has_reported_time = connection.execute(
         "SELECT 1 FROM pragma_table_info('states') WHERE name='last_reported_ts'"
@@ -161,8 +226,9 @@ def snapshot(connection, now):
         except (TypeError, ValueError, IndexError):
             value = None
         if key in ROUTING_INPUTS or key in ('pv1_power', 'pv2_power'):
-            usable = value is not None and flow_reading_is_fresh(row, observations.get(prefix + suffix), sampled_at, now)
-            route_inputs[key] = value if usable else None
+            stamps[key] = (flow_report_time(row, observations.get(prefix + suffix), sampled_at, now)
+                           if value is not None else None)
+            route_inputs[key] = value if stamps[key] is not None else None
             if key == 'bridge':
                 value = route_inputs[key]
         values[key] = value
@@ -181,13 +247,34 @@ def snapshot(connection, now):
     # must independently confirm zero in the current observation window.
     if fresh and values['pv'] == route_inputs['pv1_power'] == route_inputs['pv2_power'] == 0:
         route_inputs['pv'] = 0
+        if stamps['pv'] is None:
+            stamps['pv'] = min(stamps['pv1_power'], stamps['pv2_power'])
+    status, status_report = charging_observation(connection, 'power_flow_status', None, has_reported_time,
+                                                  observations, sampled_at, now)
+    mains = bool(status & MAINS_CHARGING_BIT) if fresh and status is not None else None
+    solar = bool(status & PV_CHARGING_BIT) if fresh and status is not None else None
+    charger = charger_report = None
+    if mains and solar:
+        charger, charger_report = charging_observation(connection, 'inverter_charging_power', 'W', has_reported_time,
+                                                       observations, sampled_at, now)
     grid, bridge, load, battery, pv = (route_inputs[key] for key in ROUTING_INPUTS)
     values['grid'] = grid
-    house, charging = estimate_grid_split(grid, bridge, load, battery, pv)
-    values['grid_house'], values['grid_battery'] = house, charging
-    values['solar_house'], values['battery_house'] = estimate_house_sources(house, charging, bridge, load, battery, pv)
-    values['solar_battery'] = estimate_solar_charging(charging, battery, pv)
-    return {'values': values, 'mode': mode_value, 'updated_at': updated, 'generated_at': now,
+    house = estimate_grid_house(grid, bridge, load)
+    charging, pv_charging, discrepancy = estimate_charging(grid, bridge, battery, pv, mains, solar, charger)
+    values.update(grid_house=house, grid_battery=charging, solar_battery=pv_charging)
+    values['solar_house'], values['battery_house'] = estimate_house_sources(house, pv_charging, bridge, load, battery, pv)
+    evidence = [updated, status_report, stamps['battery']]
+    if solar:
+        evidence.append(stamps['pv'])
+    if mains:
+        evidence.extend((stamps['grid'], stamps['bridge']))
+    if charger_report is not None:
+        evidence.append(charger_report)
+    stamp = min(evidence) if None not in evidence else None
+    persistent = tracker.observe(stamp=stamp, now=now, flags=(mains, solar),
+                                 watts=discrepancy, battery=battery) if tracker is not None else False
+    routing = dict(mains_active=mains, solar_active=solar, discrepancy_w=discrepancy, persistent=persistent)
+    return {'values': values, 'charging_routing': routing, 'mode': mode_value, 'updated_at': updated, 'generated_at': now,
             'status': 'stale' if not fresh else 'partial' if None in values.values() else 'live'}
 
 
@@ -208,13 +295,14 @@ def main():
         logging.warning('Connection health disabled: invalid local probe configuration')
         health = HealthMonitor()
     previous_error = None
+    tracker = ChargingDiscrepancy()
     while True:
         try:
             connection = sqlite3.connect(DATABASE.as_uri() + '?mode=ro', uri=True, timeout=2)
             try:
                 connection.execute('PRAGMA query_only=ON')
                 connection.execute('BEGIN')
-                payload = snapshot(connection, time.time())
+                payload = snapshot(connection, time.time(), tracker)
             finally:
                 connection.close()
             previous_error = None
@@ -222,8 +310,11 @@ def main():
             if type(error).__name__ != previous_error:
                 logging.error('Energy source unavailable: %s', type(error).__name__)
             previous_error = type(error).__name__
+            tracker.reset()
             payload = {'values': dict.fromkeys(SNAPSHOT_KEYS), 'updated_at': None,
-                       'generated_at': time.time(), 'status': 'offline'}
+                       'generated_at': time.time(), 'status': 'offline',
+                       'charging_routing': dict(mains_active=None, solar_active=None,
+                                                discrepancy_w=None, persistent=False)}
         payload['health'] = health.snapshot(time.time(), payload)
         publish(payload)
         try:

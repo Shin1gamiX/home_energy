@@ -88,6 +88,9 @@ To preview grid routing from signed inverter power, run
 `/bridge-history` shows the same scenarios as four consecutive half-hours.
 `/previous-method` shows an older sample recorded using EyeBond's destination estimates.
 
+For the charging-status preview, run `python3 -B server/preview_connection.py --charging --port 8780`.
+Open `http://127.0.0.1:8780/` to compare PV-only charging, simultaneous charging, a brief or sustained discrepancy, and an unavailable status. The History link opens the same five scenarios as consecutive six-minute blocks. Both pages use synthetic Recorder observations.
+
 ## Checks
 
 ```sh
@@ -123,7 +126,7 @@ These are manual preparation steps, not an automated installer. Review examples 
 1. Place `index.html`, `styles.css`, `app.js`, `history.html`, `history.css`, `history.js`, `history-cache.js`, `history-calendar.js`, `404.html`, `404.css`, `404.js`, `theme.js` and `theme.css` in `/var/www/homeenergy/public/`. The optional restart dialog has separate [deployment instructions](docs/CONTROL.md).
 2. Place `server/export_energy.py`, `server/history_store.py` and `server/energy_summary.py` in `/var/www/homeenergy/server/`.
 3. Create `/var/www/homeenergy/runtime/`, writable by a dedicated exporter account, e.g. `homeenergy`. Keep scripts and public source non-writable by that account where practical.
-4. Set the environment values below and verify the entity suffixes in `FIELDS`, plus `inverter_time` and `operating_mode`. For grid destinations, check that Home Assistant Recorder receives signed `grid_power` and **Inverter Power** (`inverter_power`) in watts. On this ANENJI model EyeBond prefers register 344 for Inverter Power. The separate Inverter Charging Power entity serves a different purpose.
+4. Set the environment values below and verify the entity suffixes in `FIELDS`, plus `inverter_time` and `operating_mode`. For grid destinations, check that Home Assistant Recorder receives `grid_power`, signed **Inverter Power** (`inverter_power`) in watts, and the numeric **Power Flow Status** (`power_flow_status`). On this ANENJI model EyeBond prefers register 344 for Inverter Power. **Inverter Charging Power** (`inverter_charging_power`, watts) helps estimate the split when both chargers are active. See the [collector's charging rules](docs/ARCHITECTURE.md#charging-source-estimates).
 5. Give the exporter read/traverse access to the Recorder database and required SQLite WAL/shared-memory files and directories. Keep the source database private. Read-only WAL access can require existing readable sidecar files; test under the service account rather than granting broad write access or copying only a live `.db` file.
 6. Adapt [the systemd example](deploy/homeenergy.service.example), install it as `homeenergy.service`, reload systemd and start it. Inspect service logs and generated JSON before enabling public access.
 7. Adapt [the Nginx example](deploy/nginx.conf.example) for your hostname and existing certificate. Validate with `nginx -t` before reloading. If using a CDN/proxy, ensure HTTPS to the origin and bypass caching for live/history JSON.
