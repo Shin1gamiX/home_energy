@@ -79,6 +79,8 @@ this series. The live API/HA sensor is unchanged; PV1/PV2 voltage recording cont
 | JSON key | Suffix | Required unit |
 | --- | --- | --- |
 | `grid` | `grid_to_home_power` + `grid_to_battery_power` | W |
+| `grid_house` (live only) | `grid_to_home_power` | W |
+| `grid_battery` (live only) | `grid_to_battery_power` | W |
 | `pv` | `pv_power` | W |
 | `battery` | `battery_power` | W |
 | `soc` | `battery_percent` | % |
@@ -218,7 +220,7 @@ Peaks refer to displayed averaged values in the visible range, not guaranteed in
 
 ## Display conventions and decisions to preserve
 
-The overview uses the original SVG house at 25% opacity beneath direct box-to-box SVG paths. A ResizeObserver recalculates endpoints at actual card edges after resizing or translation. Only active estimated routes appear: grid to house, solar to house, battery to house, and solar to battery. Solar-to-house visibility requires all relevant readings and uses the same load-minus-grid-minus-discharge assumption as summaries, capped by PV power. Solar-to-battery assumes grid charging remains disabled. Arrows are qualitative, not separately measured branch wattages. Missing data does not imply a zero flow; stale/offline data hides every route. Reduced-motion preferences disable moving dots.
+Overview animates the grid-to-house and grid-to-battery estimates separately. Battery charging above the grid contribution is attributed to solar, capped by PV output. The remaining PV can supply house demand after subtracting grid-to-house and battery discharge. Both charging paths can run together. The Grid card still displays total estimated import. Older snapshots with positive import and no split do not identify its destination. History continues to use the recorded totals described above.
 
 Secondary values that round to zero (current below 0.05 A, battery power below 0.5 W in magnitude) are hidden. Main power readings and SOC remain. Battery amperage is omitted from the lower summary, but remains in the scene while battery power is active. In Mains mode, idle battery power with reported SOC below 40% displays Waiting to charge, based on the owner's configured return threshold, not a BMS status. Unknown battery power shows No report. EN/RU/EL translations cover the new labels. These presentation rules do not change recorded readings or history.
 

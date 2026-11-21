@@ -1,6 +1,10 @@
+import json
+from pathlib import Path
 import sqlite3
+from tempfile import TemporaryDirectory
 import unittest
 from export_energy import FIELDS, CHANNEL_FIELDS, PREFIX, PV_PREFIX, snapshot
+from history_store import record
 
 
 class SnapshotTests(unittest.TestCase):
@@ -14,16 +18,30 @@ class SnapshotTests(unittest.TestCase):
             prefix = PV_PREFIX if key in CHANNEL_FIELDS else PREFIX
             self.db.execute('INSERT INTO states_meta VALUES(?,?)', (index, prefix + suffix))
             self.db.execute('INSERT INTO state_attributes VALUES(?,?)', (index, '{"unit_of_measurement":"' + unit + '"}'))
-            value = '84' if key == 'soc' else '-500' if key == 'battery' else '0'
+            value = {'soc': '84', 'battery': '-500', 'grid_battery': '181'}.get(key, '0')
             self.db.execute('INSERT INTO states VALUES(?,?,?,?)', (index, value, 1, index))
         self.db.execute('INSERT INTO states_meta VALUES(101,?)', (PREFIX + 'inverter_time',))
         self.db.execute("INSERT INTO states VALUES(101,'17:00:00',990,NULL)")
-        self.db.execute('INSERT INTO states_meta VALUES(102,?)', (PREFIX + 'grid_to_battery_power',))
-        self.db.execute('INSERT INTO states VALUES(102,?,?,1)', ('181', 990))
+
+    def field_id(self, key):
+        return list(FIELDS).index(key) + 1
 
     def test_grid_includes_house_and_battery(self):
-        self.db.execute("UPDATE states SET state='678' WHERE metadata_id=1")
-        self.assertEqual(snapshot(self.db, 1000)['values']['grid'], 859)
+        self.db.execute("UPDATE states SET state='678' WHERE metadata_id=?", (self.field_id('grid_house'),))
+        payload = snapshot(self.db, 1000)
+        values = payload['values']
+        self.assertEqual((values['grid_house'], values['grid_battery'], values['grid']), (678, 181, 859))
+        with TemporaryDirectory() as tmp:
+            record(payload, tmp)
+            day = json.loads((Path(tmp) / 'history' / '1970-01-01.json').read_text())
+            recorded = day['points'][0]['values']
+            self.assertEqual(recorded['grid'], 859)
+            self.assertNotIn('grid_house', recorded)
+            self.assertNotIn('grid_battery', recorded)
+
+    def test_grid_can_charge_without_supplying_the_house(self):
+        values = snapshot(self.db, 1000)['values']
+        self.assertEqual((values['grid_house'], values['grid_battery'], values['grid']), (0, 181, 181))
 
     def test_channels_do_not_double_count_total(self):
         for key, value in [('pv', 3000), ('pv1_power', 1800), ('pv2_power', 1200)]:
@@ -42,28 +60,49 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual(result['status'], 'partial')
 
     def test_missing_grid_component_is_not_zero(self):
-        self.db.execute('DELETE FROM states WHERE metadata_id=102')
-        self.assertIsNone(snapshot(self.db, 1000)['values']['grid'])
+        self.db.execute('DELETE FROM states WHERE metadata_id=?', (self.field_id('grid_battery'),))
+        result = snapshot(self.db, 1000)
+        self.assertIsNone(result['values']['grid'])
+        self.assertIsNone(result['values']['grid_battery'])
+        self.assertEqual(result['values']['grid_house'], 0)
+        self.assertEqual(result['status'], 'partial')
+
+    def test_invalid_grid_destination_keeps_the_other_reading(self):
+        for key, other, expected in [('grid_battery', 'grid_house', 0), ('grid_house', 'grid_battery', 181)]:
+            for invalid in ['-1', 'NaN', 'Infinity', 'unavailable']:
+                with self.subTest(key=key, invalid=invalid):
+                    index = self.field_id(key)
+                    self.db.execute('UPDATE states SET state=? WHERE metadata_id=?', (invalid, index))
+                    result = snapshot(self.db, 1000)
+                    self.assertIsNone(result['values'][key])
+                    self.assertIsNone(result['values']['grid'])
+                    self.assertEqual(result['values'][other], expected)
+                    self.assertEqual(result['status'], 'partial')
+            self.db.execute('UPDATE states SET state=? WHERE metadata_id=?', ('0' if key == 'grid_house' else '181', index))
 
     def test_constant_values_are_fresh_when_heartbeat_is_fresh(self):
         result = snapshot(self.db, 1000)
         self.assertEqual(result['status'], 'live')
         self.assertEqual(result['values']['battery'], -500)
         self.assertEqual(result['values']['soc'], 84)
-        self.assertEqual(set(result['values']), set(FIELDS))
+        self.assertEqual(set(result['values']), set(FIELDS) | {'grid'})
 
     def test_stale_heartbeat_is_not_live(self):
         self.assertEqual(snapshot(self.db, 1200)['status'], 'stale')
 
     def test_invalid_value_is_null(self):
-        self.db.execute("UPDATE states SET state='unavailable' WHERE metadata_id=4")
+        self.db.execute("UPDATE states SET state='unavailable' WHERE metadata_id=?", (self.field_id('soc'),))
         result = snapshot(self.db, 1000)
         self.assertEqual(result['status'], 'partial')
         self.assertIsNone(result['values']['soc'])
 
     def test_invalid_unit_is_rejected(self):
-        self.db.execute('UPDATE state_attributes SET shared_attrs=? WHERE attributes_id=1', ('{"unit_of_measurement":"V"}',))
-        self.assertIsNone(snapshot(self.db, 1000)['values']['grid'])
+        self.db.execute('UPDATE state_attributes SET shared_attrs=? WHERE attributes_id=?',
+                        ('{"unit_of_measurement":"V"}', self.field_id('grid_house')))
+        values = snapshot(self.db, 1000)['values']
+        self.assertIsNone(values['grid_house'])
+        self.assertIsNone(values['grid'])
+        self.assertEqual(values['grid_battery'], 181)
 
     def test_battery_voltage_is_measured_not_derived(self):
         index = list(FIELDS).index('battery_voltage') + 1

@@ -139,8 +139,9 @@ const document = {
 };
 const windowEvents = {};
 let themeColor = '#169779';
+const palette = {};
 const host = {window:{innerWidth:1280, addEventListener(name, fn) {windowEvents[name] = fn;}, removeEventListener(name) {delete windowEvents[name];}}, document, matchMedia:() => media,
-  getComputedStyle:() => ({borderTopLeftRadius:'18px', getPropertyValue:() => themeColor}),
+  getComputedStyle:() => ({borderTopLeftRadius:'18px', getPropertyValue:name => palette[name] ?? themeColor}),
   requestAnimationFrame(fn) { const id = ++sequence; frames.set(id, fn); return id; },
   cancelAnimationFrame(id) { frames.delete(id); },
   ResizeObserver: class {constructor(fn) {resize = fn;} observe() {} disconnect() {disconnected = true;}},
@@ -214,6 +215,46 @@ const points = [...link.matchAll(/[ML](-?[\d.]+) (-?[\d.]+)/g)].map(match => ({x
 assert.ok(points.length > 2);
 assert.ok(points.every(point => Math.abs(point.y - points[0].y) < .02), 'narrow battery link stays level rather than hanging below cards');
 assert.ok(points.every(point => point.y >= cards.load.rect.top && point.y <= cards.load.rect.top + cards.load.rect.height));
+palette['--theme-grid'] = '#bc98f0';
+palette['--theme-solar'] = '#ffbf60';
+const chargingWatts = {gridHouse:1850, gridBattery:2510, solarBattery:2970, solarHouse:350};
+const chargingRoutes = Object.fromEntries(Object.keys(chargingWatts).map(key => [key, true]));
+for (const [viewport, sceneWidth, margin, cardWidth] of [[320,296,8,134], [393,365,12,162], [767,704,24,210], [1280,920,40,210]]) {
+  host.window.innerWidth = viewport;
+  scene.rect.width = sceneWidth;
+  for (const [id, card] of Object.entries(cards)) {
+    card.rect.width = cardWidth;
+    card.rect.left = ['grid','load'].includes(id) ? margin : sceneWidth - margin - cardWidth;
+  }
+  engine.setState({routes:chargingRoutes, routeWatts:chargingWatts}); resize(); frame();
+  assert.equal(routes().length, 4);
+  const paths = {};
+  for (const route of routes()) {
+    const key = route.dataset.cometRoute;
+    const track = trackOf(route);
+    assert.equal(track.attributes.stroke, palette[key.startsWith('grid') ? '--theme-grid' : '--theme-solar']);
+    paths[key] = [...track.attributes.d.matchAll(/[ML](-?[\d.]+) (-?[\d.]+)/g)].map(match => ({x:Number(match[1]), y:Number(match[2])}));
+    assert.ok(paths[key].length > 2);
+    for (const {rect} of Object.values(cards)) {
+      assert.ok(paths[key].every(({x,y}) => x <= rect.left || x >= rect.left + rect.width || y <= rect.top || y >= rect.top + rect.height),
+        `${key} passes through a card at ${viewport}px`);
+    }
+  }
+  assert.ok(paths.gridBattery[0].x > paths.gridHouse[0].x, 'split grid feeds use distinct exit ports');
+  assert.ok(paths.gridBattery.at(-1).x < paths.solarBattery.at(-1).x, 'charging feeds enter different sides of the battery');
+}
+const batteryBorders = layer.children.filter(node => node.dataset.borderBox === 'battery');
+assert.deepEqual(batteryBorders.map(node => node.dataset.borderLane).sort(), ['gridBattery','solarBattery']);
+let simultaneous = false;
+for (let i = 0; i < 480 && !simultaneous; i++) {
+  frame();
+  simultaneous = batteryBorders.every(node => node.dataset.phase === 'spread');
+}
+assert.ok(simultaneous, 'both source colours can spread around the battery at the same time');
+for (const node of batteryBorders) {
+  const expected = palette[node.dataset.borderLane === 'gridBattery' ? '--theme-grid' : '--theme-solar'];
+  assert.equal(node.children[0].children[0].attributes.stroke, expected, 'the arrival retains its source colour');
+}
 engine.setState({routes:{}, routeWatts:{}}); frame();
 assert.equal(routes().length, 0);
 assert.equal(frames.size, 0);

@@ -13,7 +13,8 @@ DATABASE = Path(os.environ.get('HA_DATABASE', '/srv/homeassistant/config/home-as
 OUTPUT = Path(os.environ.get('ENERGY_OUTPUT', '/var/www/homeenergy/runtime/energy.json'))
 PREFIX = os.environ.get('ENERGY_ENTITY_PREFIX', 'sensor.anenji_anj_11kw_48v_wifi_p_')
 PV_PREFIX = os.environ.get('ENERGY_PV_ENTITY_PREFIX', 'sensor.living_room_anenji_anj_11kw_48v_wifi_p_')
-FIELDS = {'grid': ('grid_to_home_power', 'W'), 'pv': ('pv_power', 'W'),
+FIELDS = {'grid_house': ('grid_to_home_power', 'W'), 'grid_battery': ('grid_to_battery_power', 'W'),
+          'pv': ('pv_power', 'W'),
           'battery': ('battery_power', 'W'), 'soc': ('battery_percent', '%'), 'load': ('load_power', 'W'),
           'pv_voltage': ('pv_voltage', 'V'), 'grid_voltage': ('grid_voltage', 'V'),
           'battery_voltage': ('battery_voltage', 'V'),
@@ -23,6 +24,7 @@ CHANNEL_FIELDS = {f'pv{channel}_{metric}': (f'pv{channel}_{metric}', unit)
                   for channel in (1, 2)
                   for metric, unit in [('power', 'W'), ('voltage', 'V'), ('current', 'A')]}
 FIELDS.update(CHANNEL_FIELDS)
+SNAPSHOT_KEYS = (*FIELDS, 'grid')
 
 
 def latest(connection, suffix, prefix=PREFIX):
@@ -45,18 +47,14 @@ def snapshot(connection, now):
                 raise ValueError('Invalid measurement')
             if key == 'soc' and not 0 <= value <= 100:
                 raise ValueError('Invalid percentage')
+            if key in ('grid_house', 'grid_battery') and value < 0:
+                raise ValueError('Negative grid import')
         except (TypeError, ValueError, IndexError):
             value = None
         values[key] = value
-    # Total import estimate includes power sent to the house and battery.
-    row = latest(connection, 'grid_to_battery_power')
-    try:
-        charging = float(row[0])
-        if not math.isfinite(charging) or charging < 0 or json.loads(row[2] or '{}').get('unit_of_measurement') != 'W':
-            raise ValueError('Invalid grid charging measurement')
-        values['grid'] = values['grid'] + charging if values['grid'] is not None and values['grid'] >= 0 else None
-    except (TypeError, ValueError, IndexError):
-        values['grid'] = None
+    # History and the Grid card use total import; Overview also needs each destination.
+    house, charging = values['grid_house'], values['grid_battery']
+    values['grid'] = house + charging if house is not None and charging is not None else None
     # Constant SOC/grid states can be old. The changing inverter clock is the heartbeat.
     heartbeat = latest(connection, 'inverter_time')
     updated = heartbeat[1] if heartbeat and heartbeat[0] not in ('unknown', 'unavailable') else None
@@ -98,7 +96,7 @@ def main():
             if type(error).__name__ != previous_error:
                 logging.error('Energy source unavailable: %s', type(error).__name__)
             previous_error = type(error).__name__
-            payload = {'values': dict.fromkeys(FIELDS), 'updated_at': None,
+            payload = {'values': dict.fromkeys(SNAPSHOT_KEYS), 'updated_at': None,
                        'generated_at': time.time(), 'status': 'offline'}
         payload['health'] = health.snapshot(time.time(), payload)
         publish(payload)

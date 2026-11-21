@@ -6,23 +6,31 @@ window.energyFlowState = (values, mode) => {
   const discharging = valid('battery') && values.battery <= -0.5;
   const waiting = valid('battery') && !charging && !discharging && mode === 'Mains' && valid('soc') && values.soc < 40;
   const batteryState = charging ? 'charging' : discharging ? 'discharging' : waiting ? 'waiting' : 'idle';
-  // Grid charging is disabled in this installation. Avoid inventing missing flows.
-  const solarToHouse = ['pv', 'load', 'grid', 'battery'].every(valid)
-    ? Math.min(Math.max(0, values.pv), Math.max(0, values.load - Math.max(0, values.grid) - Math.max(0, -values.battery))) : 0;
+  // An older snapshot with zero total import also has zero on both grid branches.
+  // Positive total import alone cannot identify either destination.
+  const gridBranch = key => valid(key) && values[key] >= 0 ? values[key]
+    : !(key in values) && values.grid === 0 ? 0 : null;
+  const houseImport = gridBranch('grid_house');
+  const chargingImport = gridBranch('grid_battery');
+  const load = valid('load') ? Math.max(0, values.load) : 0;
+  const pv = valid('pv') ? Math.max(0, values.pv) : 0;
+  const gridHouse = Math.min(houseImport ?? 0, load);
+  const batteryHouse = discharging ? Math.min(-values.battery, load - gridHouse) : 0;
+  const gridBattery = charging ? Math.min(chargingImport ?? 0, values.battery) : 0;
+  const solarBattery = charging && chargingImport !== null ? Math.min(pv, values.battery - gridBattery) : 0;
+  const houseSourcesKnown = houseImport !== null && valid('load') && valid('pv') && valid('battery');
+  const solarHouse = houseSourcesKnown ? Math.min(pv - solarBattery, load - gridHouse - batteryHouse) : 0;
+  const routeWatts = { gridHouse, gridBattery, solarHouse, batteryHouse, solarBattery };
   return { batteryState, batteryLabel: !valid('battery') ? 'No report' : charging ? 'Charging' : discharging ? 'Discharging' : waiting ? 'Waiting to charge' : 'Standby',
-    routeWatts: { gridHouse: valid('grid') && valid('load') ? Math.min(Math.max(0, values.grid), Math.max(0, values.load)) : 0,
-      solarHouse: solarToHouse,
-      batteryHouse: valid('battery') && valid('load') ? Math.min(Math.max(0, -values.battery), Math.max(0, values.load)) : 0,
-      solarBattery: valid('pv') && valid('battery') ? Math.min(Math.max(0, values.pv), Math.max(0, values.battery)) : 0 },
-    routes: { gridHouse: positive(values.grid) && positive(values.load), solarHouse: positive(solarToHouse),
-      batteryHouse: discharging && positive(values.load), solarBattery: positive(values.pv) && charging } };
+    houseSourcesKnown, routeWatts,
+    routes: Object.fromEntries(Object.entries(routeWatts).map(([key, watts]) => [key, positive(watts)])) };
 };
 
 window.energyModeLabel = mode => mode === 'Mains' ? 'Grid' : mode || '—';
-window.energySupplyLabel = values => {
-  if (!['grid', 'pv', 'battery', 'load'].every(key => Number.isFinite(values[key]))) return 'Unknown supply';
+window.energySupplyLabel = (values, state = window.energyFlowState(values)) => {
+  if (!state.houseSourcesKnown) return 'Unknown supply';
   if (values.load <= 0) return 'Standby';
-  const flows = window.energyFlowState(values).routeWatts;
+  const flows = state.routeWatts;
   const sources = { Grid: flows.gridHouse, Solar: flows.solarHouse, Battery: flows.batteryHouse };
   const active = Object.keys(sources).filter(key => sources[key] > Math.max(20, values.load * .02));
   if (active.length > 1) return 'Mixed';
@@ -137,7 +145,7 @@ window.energyComets = (() => {
       : { ...phaseAt(elapsed, timing), cycle: Math.floor(elapsed / timing.total) };
   }
 
-  // One uninterrupted border pass per card. Overlapping requests join that pass;
+  // One uninterrupted border pass per lane. Overlapping requests join that pass;
   // they are not queued or replayed after it, which avoids a permanently busy rim.
   class BorderPassCoalescer {
     constructor() { this.reset(); }
@@ -177,6 +185,7 @@ window.energyComets = (() => {
     definitions.append(glow); svg.append(definitions); scene.append(svg);
     const routes = {
       gridHouse: { from: 'grid', to: 'load', color: '#8861ba', exit: 'bottom', entry: 'top' },
+      gridBattery: { from: 'grid', to: 'battery', color: '#8861ba', exit: 'right', entry: 'left' },
       batteryHouse: { from: 'battery', to: 'load', color: '#169779', exit: 'left', entry: 'right' },
       solarBattery: { from: 'solar', to: 'battery', color: '#bc8116', exit: 'bottom', entry: 'top' },
       solarHouse: { from: 'solar', to: 'load', color: '#bc8116', exit: 'left', entry: 'right' },
@@ -241,10 +250,16 @@ window.energyComets = (() => {
       } else if (route.exit === 'bottom') {
         const gap = Math.max(0, b.y-a.y);
         link = cubic(a, {x:a.x,y:a.y+gap*.45}, {x:b.x,y:b.y-gap*.45}, b);
+      } else if (key === 'gridBattery') {
+        // Both facing ports open into the clear space between card columns,
+        // even when the phone's solar card is taller than its grid card.
+        const laneX = a.x + (b.x - a.x) * .3;
+        link = cubic(a, {x:laneX,y:a.y}, {x:laneX,y:b.y}, b);
       } else if (key === 'solarHouse') {
         // Follow the gap between the two rows, instead of cutting through the roof.
         const aisle = Math.max(a.y+20, Math.min(toBox.y-16, fromBox.y+fromBox.height+22));
-        link = cubic(a, {x:a.x-60,y:aisle}, {x:b.x+45,y:aisle}, b);
+        const gap = Math.max(0, a.x - b.x);
+        link = cubic(a, {x:a.x-Math.min(60,gap*.3),y:aisle}, {x:b.x+Math.min(45,gap*.7),y:aisle}, b);
       } else {
         const width = a.x-b.x;
         const low = Math.min(bounds.height-43, Math.max(a.y,b.y)+35);
@@ -273,11 +288,13 @@ window.energyComets = (() => {
       group.dataset.gatherSeconds = timing.gather;
       group.dataset.travelSeconds = timing.travel.toFixed(3);
       group.dataset.spreadSeconds = timing.spread;
-      return { key, from:route.from, to:route.to, color:route.color, group, track, link, source, target, beams, timing, schedule, delay:index*.7 };
+      // Each charging source keeps its own arrival colour on the battery.
+      const targetLane = route.to === 'battery' ? key : route.to;
+      return { key, from:route.from, to:route.to, targetLane, color:route.color, group, track, link, source, target, beams, timing, schedule, delay:index*.7 };
     }
 
     function routeColor(key) {
-      const token = key === 'gridHouse' ? '--theme-grid' : key === 'batteryHouse' ? '--theme-house' : '--theme-solar';
+      const token = { grid: '--theme-grid', battery: '--theme-house', solar: '--theme-solar' }[routes[key].from];
       return getComputedStyle(scene).getPropertyValue?.(token).trim() || routes[key].color;
     }
     function themeChanged() {
@@ -320,7 +337,7 @@ window.energyComets = (() => {
           });
           if (state.phase === 'travel') comet.draw(route.link, state.progress, 60);
           if (state.phase === 'spread' || state.phase === 'fade') requests.push({
-            id: `${event}:target`, box: route.to, color: route.color, paths: route.target, phase: state.phase,
+            id: `${event}:target`, box: route.targetLane, color: route.color, paths: route.target, phase: state.phase,
             progress: state.phase === 'fade' ? 1 : state.progress, opacity: state.phase === 'fade' ? 1 - state.progress : 1,
           });
         });
@@ -386,10 +403,11 @@ window.energyComets = (() => {
       borderEffects.forEach(effect => effect.node.remove()); borderEffects.clear();
       svg.setAttribute('viewBox', `0 0 ${bounds.width} ${bounds.height}`);
       active = keys.map((key, index) => buildRoute(key, wattsByRoute[key], index, bounds));
-      for (const box of new Set(active.flatMap(route => [route.from, route.to]))) {
-        const node = element('g', { 'data-border-box': box, 'data-active': 'false' });
+      const lanes = new Map(active.flatMap(route => [[route.from, route.from], [route.targetLane, route.to]]));
+      for (const [lane, box] of lanes) {
+        const node = element('g', { 'data-border-box': box, 'data-border-lane': lane, 'data-active': 'false' });
         svg.append(node);
-        borderEffects.set(box, { node, movers: [new Comet(node, '#169779', true), new Comet(node, '#169779', true)] });
+        borderEffects.set(lane, { node, movers: [new Comet(node, '#169779', true), new Comet(node, '#169779', true)] });
       }
       seconds = 0;
       draw(); requestFrame();
@@ -834,6 +852,8 @@ const samples = [
 ];
 // Explicitly synthetic channel values for the loopback-only preview.
 samples.forEach(sample => {
+  sample.grid_house = sample.grid;
+  sample.grid_battery = 0;
   for (const channel of [1, 2]) {
     const power = sample.pv * (channel === 1 ? .6 : .4);
     const voltage = sample.pv ? (channel === 1 ? 382.9 : 237.2) : 30;
@@ -964,7 +984,7 @@ function render(sample) {
   // Dashboard convention: positive = charging, negative = discharging.
   const mode = demo ? sample.mode : latest?.mode;
   const state = window.energyFlowState(sample, mode);
-  const supply = window.energySupplyLabel(sample);
+  const supply = window.energySupplyLabel(sample, state);
   document.querySelector('#supply-status').textContent = t('House supply · {source}', { source: t(supply) });
   document.body.dataset.activeSource = { Grid: 'grid', Solar: 'solar', Battery: 'battery' }[supply] || '';
   document.body.dataset.batteryState = state.batteryState;
